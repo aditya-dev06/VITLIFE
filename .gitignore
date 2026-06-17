@@ -31,4 +31,6 @@ __pycache__/
 
 # Local JSON database (sensitive user profiles)
 server/data/users.json
+server/data/secret.key
+server/data/*.key
 

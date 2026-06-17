@@ -1,12 +1,14 @@
 import React from 'react';
 
-const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate }) => {
+const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, onUpdateSemester }) => {
   const inProgressSkills = stats.inProgressSkillsList || [];
   const activeOpportunities = opportunities ? opportunities.slice(0, 3) : [];
 
   // Helper to extract registration number
   const getRegNumber = () => {
-    if (!user || !user.isVitBhopal || !user.email) return '';
+    if (!user) return '';
+    if (user.registrationNumber) return user.registrationNumber;
+    if (!user.isVitBhopal || !user.email) return '';
     const parts = user.email.split('@')[0].split('.');
     if (parts.length >= 2) {
       return parts[1].toUpperCase();
@@ -25,15 +27,17 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate }) 
 
       {/* Info Banner */}
       <div className="glass-panel info-banner">
-        <div className="info-banner-content" style={{ maxWidt: '100%' }}>
+        <div className="info-banner-content" style={{ maxWidth: '100%' }}>
           <span className="branch-badge">
             {user && user.isVitBhopal 
-              ? `VIT Bhopal Student • ${getRegNumber()}` 
-              : 'Global Data Science & AI Member'}
+              ? `VIT Bhopal Student • ${getRegNumber()} • Sem ${user.semester || 1}` 
+              : (user && user.semester && user.semester !== 0 ? `Global Student • Sem ${user.semester}` : 'Global Data Science & AI Member')}
           </span>
           
           <h2 style={{ marginTop: '0.5rem' }}>
-            {user && user.isVitBhopal ? 'Integrated M.Tech CSE (Computational & Data Science)' : 'Master Computational Science & AI'}
+            {user && user.isVitBhopal 
+              ? (user.program || 'Integrated M.Tech CSE (Computational & Data Science)') 
+              : 'Master Computational Science & AI'}
           </h2>
           
           <p>
@@ -66,9 +70,48 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate }) 
             </div>
           )}
 
-          <button className="btn-primary" onClick={() => onNavigate('roadmap')}>
-            View Skill Roadmap
-          </button>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '1.25rem' }}>
+            <button className="btn-primary" onClick={() => onNavigate('roadmap')}>
+              View Skill Roadmap
+            </button>
+
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.85rem', color: 'rgba(255, 255, 255, 0.7)', fontWeight: 600 }}>Active Semester:</span>
+              <select
+                value={user ? user.semester : '1'}
+                onChange={(e) => onUpdateSemester(e.target.value)}
+                style={{
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '6px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: 'white',
+                  outline: 'none',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                {user && user.isVitBhopal ? (
+                  (() => {
+                    const isBim = user.email && user.email.toLowerCase().includes('bim');
+                    const maxSem = isBim ? 10 : 8;
+                    const options = [];
+                    for (let i = 1; i <= maxSem; i++) {
+                      options.push(<option key={i} value={i.toString()} style={{ backgroundColor: '#18181b' }}>Sem {i}</option>);
+                    }
+                    return options;
+                  })()
+                ) : (
+                  <>
+                    <option value="0" style={{ backgroundColor: '#18181b' }}>Not a Student</option>
+                    {[1,2,3,4,5,6,7,8].map(i => (
+                      <option key={i} value={i.toString()} style={{ backgroundColor: '#18181b' }}>Sem {i}</option>
+                    ))}
+                  </>
+                )}
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 

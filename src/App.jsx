@@ -382,6 +382,30 @@ function App() {
     }
   };
 
+  const handleUpdateSemester = async (newSemester) => {
+    const semNum = parseInt(newSemester, 10) || 1;
+    if (user) {
+      const updatedUser = { ...user, semester: semNum };
+      setUser(updatedUser);
+      localStorage.setItem('ds_ai_user', JSON.stringify(updatedUser));
+    }
+
+    if (token) {
+      try {
+        await fetch('/api/user/profile', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ semester: semNum })
+        });
+      } catch (err) {
+        console.error("Failed to sync semester with backend: ", err);
+      }
+    }
+  };
+
   // Extract student registration number from college email (firstname.regnumber@vitbhopal.ac.in)
   const getRegNumber = () => {
     if (!user || !user.isVitBhopal || !user.email) return '';
@@ -415,6 +439,7 @@ function App() {
           <Roadmap 
             skills={skills} 
             userCourses={user ? user.courses : []}
+            userSemester={user ? user.semester : 1}
             onUpdateSkillStatus={handleUpdateSkillStatus} 
           />
         );
@@ -427,7 +452,13 @@ function App() {
           />
         );
       case 'guide':
-        return <VITBhopalGuide isVitBhopal={user ? user.isVitBhopal : false} />;
+        return (
+          <VITBhopalGuide 
+            isVitBhopal={user ? user.isVitBhopal : false} 
+            userSemester={user ? user.semester : 1}
+            userProgram={user ? user.program : ''}
+          />
+        );
       case 'practice':
         return <PracticeArena onAddXp={handleAddXp} />;
       default:
@@ -438,6 +469,7 @@ function App() {
             opportunities={opportunities} 
             roadmapProgress={roadmapProgress}
             onNavigate={setActiveTab}
+            onUpdateSemester={handleUpdateSemester}
           />
         );
     }
@@ -510,8 +542,10 @@ function App() {
                 <div className="name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {user ? user.name : 'CDS Student'}
                 </div>
-                <div className="college" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {user && user.isVitBhopal ? getRegNumber() : 'Global Member'}
+                <div className="college" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>
+                  {user && user.isVitBhopal 
+                    ? `${getRegNumber()} • Sem ${user.semester || 1}` 
+                    : (user && user.semester && user.semester !== 0 ? `Global Student • Sem ${user.semester}` : 'Global Member')}
                 </div>
               </div>
             </div>

@@ -7,6 +7,37 @@ const COURSES_LIST = [
   { code: 'Numerical Methods', name: 'Numerical Methods & Computational Math' }
 ];
 
+const getRegNumberAndProgram = (emailStr) => {
+  const cleanEmail = emailStr.trim().toLowerCase();
+  const regex = /^([a-zA-Z.-]+)\.([a-zA-Z0-9]+)@vitbhopal\.ac\.in$/;
+  const match = cleanEmail.match(regex);
+  if (match) {
+    const regNum = match[2].toUpperCase();
+    const progMatch = regNum.match(/^\d{2}([A-Z]{3})/);
+    let program = 'VIT Bhopal Student';
+    let isBim = false;
+    if (progMatch) {
+      const code = progMatch[1];
+      const programMap = {
+        'BIM': 'Integrated M.Tech CSE (Computational & Data Science)',
+        'BCE': 'B.Tech Computer Science & Engineering',
+        'BDS': 'B.Tech CSE (Data Science)',
+        'BAI': 'B.Tech CSE (AI & ML)',
+        'BCY': 'B.Tech CSE (Cyber Security)',
+        'BEC': 'B.Tech Electronics & Communication Engineering',
+        'BEE': 'B.Tech Electrical & Electronics Engineering',
+        'BME': 'B.Tech Mechanical Engineering',
+        'BBA': 'Bachelor of Business Administration',
+        'MCA': 'Master of Computer Applications'
+      };
+      program = programMap[code] || `B.Tech/M.Tech (${code}) Student`;
+      if (code === 'BIM') isBim = true;
+    }
+    return { regNum, program, isBim };
+  }
+  return null;
+};
+
 const Auth = ({ onLoginSuccess }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState('');
@@ -14,6 +45,7 @@ const Auth = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState('');
   const [isVitBhopal, setIsVitBhopal] = useState(true);
   const [selectedCourses, setSelectedCourses] = useState([]);
+  const [semester, setSemester] = useState('1');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -64,7 +96,14 @@ const Auth = ({ onLoginSuccess }) => {
     const url = isLogin ? '/api/auth/login' : '/api/auth/register';
     const payload = isLogin 
       ? { email, password }
-      : { name, email, password, isVitBhopal, courses: isVitBhopal ? selectedCourses : [] };
+      : { 
+          name, 
+          email, 
+          password, 
+          isVitBhopal, 
+          courses: isVitBhopal ? selectedCourses : [],
+          semester: parseInt(semester, 10)
+        };
 
     try {
       const response = await fetch(url, {
@@ -139,6 +178,28 @@ const Auth = ({ onLoginSuccess }) => {
             />
           </div>
 
+          {!isLogin && isVitBhopal && email && (() => {
+            const parsed = getRegNumberAndProgram(email);
+            if (parsed) {
+              return (
+                <div className="detected-program-banner" style={{
+                  fontSize: '0.8rem',
+                  padding: '0.6rem 0.8rem',
+                  background: 'rgba(6, 182, 212, 0.15)',
+                  color: 'hsl(var(--secondary))',
+                  border: '1px solid rgba(6, 182, 212, 0.3)',
+                  borderRadius: '6px',
+                  marginBottom: '1rem',
+                  lineHeight: '1.4'
+                }}>
+                  ✅ <strong>Registration Number:</strong> {parsed.regNum} <br/>
+                  🎓 <strong>Detected Program:</strong> {parsed.program}
+                </div>
+              );
+            }
+            return null;
+          })()}
+
           <div className="form-group">
             <label>Password</label>
             <input 
@@ -163,6 +224,49 @@ const Auth = ({ onLoginSuccess }) => {
                   }} 
                 />
                 <label htmlFor="vit-check">I am a student of VIT Bhopal</label>
+              </div>
+
+              <div className="form-group">
+                <label>Current Status / Semester</label>
+                <select 
+                  value={semester} 
+                  onChange={(e) => setSemester(e.target.value)} 
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    borderRadius: '8px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    color: 'white',
+                    outline: 'none'
+                  }}
+                >
+                  {isVitBhopal ? (
+                    (() => {
+                      const parsed = getRegNumberAndProgram(email);
+                      const maxSem = (parsed && parsed.isBim) ? 10 : 8;
+                      const options = [];
+                      for (let i = 1; i <= maxSem; i++) {
+                        options.push(
+                          <option key={i} value={i.toString()} style={{ backgroundColor: '#18181b' }}>
+                            Semester {i}
+                          </option>
+                        );
+                      }
+                      return options;
+                    })()
+                  ) : (
+                    <>
+                      <option value="0" style={{ backgroundColor: '#18181b' }}>Not a Student / Professional</option>
+                      {[1,2,3,4,5,6,7,8].map(i => (
+                        <option key={i} value={i.toString()} style={{ backgroundColor: '#18181b' }}>
+                          Semester {i}
+                        </option>
+                      ))}
+                    </>
+                  )}
+                </select>
               </div>
 
               {isVitBhopal && (

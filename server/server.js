@@ -5,6 +5,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
+import { MongoClient } from 'mongodb';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,10 +22,29 @@ const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const SCRIPTS_DIR = path.join(path.dirname(__dirname), 'scripts');
 const PYTHON_SCRIPT = path.join(SCRIPTS_DIR, 'fetch_opportunities.py');
 
-// High-entropy secret generated dynamically on startup to sign session tokens securely
-// Ensure database directories and database files exist
+// Ensure database directories exist
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// MongoDB Database Client Connection Setup
+const MONGODB_URI = process.env.MONGODB_URI;
+let db = null;
+let client = null;
+
+if (MONGODB_URI) {
+  console.log("Connecting to MongoDB Atlas...");
+  client = new MongoClient(MONGODB_URI);
+  client.connect()
+    .then(c => {
+      db = c.db();
+      console.log("Successfully connected to MongoDB Database!");
+    })
+    .catch(err => {
+      console.error("Failed to connect to MongoDB Atlas, falling back to local files:", err);
+    });
+} else {
+  console.log("No MONGODB_URI set, running in local fallback file mode.");
 }
 
 // Load or generate a persistent secret so session tokens remain valid across server restarts
@@ -142,7 +162,7 @@ if (!fs.existsSync(OPPORTUNITIES_FILE)) {
   writeInitialSeeds();
 }
 
-// User helper functions
+// User helper functions (local file fallback fallback)
 const loadUsers = () => {
   if (!fs.existsSync(USERS_FILE)) {
     fs.writeFileSync(USERS_FILE, JSON.stringify({}, null, 2), 'utf-8');
@@ -157,6 +177,119 @@ const loadUsers = () => {
 
 const saveUsers = (users) => {
   fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
+};
+
+// Database interface methods
+const findUserByEmail = async (email) => {
+  const lowerEmail = email.toLowerCase().trim();
+  if (db) {
+    try {
+      return await db.collection('users').findOne({ email: lowerEmail });
+    } catch (err) {
+      console.error("MongoDB findUserByEmail error, falling back to file:", err);
+    }
+  }
+  const users = loadUsers();
+  return users[lowerEmail] || null;
+};
+
+const saveUser = async (email, userData) => {
+  const lowerEmail = email.toLowerCase().trim();
+  if (db) {
+    try {
+      await db.collection('users').updateOne(
+        { email: lowerEmail },
+        { $set: userData },
+        { upsert: true }
+      );
+      return;
+    } catch (err) {
+      console.error("MongoDB saveUser error, falling back to file:", err);
+    }
+  }
+  const users = loadUsers();
+  users[lowerEmail] = userData;
+  saveUsers(users);
+};
+
+const getOpportunities = async () => {
+  if (db) {
+    try {
+      const data = await db.collection('opportunities').findOne({ type: 'metadata' });
+      if (data) {
+        return {
+          lastUpdated: data.lastUpdated,
+          opportunities: data.opportunities || []
+        };
+      }
+    } catch (err) {
+      console.error("MongoDB getOpportunities error, falling back to file:", err);
+    }
+  }
+  if (!fs.existsSync(OPPORTUNITIES_FILE)) {
+    writeInitialSeeds();
+  }
+  try {
+    const data = JSON.parse(fs.readFileSync(OPPORTUNITIES_FILE, 'utf-8'));
+    return {
+      lastUpdated: data.lastUpdated,
+      opportunities: data.opportunities || []
+    };
+  } catch (e) {
+    return { lastUpdated: '', opportunities: [] };
+  }
+};
+
+const saveOpportunities = async (opportunitiesData) => {
+  fs.writeFileSync(OPPORTUNITIES_FILE, JSON.stringify(opportunitiesData, null, 2), 'utf-8');
+  if (db) {
+    try {
+      await db.collection('opportunities').updateOne(
+        { type: 'metadata' },
+        { $set: {
+            type: 'metadata',
+            lastUpdated: opportunitiesData.lastUpdated,
+            opportunities: opportunitiesData.opportunities
+          }
+        },
+        { upsert: true }
+      );
+      console.log("Successfully synced opportunities to MongoDB Atlas!");
+    } catch (err) {
+      console.error("MongoDB saveOpportunities error:", err);
+    }
+  }
+};
+
+// Parser to extract registration number and program name from VIT email
+const parseVitBhopalEmail = (email) => {
+  const cleanEmail = email.trim().toLowerCase();
+  const vitRegex = /^([a-zA-Z.-]+)\.([a-zA-Z0-9]+)@vitbhopal\.ac\.in$/;
+  const match = cleanEmail.match(vitRegex);
+  if (!match) return null;
+
+  const registrationNumber = match[2].toUpperCase();
+  const progMatch = registrationNumber.match(/^\d{2}([A-Z]{3})/);
+  let program = 'VIT Bhopal Student';
+  
+  if (progMatch) {
+    const code = progMatch[1];
+    const programMap = {
+      'BIM': 'Integrated M.Tech CSE (Computational & Data Science)',
+      'BCE': 'B.Tech Computer Science & Engineering',
+      'BDS': 'B.Tech CSE (Data Science)',
+      'BAI': 'B.Tech CSE (AI & ML)',
+      'BCY': 'B.Tech CSE (Cyber Security)',
+      'BEC': 'B.Tech Electronics & Communication Engineering',
+      'BEE': 'B.Tech Electrical & Electronics Engineering',
+      'BME': 'B.Tech Mechanical Engineering',
+      'BBA': 'Bachelor of Business Administration',
+      'MCA': 'Master of Computer Applications'
+    };
+    program = programMap[code] || `B.Tech/M.Tech (${code}) Student`;
+  }
+
+  return { registrationNumber, program };
 };
 
 // PBKDF2 Password Hashing
@@ -203,7 +336,7 @@ const verifyToken = (token) => {
 };
 
 // Express Authenticated Route Middleware
-const authenticate = (req, res, next) => {
+const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Access denied. No token provided.' });
@@ -215,8 +348,7 @@ const authenticate = (req, res, next) => {
     return res.status(401).json({ error: 'Session expired. Please log in again.' });
   }
 
-  const users = loadUsers();
-  const user = users[email.toLowerCase()];
+  const user = await findUserByEmail(email);
   if (!user) {
     return res.status(401).json({ error: 'User does not exist.' });
   }
@@ -228,9 +360,9 @@ const authenticate = (req, res, next) => {
 // ================= AUTH ROUTES =================
 
 // 1. Register User
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   try {
-    const { name, email, password, isVitBhopal, courses } = req.body;
+    const { name, email, password, isVitBhopal, courses, semester } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Name, email, and password are required.' });
@@ -241,6 +373,8 @@ app.post('/api/auth/register', (req, res) => {
     }
 
     const lowerEmail = email.trim().toLowerCase();
+    let registrationNumber = '';
+    let program = 'Global Member';
 
     // Verification logic
     if (isVitBhopal) {
@@ -251,6 +385,11 @@ app.post('/api/auth/register', (req, res) => {
           error: 'College email must follow the prototype: firstname.registrationnumber@vitbhopal.ac.in'
         });
       }
+      const parsed = parseVitBhopalEmail(lowerEmail);
+      if (parsed) {
+        registrationNumber = parsed.registrationNumber;
+        program = parsed.program;
+      }
     } else {
       const generalRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!generalRegex.test(lowerEmail)) {
@@ -258,8 +397,8 @@ app.post('/api/auth/register', (req, res) => {
       }
     }
 
-    const users = loadUsers();
-    if (users[lowerEmail]) {
+    const existingUser = await findUserByEmail(lowerEmail);
+    if (existingUser) {
       return res.status(400).json({ error: 'User already exists with this email.' });
     }
 
@@ -268,10 +407,13 @@ app.post('/api/auth/register', (req, res) => {
     const passwordHash = hashPassword(password, salt);
 
     // Create user profile
-    users[lowerEmail] = {
+    const newUser = {
       name: name.trim(),
       email: lowerEmail,
       isVitBhopal: !!isVitBhopal,
+      registrationNumber,
+      program,
+      semester: semester ? parseInt(semester, 10) : 1,
       courses: Array.isArray(courses) ? courses : [],
       passwordHash,
       salt,
@@ -280,12 +422,12 @@ app.post('/api/auth/register', (req, res) => {
       createdAt: new Date().toISOString()
     };
 
-    saveUsers(users);
+    await saveUser(lowerEmail, newUser);
 
     const token = generateToken(lowerEmail);
 
     // Remove sensitive data before sending back response
-    const userProfile = { ...users[lowerEmail] };
+    const userProfile = { ...newUser };
     delete userProfile.passwordHash;
     delete userProfile.salt;
 
@@ -296,7 +438,7 @@ app.post('/api/auth/register', (req, res) => {
 });
 
 // 2. Login User
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -305,8 +447,7 @@ app.post('/api/auth/login', (req, res) => {
     }
 
     const lowerEmail = email.trim().toLowerCase();
-    const users = loadUsers();
-    const user = users[lowerEmail];
+    const user = await findUserByEmail(lowerEmail);
 
     if (!user) {
       return res.status(400).json({ error: 'Invalid email or password.' });
@@ -338,11 +479,14 @@ app.get('/api/user/profile', authenticate, (req, res) => {
 });
 
 // 4. Update User Profile Progress / Stats
-app.post('/api/user/profile', authenticate, (req, res) => {
+app.post('/api/user/profile', authenticate, async (req, res) => {
   try {
-    const { xpPoints, skillsProgress, courses } = req.body;
-    const users = loadUsers();
-    const user = users[req.user.email];
+    const { xpPoints, skillsProgress, courses, semester } = req.body;
+    const user = await findUserByEmail(req.user.email);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
 
     if (xpPoints !== undefined) {
       user.xpPoints = parseInt(xpPoints, 10) || 0;
@@ -353,9 +497,11 @@ app.post('/api/user/profile', authenticate, (req, res) => {
     if (courses !== undefined) {
       user.courses = Array.isArray(courses) ? courses : [];
     }
+    if (semester !== undefined) {
+      user.semester = parseInt(semester, 10) || 1;
+    }
 
-    users[req.user.email] = user;
-    saveUsers(users);
+    await saveUser(req.user.email, user);
 
     const userProfile = { ...user };
     delete userProfile.passwordHash;
@@ -370,12 +516,9 @@ app.post('/api/user/profile', authenticate, (req, res) => {
 // ================= OPPORTUNITY & SCRAPER ROUTES =================
 
 // 1. GET Route: Fetch opportunities (with personalization based on active courses)
-app.get('/api/opportunities', (req, res) => {
+app.get('/api/opportunities', async (req, res) => {
   try {
-    if (!fs.existsSync(OPPORTUNITIES_FILE)) {
-      writeInitialSeeds();
-    }
-    const data = JSON.parse(fs.readFileSync(OPPORTUNITIES_FILE, 'utf-8'));
+    const data = await getOpportunities();
     let opps = data.opportunities || [];
 
     // Personalization check: If a valid authentication token is passed, boost match score for selected courses
@@ -384,8 +527,7 @@ app.get('/api/opportunities', (req, res) => {
       const token = authHeader.split(' ')[1];
       const email = verifyToken(token);
       if (email) {
-        const users = loadUsers();
-        const user = users[email.toLowerCase()];
+        const user = await findUserByEmail(email);
         if (user && user.isVitBhopal && user.courses.length > 0) {
           // Boost matching opportunities
           opps = opps.map(opp => {
@@ -459,9 +601,17 @@ app.post('/api/research', (req, res) => {
     res.write(`ERROR: ${data.toString()}`);
   });
 
-  child.on('close', (code) => {
+  child.on('close', async (code) => {
     if (code === 0) {
-      res.write("\nSTATUS_SUCCESS: Scraper executed successfully and database updated!\n");
+      try {
+        if (fs.existsSync(OPPORTUNITIES_FILE)) {
+          const fileData = JSON.parse(fs.readFileSync(OPPORTUNITIES_FILE, 'utf-8'));
+          await saveOpportunities(fileData);
+        }
+        res.write("\nSTATUS_SUCCESS: Scraper executed successfully and database updated!\n");
+      } catch (err) {
+        res.write(`\nSTATUS_SUCCESS: Scraper executed successfully, but failed to sync to MongoDB: ${err.message}\n`);
+      }
     } else {
       res.write(`\nSTATUS_FAILED: Scraper process exited with code ${code}\n`);
     }
@@ -509,8 +659,19 @@ const runCrawlerSilently = () => {
     console.log(`[Scheduler Scraper] ${data.toString().trim()}`);
   });
 
-  child.on('close', (code) => {
+  child.on('close', async (code) => {
     console.log(`[Scheduler Scraper] Completed with exit code ${code}`);
+    if (code === 0) {
+      try {
+        if (fs.existsSync(OPPORTUNITIES_FILE)) {
+          const fileData = JSON.parse(fs.readFileSync(OPPORTUNITIES_FILE, 'utf-8'));
+          await saveOpportunities(fileData);
+          console.log(`[Scheduler Scraper] Synced crawled opportunities to MongoDB Atlas successfully.`);
+        }
+      } catch (err) {
+        console.error(`[Scheduler Scraper] Failed to sync crawled opportunities: ${err.message}`);
+      }
+    }
   });
 };
 
