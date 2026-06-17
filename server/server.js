@@ -168,11 +168,15 @@ const sendMailHelper = async (to, subject, text) => {
         return true;
       } else {
         console.error(`Resend API error sending to ${to}:`, data);
-        smtpHealthy = false;
+        // Only set unhealthy if it's an authorization/authentication issue or server error (not 400 Bad Request)
+        if (res.status === 401 || res.status >= 500) {
+          smtpHealthy = false;
+        }
         throw new Error(data.message || 'Failed to send email via Resend.');
       }
     } catch (err) {
       console.error(`Resend connection error sending to ${to}:`, err);
+      // Connection timeouts/failures should set unhealthy
       smtpHealthy = false;
       throw new Error('Failed to send email. Please try again later.');
     }
@@ -188,8 +192,11 @@ const sendMailHelper = async (to, subject, text) => {
       return true;
     } catch (err) {
       console.error(`Nodemailer error sending to ${to}:`, err);
-      // Mark SMTP as unhealthy on send failure
-      smtpHealthy = false;
+      // Only set unhealthy on connection/auth errors
+      const isConnectionOrAuthError = err.code === 'ECONNREFUSED' || err.code === 'EAUTH' || err.responseCode >= 500;
+      if (isConnectionOrAuthError) {
+        smtpHealthy = false;
+      }
       throw new Error('Failed to send email. Please try again later.');
     }
   } else {
