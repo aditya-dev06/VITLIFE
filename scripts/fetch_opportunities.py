@@ -2,6 +2,7 @@ import os
 import json
 import re
 import sys
+import time
 from datetime import datetime
 
 # Import duckduckgo_search safely
@@ -114,11 +115,104 @@ CURATED_OPPORTUNITIES = [
         "matchScore": 93,
         "description": "Explore and register for active hackathons, coding challenges, and internships curated for college students in India.",
         "tags": ["Hackathon", "India", "College Students", "Coding"]
+    },
+    {
+        "id": "c9",
+        "title": "Major League Hacking (MLH) Hackathon Season",
+        "type": "hackathon",
+        "organization": "Major League Hacking",
+        "link": "https://mlh.io/seasons/2026/events",
+        "deadline": "Ongoing events",
+        "matchScore": 96,
+        "description": "The official student hackathon league. Compete in weekly global digital and in-person hackathons. Highly valuable for building developer portfolios.",
+        "tags": ["Hackathon", "Global", "Student Event", "Weekly"]
+    },
+    {
+        "id": "c10",
+        "title": "TCS CodeVita 2026 - Global Coding Contest",
+        "type": "hackathon",
+        "organization": "Tata Consultancy Services",
+        "link": "https://www.tcscodevita.com/",
+        "deadline": "Check official portal",
+        "matchScore": 97,
+        "description": "One of the world's largest coding competitions for college students. Top performers secure direct interview invites for prime roles.",
+        "tags": ["Hackathon", "Coding Contest", "Placements", "India"]
+    },
+    {
+        "id": "c11",
+        "title": "Microsoft Imagine Cup 2026",
+        "type": "hackathon",
+        "organization": "Microsoft",
+        "link": "https://imaginecup.microsoft.com/",
+        "deadline": "Check portal for registration",
+        "matchScore": 95,
+        "description": "A global competition for student developers to build innovative technology projects using Microsoft Azure. Huge cash prizes and mentoring from industry leaders.",
+        "tags": ["Hackathon", "Global", "Azure", "Mentor Support"]
+    },
+    {
+        "id": "c12",
+        "title": "Amazon ML Challenge 2026",
+        "type": "hackathon",
+        "organization": "Amazon India",
+        "link": "https://www.amazon.science/",
+        "deadline": "Varies (usually mid-year)",
+        "matchScore": 98,
+        "description": "An annual competition designed to test machine learning modeling skills on real-world datasets. Top ranks get direct interview opportunities at Amazon.",
+        "tags": ["Hackathon", "Machine Learning", "Amazon", "Placements"]
+    },
+    {
+        "id": "c13",
+        "title": "Google Girl Hackathon 2026",
+        "type": "hackathon",
+        "organization": "Google India",
+        "link": "https://buildyourfuture.withgoogle.com/",
+        "deadline": "Announced annually",
+        "matchScore": 96,
+        "description": "A coding and system design challenge for female engineering students across India, designed to create a pipeline for internship and full-time hiring.",
+        "tags": ["Hackathon", "Coding Contest", "Women in Tech", "Google"]
+    },
+    {
+        "id": "c14",
+        "title": "Kaggle Active Data Science Competitions",
+        "type": "hackathon",
+        "organization": "Kaggle (Google)",
+        "link": "https://www.kaggle.com/competitions",
+        "deadline": "Ongoing",
+        "matchScore": 94,
+        "description": "Solve challenging machine learning problems on real datasets. Gold/Silver medals are highly respected on resumes for Data Science roles.",
+        "tags": ["Hackathon", "Data Science", "Machine Learning", "Kaggle"]
+    },
+    {
+        "id": "c15",
+        "title": "LeetCode Weekly & Biweekly Contests",
+        "type": "hackathon",
+        "organization": "LeetCode",
+        "link": "https://leetcode.com/contest/",
+        "deadline": "Every Sunday & alternate Saturdays",
+        "matchScore": 95,
+        "description": "Improve your speed and accuracy in solving DSA problems. Crucial preparation for top tier technical screening tests.",
+        "tags": ["Coding Contest", "DSA", "Weekly", "Practice"]
+    },
+    {
+        "id": "c16",
+        "title": "Flipkart Runway Season 6",
+        "type": "internship",
+        "organization": "Flipkart",
+        "link": "https://unstop.com/competitions/flipkart-runway",
+        "deadline": "Check Unstop portal",
+        "matchScore": 94,
+        "description": "Engineering challenge for female students offering direct summer internships at Flipkart. Focuses on coding, analytical ability, and innovation.",
+        "tags": ["Internship Challenge", "Women in Tech", "Flipkart", "Summer Intern"]
     }
 ]
 
-def is_relevant(title, body, opp_type):
+def is_relevant(title, body, opp_type, link):
     text = (title + " " + body).lower()
+    
+    # Bypass strict tech check for trusted platforms
+    trusted_domains = ["devpost.com", "unstop.com", "hackerearth.com", "kaggle.com", "sih.gov.in"]
+    if any(domain in link.lower() for domain in trusted_domains):
+        return True
     
     # Must contain at least one of these tech/education keywords
     tech_keywords = [
@@ -176,105 +270,121 @@ def calculate_match_score(title, description):
     return min(score, 99)
 
 def fetch_from_duckduckgo():
-    # Simplest keywords to avoid triggering DuckDuckGo blocks or empty responses
+    # Multiple highly targeted queries to grab active hackathons and opportunities
     queries = {
-        "hackathon": "hackathons",
-        "internship": "data science internship",
-        "course": "free data science courses",
-        "certificate": "AI certification"
+        "hackathon": [
+            "unstop hackathons",
+            "devpost AI hackathons",
+            "hackerearth coding contests"
+        ],
+        "internship": [
+            "data science machine learning internship India"
+        ],
+        "course": [
+            "free data science courses"
+        ],
+        "certificate": [
+            "AI certification free courses"
+        ]
     }
 
     crawled_items = []
+    seen_links = set()
     
     print("Starting DuckDuckGo search queries...")
     with DDGS() as ddgs:
-        for opp_type, query in queries.items():
-            print(f"Searching for {opp_type}s with query: '{query}'...")
-            try:
-                results = list(ddgs.text(query))
-                count = 0
-                for r in results[:8]:  # Limit to top 8 results to prevent spam
-                    title = r.get("title", "")
-                    link = r.get("href", "")
-                    body = r.get("body", "")
+        for opp_type, query_list in queries.items():
+            for query in query_list:
+                print(f"Searching for {opp_type}s with query: '{query}'...")
+                time.sleep(2.5)  # Add delay to avoid bot detection/rate-limiting
+                try:
+                    results = list(ddgs.text(query))
+                    print(f"DEBUG: '{query}' returned {len(results)} results")
+                    count = 0
+                    for r in results[:8]:  # Limit to top 8 results to prevent spam
+                        title = r.get("title", "")
+                        link = r.get("href", "")
+                        body = r.get("body", "")
 
-                    if not title or not link:
-                        continue
+                        if not title or not link or link in seen_links:
+                            continue
 
-                    # Filter out noise
-                    if any(domain in link for domain in ["youtube.com", "facebook.com", "instagram.com", "twitter.com"]):
-                        continue
+                        # Filter out noise
+                        if any(domain in link for domain in ["youtube.com", "facebook.com", "instagram.com", "twitter.com"]):
+                            continue
 
-                    # Filter out irrelevant search results (e.g. movies, games, general online freebies)
-                    if not is_relevant(title, body, opp_type):
-                        continue
+                        # Filter out irrelevant search results (e.g. movies, games, general online freebies)
+                        if not is_relevant(title, body, opp_type, link):
+                            continue
 
-                    # Determine score
-                    score = calculate_match_score(title, body)
+                        seen_links.add(link)
 
-                    # Extract organization name if possible (e.g., from domain or title)
-                    domain_match = re.search(r'https?://(?:www\.)?([^/]+)', link)
-                    org = domain_match.group(1) if domain_match else "Online Portal"
-                    
-                    if "coursera" in link:
-                        org = "Coursera"
-                    elif "udemy" in link:
-                        org = "Udemy"
-                    elif "unstop" in link:
-                        org = "Unstop"
-                    elif "devpost" in link:
-                        org = "Devpost"
-                    elif "linkedin" in link:
-                        org = "LinkedIn Careers"
-                    elif "internshala" in link:
-                        org = "Internshala"
-                    elif "hackerearth" in link:
-                        org = "HackerEarth"
-                    elif "google" in link:
-                        org = "Google"
-                    elif "ibm" in link:
-                        org = "IBM"
+                        # Determine score
+                        score = calculate_match_score(title, body)
 
-                    # Generate a deadline representation
-                    deadline = "Check official site"
-                    date_matches = re.findall(r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}(?:st|nd|rd|th)?(?:, \d{4})?\b', body)
-                    if date_matches:
-                        deadline = date_matches[0]
+                        # Extract organization name if possible (e.g., from domain or title)
+                        domain_match = re.search(r'https?://(?:www\.)?([^/]+)', link)
+                        org = domain_match.group(1) if domain_match else "Online Portal"
+                        
+                        if "coursera" in link:
+                            org = "Coursera"
+                        elif "udemy" in link:
+                            org = "Udemy"
+                        elif "unstop" in link:
+                            org = "Unstop"
+                        elif "devpost" in link:
+                            org = "Devpost"
+                        elif "linkedin" in link:
+                            org = "LinkedIn Careers"
+                        elif "internshala" in link:
+                            org = "Internshala"
+                        elif "hackerearth" in link:
+                            org = "HackerEarth"
+                        elif "google" in link:
+                            org = "Google"
+                        elif "ibm" in link:
+                            org = "IBM"
 
-                    tags = [opp_type.capitalize()]
-                    if "remote" in body.lower() or "remote" in title.lower():
-                        tags.append("Remote")
-                    else:
-                        tags.append("India")
-                    
-                    if score >= 80:
-                        tags.append("Top Match")
-                    
-                    if "python" in (title + body).lower():
-                        tags.append("Python")
+                        # Generate a deadline representation
+                        deadline = "Check official site"
+                        date_matches = re.findall(r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}(?:st|nd|rd|th)?(?:, \d{4})?\b', body)
+                        if date_matches:
+                            deadline = date_matches[0]
 
-                    crawled_items.append({
-                        "id": f"ddg-{opp_type}-{count}-{hash(title) % 10000}",
-                        "title": title,
-                        "type": "certificate" if opp_type == "certificate" else opp_type,
-                        "organization": org,
-                        "link": link,
-                        "deadline": deadline,
-                        "matchScore": score,
-                        "description": body,
-                        "tags": tags
-                    })
-                    count += 1
-                print(f"Found {count} opportunities for {opp_type}.")
-            except Exception as e:
-                print(f"Error searching for {opp_type}s: {e}")
+                        tags = [opp_type.capitalize()]
+                        if "remote" in body.lower() or "remote" in title.lower():
+                            tags.append("Remote")
+                        else:
+                            tags.append("India")
+                        
+                        if score >= 80:
+                            tags.append("Top Match")
+                        
+                        if "python" in (title + body).lower():
+                            tags.append("Python")
+
+                        crawled_items.append({
+                            "id": f"ddg-{opp_type}-{count}-{hash(title) % 10000}",
+                            "title": title,
+                            "type": "certificate" if opp_type == "certificate" else opp_type,
+                            "organization": org,
+                            "link": link,
+                            "deadline": deadline,
+                            "matchScore": score,
+                            "description": body,
+                            "tags": tags
+                        })
+                        count += 1
+                    print(f"Found {count} opportunities for query: '{query}'.")
+                except Exception as e:
+                    print(f"Error searching for query '{query}': {e}")
 
     # Remove duplicates based on title similarity or exact links
     unique_items = []
-    seen_links = set()
+    seen_final_links = set()
     for item in crawled_items:
-        if item["link"] not in seen_links:
-            seen_links.add(item["link"])
+        if item["link"] not in seen_final_links:
+            seen_final_links.add(item["link"])
             unique_items.append(item)
 
     return unique_items

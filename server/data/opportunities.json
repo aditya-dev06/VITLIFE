@@ -1,6 +1,6 @@
 {
-  "lastUpdated": "2026-06-17 11:08:48",
-  "count": 8,
+  "lastUpdated": "2026-06-17 06:25:10",
+  "count": 16,
   "opportunities": [
     {
       "id": "c1",
@@ -128,6 +128,134 @@
         "India",
         "College Students",
         "Coding"
+      ]
+    },
+    {
+      "id": "c9",
+      "title": "Major League Hacking (MLH) Hackathon Season",
+      "type": "hackathon",
+      "organization": "Major League Hacking",
+      "link": "https://mlh.io/seasons/2026/events",
+      "deadline": "Ongoing events",
+      "matchScore": 96,
+      "description": "The official student hackathon league. Compete in weekly global digital and in-person hackathons. Highly valuable for building developer portfolios.",
+      "tags": [
+        "Hackathon",
+        "Global",
+        "Student Event",
+        "Weekly"
+      ]
+    },
+    {
+      "id": "c10",
+      "title": "TCS CodeVita 2026 - Global Coding Contest",
+      "type": "hackathon",
+      "organization": "Tata Consultancy Services",
+      "link": "https://www.tcscodevita.com/",
+      "deadline": "Check official portal",
+      "matchScore": 97,
+      "description": "One of the world's largest coding competitions for college students. Top performers secure direct interview invites for prime roles.",
+      "tags": [
+        "Hackathon",
+        "Coding Contest",
+        "Placements",
+        "India"
+      ]
+    },
+    {
+      "id": "c11",
+      "title": "Microsoft Imagine Cup 2026",
+      "type": "hackathon",
+      "organization": "Microsoft",
+      "link": "https://imaginecup.microsoft.com/",
+      "deadline": "Check portal for registration",
+      "matchScore": 95,
+      "description": "A global competition for student developers to build innovative technology projects using Microsoft Azure. Huge cash prizes and mentoring from industry leaders.",
+      "tags": [
+        "Hackathon",
+        "Global",
+        "Azure",
+        "Mentor Support"
+      ]
+    },
+    {
+      "id": "c12",
+      "title": "Amazon ML Challenge 2026",
+      "type": "hackathon",
+      "organization": "Amazon India",
+      "link": "https://www.amazon.science/",
+      "deadline": "Varies (usually mid-year)",
+      "matchScore": 98,
+      "description": "An annual competition designed to test machine learning modeling skills on real-world datasets. Top ranks get direct interview opportunities at Amazon.",
+      "tags": [
+        "Hackathon",
+        "Machine Learning",
+        "Amazon",
+        "Placements"
+      ]
+    },
+    {
+      "id": "c13",
+      "title": "Google Girl Hackathon 2026",
+      "type": "hackathon",
+      "organization": "Google India",
+      "link": "https://buildyourfuture.withgoogle.com/",
+      "deadline": "Announced annually",
+      "matchScore": 96,
+      "description": "A coding and system design challenge for female engineering students across India, designed to create a pipeline for internship and full-time hiring.",
+      "tags": [
+        "Hackathon",
+        "Coding Contest",
+        "Women in Tech",
+        "Google"
+      ]
+    },
+    {
+      "id": "c14",
+      "title": "Kaggle Active Data Science Competitions",
+      "type": "hackathon",
+      "organization": "Kaggle (Google)",
+      "link": "https://www.kaggle.com/competitions",
+      "deadline": "Ongoing",
+      "matchScore": 94,
+      "description": "Solve challenging machine learning problems on real datasets. Gold/Silver medals are highly respected on resumes for Data Science roles.",
+      "tags": [
+        "Hackathon",
+        "Data Science",
+        "Machine Learning",
+        "Kaggle"
+      ]
+    },
+    {
+      "id": "c15",
+      "title": "LeetCode Weekly & Biweekly Contests",
+      "type": "hackathon",
+      "organization": "LeetCode",
+      "link": "https://leetcode.com/contest/",
+      "deadline": "Every Sunday & alternate Saturdays",
+      "matchScore": 95,
+      "description": "Improve your speed and accuracy in solving DSA problems. Crucial preparation for top tier technical screening tests.",
+      "tags": [
+        "Coding Contest",
+        "DSA",
+        "Weekly",
+        "Practice"
+      ]
+    },
+    {
+      "id": "c16",
+      "title": "Flipkart Runway Season 6",
+      "type": "internship",
+      "organization": "Flipkart",
+      "link": "https://unstop.com/competitions/flipkart-runway",
+      "deadline": "Check Unstop portal",
+      "matchScore": 94,
+      "description": "Engineering challenge for female students offering direct summer internships at Flipkart. Focuses on coding, analytical ability, and innovation.",
+      "tags": [
+        "Internship Challenge",
+        "Women in Tech",
+        "Flipkart",
+        "Summer Intern"
       ]
     }
   ]
