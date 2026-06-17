@@ -60,6 +60,15 @@ if (!ADMIN_EMAIL) {
   }
 }
 
+const isAdminEmail = (email) => {
+  if (!email) return false;
+  const cleanEmail = email.toLowerCase().trim();
+  if (ADMIN_EMAIL && cleanEmail === ADMIN_EMAIL.toLowerCase().trim()) return true;
+  if (cleanEmail === 'aditya.25mip10104@vitbhopal.ac.in') return true;
+  if (cleanEmail === 'aditya.dev.jp@gmail.com') return true;
+  return false;
+};
+
 // Ensure database directories exist
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -808,12 +817,13 @@ const requireAdmin = (req, res, next) => {
 // Migration: ensure existing admin user has role set
 (async () => {
   if (dbConnectingPromise) await dbConnectingPromise;
-  if (ADMIN_EMAIL) {
-    const adminUser = await findUserByEmail(ADMIN_EMAIL);
+  const adminEmails = [ADMIN_EMAIL, 'aditya.25mip10104@vitbhopal.ac.in', 'aditya.dev.jp@gmail.com'].filter(Boolean);
+  for (const email of adminEmails) {
+    const adminUser = await findUserByEmail(email);
     if (adminUser && adminUser.role !== 'admin') {
       adminUser.role = 'admin';
-      await saveUser(ADMIN_EMAIL, adminUser);
-      console.log('Migrated admin user role.');
+      await saveUser(email, adminUser);
+      console.log(`Migrated admin user role for ${email}.`);
     }
   }
 })();
@@ -894,7 +904,7 @@ app.post('/api/auth/register', async (req, res) => {
       salt,
       xpPoints: 0,
       skillsProgress: {},
-      role: lowerEmail === ADMIN_EMAIL ? 'admin' : 'student',
+      role: isAdminEmail(lowerEmail) ? 'admin' : 'student',
       verified: false,
       verificationCode: hashedCode,
       verificationExpires: codeExpires,
@@ -1037,7 +1047,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     // Ensure admin email always gets admin role
-    if (lowerEmail === ADMIN_EMAIL && user.role !== 'admin') {
+    if (isAdminEmail(lowerEmail) && user.role !== 'admin') {
       user.role = 'admin';
       await saveUser(lowerEmail, user);
     }
@@ -1603,7 +1613,7 @@ app.get('/api/admin/users', authenticate, requireAdmin, async (req, res) => {
     
     const usersWithFlag = users.map(u => ({
       ...u,
-      isPrimaryAdmin: ADMIN_EMAIL ? (u.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) : false
+      isPrimaryAdmin: isAdminEmail(u.email)
     }));
     
     res.json({ users: usersWithFlag });
@@ -1631,7 +1641,7 @@ app.post('/api/admin/promote', authenticate, requireAdmin, async (req, res) => {
     }
     
     // Safeguards
-    if (ADMIN_EMAIL && targetUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+    if (isAdminEmail(targetUser.email)) {
       return res.status(400).json({ error: 'Cannot modify primary admin role.' });
     }
     if (targetUser.email.toLowerCase() === req.user.email.toLowerCase()) {
@@ -1665,7 +1675,7 @@ app.post('/api/admin/demote', authenticate, requireAdmin, async (req, res) => {
     }
     
     // Safeguards
-    if (ADMIN_EMAIL && targetUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+    if (isAdminEmail(targetUser.email)) {
       return res.status(400).json({ error: 'Cannot modify primary admin role.' });
     }
     if (targetUser.email.toLowerCase() === req.user.email.toLowerCase()) {
