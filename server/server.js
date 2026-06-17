@@ -129,6 +129,7 @@ if (!resendApiKey && smtpHost && smtpUser && smtpPass) {
 }
 
 let smtpHealthy = false;
+let smtpError = null;
 if (resendApiKey) {
   smtpHealthy = true;
   console.log('✅ Resend API email service configured.');
@@ -136,10 +137,12 @@ if (resendApiKey) {
   transporter.verify()
     .then(() => {
       smtpHealthy = true;
+      smtpError = null;
       console.log('✅ SMTP connection verified successfully.');
     })
     .catch((err) => {
       smtpHealthy = false;
+      smtpError = err.message || String(err);
       console.error('❌ SMTP connection failed:', err.message);
     });
 } else {
@@ -1750,6 +1753,7 @@ app.delete('/api/recruitments/:id', authenticate, async (req, res) => {
 app.get('/api/health/smtp', (req, res) => {
   res.json({
     smtpHealthy,
+    smtpError,
     smtpHost: process.env.SMTP_HOST || null,
     smtpPort: process.env.SMTP_PORT || null,
     smtpUser: process.env.SMTP_USER || null,
