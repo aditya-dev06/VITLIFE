@@ -10,7 +10,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "node server/server.js"
+    "start": "node server/server.js",
+    "postinstall": "npm run build"
   },
   "dependencies": {
     "concurrently": "^10.0.3",

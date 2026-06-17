@@ -466,12 +466,23 @@ app.post('/api/research', (req, res) => {
 
 // Serve frontend build static files in production
 const frontendBuild = path.join(path.dirname(__dirname), 'dist');
-if (fs.existsSync(frontendBuild)) {
-  app.use(express.static(frontendBuild));
-  app.get('/{*splat}', (req, res) => {
-    res.sendFile(path.join(frontendBuild, 'index.html'));
-  });
-}
+console.log(`Serving static files from: ${frontendBuild} (Exists: ${fs.existsSync(frontendBuild)})`);
+
+app.use(express.static(frontendBuild));
+
+// Fallback all non-API GET requests to index.html for React routing
+app.use((req, res, next) => {
+  if (req.method === 'GET' && !req.path.startsWith('/api')) {
+    const indexPath = path.join(frontendBuild, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      res.status(404).send('Frontend build index.html not found. Please run npm run build.');
+    }
+  } else {
+    next();
+  }
+});
 
 // 3. Scheduler: Run crawler automatically every 24 hours
 const runCrawlerSilently = () => {
