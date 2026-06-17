@@ -39,6 +39,57 @@ function formatDate(dateStr) {
   } catch { return dateStr; }
 }
 
+function formatDateTime(dtStr) {
+  if (!dtStr) return '';
+  try {
+    return new Date(dtStr).toLocaleString('en-IN', {
+      weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  } catch { return dtStr; }
+}
+
+/**
+ * Returns the status of an event:
+ *  'ended'       — event has ended (eventEndDateTime passed)
+ *  'ongoing'     — event is currently happening (start passed, end not passed)
+ *  'reg_closed'  — registration deadline passed but event hasn't ended
+ *  'reg_open'    — registration is still open
+ *  'upcoming'    — fallback when no deadline/end dates exist
+ */
+function getEventStatus(event) {
+  const now = new Date();
+  const end = event.eventEndDateTime ? new Date(event.eventEndDateTime) : null;
+  const start = event.eventStartDateTime ? new Date(event.eventStartDateTime) : (event.date ? new Date(event.date) : null);
+  const regDeadline = event.registrationDeadline ? new Date(event.registrationDeadline) : null;
+
+  if (end && now > end) return 'ended';
+  if (start && now >= start && (!end || now <= end)) return 'ongoing';
+  if (regDeadline && now > regDeadline) return 'reg_closed';
+  if (regDeadline && now <= regDeadline) return 'reg_open';
+  return 'upcoming';
+}
+
+function getStatusBadge(status) {
+  switch (status) {
+    case 'reg_open': return { text: '🟢 Registration Open', color: '140, 70%, 45%', bg: '140, 70%, 45%' };
+    case 'ongoing': return { text: '🔵 Happening Now', color: '210, 80%, 60%', bg: '210, 80%, 60%' };
+    case 'reg_closed': return { text: '🟡 Registration Closed', color: '40, 80%, 50%', bg: '40, 80%, 50%' };
+    case 'ended': return { text: '🔴 Ended', color: '0, 60%, 55%', bg: '0, 60%, 55%' };
+    default: return { text: '📅 Upcoming', color: '263, 70%, 60%', bg: '263, 70%, 60%' };
+  }
+}
+
+function getCardOpacity(status) {
+  switch (status) {
+    case 'ended': return 0.4;
+    case 'reg_closed': return 0.55;
+    default: return 1;
+  }
+}
+
+const STATUS_SORT_ORDER = { reg_open: 0, ongoing: 1, upcoming: 2, reg_closed: 3, ended: 4 };
+
 const ensureAbsoluteUrl = (urlStr) => {
   if (!urlStr) return '';
   const trimmed = urlStr.trim();
@@ -175,6 +226,55 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
     }
   };
 
+  const handleCreateClub = async (clubData) => {
+    setFormLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/clubs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(clubData)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await fetchClubs();
+        return true;
+      } else {
+        setError(data.error || 'Failed to create club.');
+        return false;
+      }
+    } catch (err) {
+      setError('Network error creating club.');
+      return false;
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleDeleteClub = async (clubId) => {
+    if (!window.confirm('Are you sure you want to delete this club? This will demote any managers of this club to students.')) return;
+    try {
+      const res = await fetch(`/api/clubs/${clubId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        await fetchClubs();
+        if (isAdmin && token) {
+          await fetchAdminUsers();
+        }
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to delete club.');
+      }
+    } catch {
+      alert('Network error deleting club.');
+    }
+  };
+
   const handleCreateEvent = async (formData) => {
     setFormLoading(true);
     setError('');
@@ -208,7 +308,11 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
         venue: formData.venue,
         posterUrl,
         registrationLink: formData.registrationLink ? ensureAbsoluteUrl(formData.registrationLink) : '',
-        tags: formData.tags ? formData.tags.split(',').map(t => t.trim()).filter(Boolean) : []
+        tags: formData.tags ? formData.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        registrationDeadline: formData.registrationDeadline || '',
+        eventStartDateTime: formData.eventStartDateTime || '',
+        eventEndDateTime: formData.eventEndDateTime || '',
+        price: formData.price || ''
       };
 
       const res = await fetch('/api/events', {
@@ -408,11 +512,20 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
     : events.filter(e => e.category === selectedCategory);
 
   // Sort events so pinned ones are always at the top, and then sort by date ascending
+  // Sort events: pinned first, then by status (open > ongoing > upcoming > closed > ended), then by date
   const sortedEvents = [...filteredEvents].sort((a, b) => {
     if (a.pinned && !b.pinned) return -1;
     if (!a.pinned && b.pinned) return 1;
-    return new Date(a.date) - new Date(b.date);
+    const statusA = STATUS_SORT_ORDER[getEventStatus(a)] ?? 2;
+    const statusB = STATUS_SORT_ORDER[getEventStatus(b)] ?? 2;
+    if (statusA !== statusB) return statusA - statusB;
+    const dateA = new Date(a.eventStartDateTime || a.date || 0);
+    const dateB = new Date(b.eventStartDateTime || b.date || 0);
+    return dateA - dateB;
   });
+
+  // Ongoing / Today's Events
+  const ongoingEvents = events.filter(e => getEventStatus(e) === 'ongoing');
 
   // ─── Sub-tabs ────────────────────────────────────────────────────
   const SUB_TABS = [
@@ -587,13 +700,82 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
       {/* ═══════════════ TAB 2: EVENTS ═══════════════ */}
       {activeSubTab === 'events' && (
         <>
+          {/* ── Ongoing / Today's Events Section ── */}
+          {ongoingEvents.length > 0 && (
+            <div style={{ marginBottom: '2rem' }}>
+              <h3 style={{
+                fontSize: '1.1rem', fontWeight: 700, color: 'hsl(var(--text-primary))',
+                marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'
+              }}>
+                <span style={{
+                  display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%',
+                  background: 'hsl(0, 80%, 55%)', boxShadow: '0 0 8px hsl(0, 80%, 55%)',
+                  animation: 'pulse 2s ease-in-out infinite'
+                }} />
+                🔴 Ongoing / Today's Events
+              </h3>
+              <div className="event-masonry-grid">
+                {ongoingEvents.map(event => {
+                  const catColor = getCategoryColor(event.category);
+                  const eventClub = clubs.find(c => c.id === event.clubId);
+                  const clubName = eventClub ? eventClub.name : event.clubName || 'Unknown Club';
+                  return (
+                    <div
+                      key={`ongoing-${event.id}`}
+                      className="glass-card event-card event-masonry-card"
+                      onClick={() => setSelectedEventDetails(event)}
+                      style={{
+                        cursor: 'pointer', position: 'relative',
+                        border: '1px solid hsla(0, 80%, 55%, 0.5)',
+                        boxShadow: '0 0 20px hsla(0, 80%, 55%, 0.15), inset 0 0 20px hsla(0, 80%, 55%, 0.03)',
+                        animation: 'pulse-border 3s ease-in-out infinite'
+                      }}
+                    >
+                      <div style={{
+                        position: 'absolute', top: '0.75rem', left: '0.75rem',
+                        background: 'linear-gradient(135deg, hsl(210, 80%, 55%), hsl(190, 80%, 50%))',
+                        color: 'white', fontSize: '0.65rem', fontWeight: 800,
+                        padding: '0.25rem 0.5rem', borderRadius: '4px', zIndex: 5,
+                        textTransform: 'uppercase', letterSpacing: '0.05em'
+                      }}>
+                        🔵 Happening Now
+                      </div>
+                      {event.posterUrl && (
+                        <img src={event.posterUrl} alt={event.title} className="event-poster-dynamic"
+                          onError={(e) => { e.target.style.display = 'none'; }} />
+                      )}
+                      <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', flexGrow: 1, gap: '0.5rem' }}>
+                        <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0 }}>{event.title}</h3>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 600, color: `hsl(${catColor})` }}>
+                          <ClubLogo club={eventClub} category={event.category} size={24} borderRadius="50%" />
+                          <span>{clubName}</span>
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}>
+                          {event.venue && <span>📍 {event.venue}</span>}
+                          {event.eventEndDateTime && <span>🏁 Ends {formatDateTime(event.eventEndDateTime)}</span>}
+                        </div>
+                        {(event.price && event.price !== '0' && event.price !== 'free') && (
+                          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'hsl(var(--accent))' }}>💰 ₹{event.price}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── All Events Grid ── */}
           {sortedEvents.length > 0 ? (
             <div className="event-masonry-grid">
               {sortedEvents.map(event => {
-                const daysLeft = getDaysRemaining(event.date);
+                const daysLeft = getDaysRemaining(event.registrationDeadline || event.date);
                 const catColor = getCategoryColor(event.category);
                 const eventClub = clubs.find(c => c.id === event.clubId);
                 const clubName = eventClub ? eventClub.name : event.clubName || 'Unknown Club';
+                const status = getEventStatus(event);
+                const badge = getStatusBadge(status);
+                const opacity = getCardOpacity(status);
 
                 return (
                   <div 
@@ -603,28 +785,37 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
                     style={{ 
                       cursor: 'pointer',
                       position: 'relative',
+                      opacity: opacity,
+                      transition: 'opacity 0.3s ease, box-shadow 0.3s ease',
                       border: event.pinned ? '1px solid hsla(var(--primary) / 0.5)' : '1px solid hsla(var(--border-glass))',
                       boxShadow: event.pinned ? '0 0 15px hsla(var(--primary) / 0.15)' : 'none'
                     }}
                   >
+                    {/* Pinned Badge */}
                     {event.pinned && (
                       <div style={{
-                        position: 'absolute',
-                        top: '0.75rem',
-                        left: '0.75rem',
+                        position: 'absolute', top: '0.75rem', left: '0.75rem',
                         background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))',
-                        color: 'white',
-                        fontSize: '0.65rem',
-                        fontWeight: 800,
-                        padding: '0.25rem 0.5rem',
-                        borderRadius: '4px',
-                        zIndex: 5,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em'
+                        color: 'white', fontSize: '0.65rem', fontWeight: 800,
+                        padding: '0.25rem 0.5rem', borderRadius: '4px', zIndex: 5,
+                        textTransform: 'uppercase', letterSpacing: '0.05em'
                       }}>
                         📌 Featured
                       </div>
                     )}
+
+                    {/* Status Badge */}
+                    <div style={{
+                      position: 'absolute', top: '0.75rem', right: '0.75rem',
+                      background: `hsla(${badge.bg}, 0.15)`,
+                      border: `1px solid hsla(${badge.color}, 0.4)`,
+                      color: `hsl(${badge.color})`,
+                      fontSize: '0.62rem', fontWeight: 700,
+                      padding: '0.2rem 0.45rem', borderRadius: '4px', zIndex: 5,
+                      textTransform: 'uppercase', letterSpacing: '0.03em'
+                    }}>
+                      {badge.text}
+                    </div>
 
                     {event.posterUrl && (
                       <img
@@ -639,7 +830,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
                         <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0, flex: 1 }}>
                           {event.title}
                         </h3>
-                        {daysLeft !== null && (
+                        {daysLeft !== null && status !== 'ended' && (
                           <span className="countdown-badge">
                             ⏰ {daysLeft}d left
                           </span>
@@ -647,21 +838,34 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
                       </div>
 
                       <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        marginBottom: '0.3rem',
-                        fontSize: '0.8rem',
-                        fontWeight: 600,
+                        display: 'flex', alignItems: 'center', gap: '0.5rem',
+                        marginBottom: '0.3rem', fontSize: '0.8rem', fontWeight: 600,
                         color: `hsl(${catColor})`
                       }}>
                         <ClubLogo club={eventClub} category={event.category} size={24} borderRadius="50%" />
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{clubName}</span>
                       </div>
 
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginBottom: '0.5rem' }}>
-                        {event.date && <span>📅 {formatDate(event.date)}</span>}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginBottom: '0.3rem' }}>
+                        {event.eventStartDateTime && <span>🚀 {formatDateTime(event.eventStartDateTime)}</span>}
+                        {!event.eventStartDateTime && event.date && <span>📅 {formatDate(event.date)}</span>}
                         {event.venue && <span>📍 {event.venue}</span>}
+                      </div>
+
+                      {/* Registration deadline & Price row */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.78rem', alignItems: 'center' }}>
+                        {event.registrationDeadline && (
+                          <span style={{ color: status === 'reg_closed' || status === 'ended' ? 'hsl(0, 60%, 55%)' : 'hsl(140, 60%, 50%)', fontWeight: 600 }}>
+                            📝 Reg. {status === 'reg_closed' || status === 'ended' ? 'closed' : `till ${formatDateTime(event.registrationDeadline)}`}
+                          </span>
+                        )}
+                        {event.price ? (
+                          <span style={{ fontWeight: 700, color: 'hsl(var(--accent))' }}>
+                            💰 {event.price === '0' || event.price.toLowerCase() === 'free' ? 'Free' : `₹${event.price}`}
+                          </span>
+                        ) : (
+                          <span style={{ fontWeight: 600, color: 'hsl(140, 60%, 50%)' }}>🆓 Free</span>
+                        )}
                       </div>
 
                       {isAdmin && (
@@ -871,6 +1075,11 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
           onPromote={handlePromote}
           onDemote={handleDemote}
           currentUserEmail={user?.email}
+          onCreateClub={handleCreateClub}
+          onDeleteClub={handleDeleteClub}
+          formLoading={formLoading}
+          error={error}
+          setError={setError}
         />
       )}
 
@@ -1076,23 +1285,72 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, on
             </p>
           </div>
 
+          {/* Status Banner */}
+          {(() => {
+            const status = getEventStatus(event);
+            const badge = getStatusBadge(status);
+            return (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                padding: '0.6rem 0.85rem', borderRadius: '8px',
+                background: `hsla(${badge.bg}, 0.1)`,
+                border: `1px solid hsla(${badge.color}, 0.3)`
+              }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: `hsl(${badge.color})` }}>{badge.text}</span>
+                {event.registrationDeadline && status === 'reg_open' && (
+                  <span style={{ fontSize: '0.78rem', color: 'hsl(var(--text-muted))', marginLeft: 'auto' }}>
+                    ⏳ Reg. closes {formatDateTime(event.registrationDeadline)}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', background: 'rgba(255, 255, 255, 0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid hsla(var(--border-glass))' }}>
-            <div>
-              <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Date</div>
-              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>📅 {formatDate(event.date)}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Time</div>
-              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>🕐 {event.time}</div>
-            </div>
+            {event.eventStartDateTime ? (
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Event Start</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>🚀 {formatDateTime(event.eventStartDateTime)}</div>
+              </div>
+            ) : event.date ? (
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Date</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>📅 {formatDate(event.date)}</div>
+              </div>
+            ) : null}
+            {event.eventEndDateTime ? (
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Event End</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>🏁 {formatDateTime(event.eventEndDateTime)}</div>
+              </div>
+            ) : event.time ? (
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Time</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>🕐 {event.time}</div>
+              </div>
+            ) : null}
             <div>
               <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Venue</div>
-              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>📍 {event.venue}</div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>📍 {event.venue || 'TBA'}</div>
             </div>
             <div>
               <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Category</div>
               <div style={{ fontSize: '0.9rem', fontWeight: 600, color: `hsl(${catColor})`, textTransform: 'capitalize' }}>
                 {getCategoryIcon(event.category)} {event.category}
+              </div>
+            </div>
+            {event.registrationDeadline && (
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Registration Deadline</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: getEventStatus(event) === 'reg_open' ? 'hsl(140, 60%, 50%)' : 'hsl(0, 60%, 55%)' }}>
+                  📝 {formatDateTime(event.registrationDeadline)}
+                </div>
+              </div>
+            )}
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Price</div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>
+                {event.price && event.price !== '0' && event.price.toLowerCase() !== 'free' ? `💰 ₹${event.price}` : '🆓 Free'}
               </div>
             </div>
           </div>
@@ -1326,14 +1584,16 @@ function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
   const [description, setDescription] = useState('');
   const [clubId, setClubId] = useState(user?.clubId || '');
   const [category, setCategory] = useState('tech');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
+  const [eventStart, setEventStart] = useState('');
+  const [eventEnd, setEventEnd] = useState('');
+  const [registrationDeadline, setRegistrationDeadline] = useState('');
   const [venue, setVenue] = useState('');
   const [posterMode, setPosterMode] = useState('url'); // 'url' | 'file'
   const [posterUrl, setPosterUrl] = useState('');
   const [posterFile, setPosterFile] = useState(null);
   const [registrationLink, setRegistrationLink] = useState('');
   const [tags, setTags] = useState('');
+  const [price, setPrice] = useState('');
 
   const selectedClub = clubs.find(c => c.id === clubId);
   const clubName = selectedClub ? selectedClub.name : '';
@@ -1341,9 +1601,12 @@ function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!title.trim()) { alert('Title is required.'); return; }
-    if (!date) { alert('Date is required.'); return; }
+    if (!eventStart) { alert('Event start date/time is required.'); return; }
     if (!clubId) { alert('Please select a club.'); return; }
     if (!category) { alert('Please select a category.'); return; }
+
+    // Derive legacy "date" from eventStart for backward compat
+    const legacyDate = eventStart ? eventStart.split('T')[0] : '';
 
     onSubmit({
       title: title.trim(),
@@ -1351,18 +1614,22 @@ function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
       clubId,
       clubName,
       category,
-      date,
-      time: time.trim(),
+      date: legacyDate,
+      time: '',
       venue: venue.trim(),
       posterUrl: posterMode === 'url' ? posterUrl.trim() : '',
       posterFile: posterMode === 'file' ? posterFile : null,
       registrationLink: registrationLink.trim(),
-      tags: tags.trim()
+      tags: tags.trim(),
+      registrationDeadline,
+      eventStartDateTime: eventStart,
+      eventEndDateTime: eventEnd,
+      price: price.trim()
     });
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0 }}>
@@ -1438,12 +1705,23 @@ function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
             <div className="form-group">
-              <label>Date *</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
+              <label>Event Start *</label>
+              <input type="datetime-local" value={eventStart} onChange={e => setEventStart(e.target.value)} required />
             </div>
             <div className="form-group">
-              <label>Time</label>
-              <input type="time" value={time} onChange={e => setTime(e.target.value)} />
+              <label>Event End</label>
+              <input type="datetime-local" value={eventEnd} onChange={e => setEventEnd(e.target.value)} />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div className="form-group">
+              <label>Registration Deadline</label>
+              <input type="datetime-local" value={registrationDeadline} onChange={e => setRegistrationDeadline(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>Price (₹)</label>
+              <input type="text" value={price} onChange={e => setPrice(e.target.value)} placeholder="0 or Free for no charge" />
             </div>
           </div>
 
@@ -1541,7 +1819,7 @@ function CreateRecruitmentModal({ clubs, user, onSubmit, onClose, loading, error
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0 }}>
@@ -1627,9 +1905,10 @@ function CreateRecruitmentModal({ clubs, user, onSubmit, onClose, loading, error
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Admin Panel
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function AdminPanel({ users, clubs, onPromote, onDemote, currentUserEmail }) {
+function AdminPanel({ users, clubs, onPromote, onDemote, currentUserEmail, onCreateClub, onDeleteClub, formLoading, error, setError }) {
   const [promoteRoles, setPromoteRoles] = useState({}); // { [email]: 'club_manager' | 'admin' }
   const [promoteClubs, setPromoteClubs] = useState({}); // { [email]: clubId }
+  const [showCreateClub, setShowCreateClub] = useState(false);
 
   if (users.length === 0) {
     return (
@@ -1641,113 +1920,341 @@ function AdminPanel({ users, clubs, onPromote, onDemote, currentUserEmail }) {
   }
 
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table className="admin-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Club</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((u, idx) => {
-            const isMe = u.email && currentUserEmail && u.email.toLowerCase() === currentUserEmail.toLowerCase();
-            const isPrimary = u.isPrimaryAdmin;
-            const selectedRole = promoteRoles[u.email] || 'club_manager';
-            const selectedClub = promoteClubs[u.email] || '';
+    <div>
+      <h3 style={{ marginBottom: '1.25rem', fontSize: '1.25rem', color: 'hsl(var(--text-primary))' }}>👥 User Management</h3>
+      <div style={{ overflowX: 'auto', marginBottom: '3rem' }}>
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Club</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u, idx) => {
+              const isMe = u.email && currentUserEmail && u.email.toLowerCase() === currentUserEmail.toLowerCase();
+              const isPrimary = u.isPrimaryAdmin;
+              const selectedRole = promoteRoles[u.email] || 'club_manager';
+              const selectedClub = promoteClubs[u.email] || '';
 
-            return (
-              <tr key={u.email || idx}>
-                <td>{u.name || '—'}</td>
-                <td style={{ fontSize: '0.82rem', color: 'hsl(var(--text-muted))' }}>{u.email}</td>
-                <td>
-                  <span style={{
-                    fontSize: '0.72rem', fontWeight: 700, padding: '3px 10px', borderRadius: '999px',
-                    textTransform: 'uppercase', letterSpacing: '0.04em',
-                    background: u.role === 'admin'
-                      ? 'hsla(var(--accent) / 0.15)'
-                      : u.role === 'club_manager'
-                        ? 'hsla(var(--secondary) / 0.15)'
-                        : 'hsla(var(--text-muted) / 0.15)',
-                    color: u.role === 'admin'
-                      ? 'hsl(var(--accent))'
-                      : u.role === 'club_manager'
-                        ? 'hsl(var(--secondary))'
-                        : 'hsl(var(--text-muted))'
-                  }}>
-                    {u.role || 'student'}
-                  </span>
-                </td>
-                <td style={{ fontSize: '0.82rem' }}>{u.clubId || '—'}</td>
-                <td>
-                  {isPrimary ? (
-                    <span style={{ fontSize: '0.78rem', color: 'hsl(var(--accent))', fontWeight: 600 }}>👑 Primary Admin</span>
-                  ) : isMe ? (
-                    <span style={{ fontSize: '0.78rem', color: 'hsl(var(--text-muted))', fontStyle: 'italic' }}>You (Logged In)</span>
-                  ) : u.role === 'admin' ? (
-                    <button
-                      className="btn-demote"
-                      onClick={() => onDemote(u.email)}
-                    >
-                      ⬇ Demote to Student
-                    </button>
-                  ) : (
-                    <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <select
-                        value={selectedRole}
-                        onChange={e => setPromoteRoles(prev => ({ ...prev, [u.email]: e.target.value }))}
-                        style={{
-                          padding: '0.3rem 0.5rem', fontSize: '0.78rem', borderRadius: '6px',
-                          background: 'hsl(var(--bg-card))', border: '1px solid hsla(var(--border-glass))',
-                          color: 'hsl(var(--text-primary))', width: '120px'
-                        }}
+              return (
+                <tr key={u.email || idx}>
+                  <td>{u.name || '—'}</td>
+                  <td style={{ fontSize: '0.82rem', color: 'hsl(var(--text-muted))' }}>{u.email}</td>
+                  <td>
+                    <span style={{
+                      fontSize: '0.72rem', fontWeight: 700, padding: '3px 10px', borderRadius: '999px',
+                      textTransform: 'uppercase', letterSpacing: '0.04em',
+                      background: u.role === 'admin'
+                        ? 'hsla(var(--accent) / 0.15)'
+                        : u.role === 'club_manager'
+                          ? 'hsla(var(--secondary) / 0.15)'
+                          : 'hsla(var(--text-muted) / 0.15)',
+                      color: u.role === 'admin'
+                        ? 'hsl(var(--accent))'
+                        : u.role === 'club_manager'
+                          ? 'hsl(var(--secondary))'
+                          : 'hsl(var(--text-muted))'
+                    }}>
+                      {u.role || 'student'}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: '0.82rem' }}>{u.clubId || '—'}</td>
+                  <td>
+                    {isPrimary ? (
+                      <span style={{ fontSize: '0.78rem', color: 'hsl(var(--accent))', fontWeight: 600 }}>👑 Primary Admin</span>
+                    ) : isMe ? (
+                      <span style={{ fontSize: '0.78rem', color: 'hsl(var(--text-muted))', fontStyle: 'italic' }}>You (Logged In)</span>
+                    ) : u.role === 'admin' ? (
+                      <button
+                        className="btn-demote"
+                        onClick={() => onDemote(u.email)}
                       >
-                        <option value="club_manager">Club Manager</option>
-                        <option value="admin">Admin</option>
-                      </select>
-
-                      {selectedRole === 'club_manager' && (
+                        ⬇ Demote to Student
+                      </button>
+                    ) : (
+                      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
                         <select
-                          value={selectedClub}
-                          onChange={e => setPromoteClubs(prev => ({ ...prev, [u.email]: e.target.value }))}
+                          value={selectedRole}
+                          onChange={e => setPromoteRoles(prev => ({ ...prev, [u.email]: e.target.value }))}
                           style={{
                             padding: '0.3rem 0.5rem', fontSize: '0.78rem', borderRadius: '6px',
                             background: 'hsl(var(--bg-card))', border: '1px solid hsla(var(--border-glass))',
-                            color: 'hsl(var(--text-primary))', maxWidth: '140px'
+                            color: 'hsl(var(--text-primary))', width: '120px'
                           }}
                         >
-                          <option value="">Pick club...</option>
-                          {clubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          <option value="club_manager">Club Manager</option>
+                          <option value="admin">Admin</option>
                         </select>
-                      )}
 
-                      <button
-                        className="btn-promote"
-                        onClick={() => onPromote(u.email, selectedRole, selectedClub)}
-                        disabled={selectedRole === 'club_manager' && !selectedClub}
-                      >
-                        ⬆ Promote
-                      </button>
+                        {selectedRole === 'club_manager' && (
+                          <select
+                            value={selectedClub}
+                            onChange={e => setPromoteClubs(prev => ({ ...prev, [u.email]: e.target.value }))}
+                            style={{
+                              padding: '0.3rem 0.5rem', fontSize: '0.78rem', borderRadius: '6px',
+                              background: 'hsl(var(--bg-card))', border: '1px solid hsla(var(--border-glass))',
+                              color: 'hsl(var(--text-primary))', maxWidth: '140px'
+                            }}
+                          >
+                            <option value="">Pick club...</option>
+                            {clubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        )}
 
-                      {u.role === 'club_manager' && (
                         <button
-                          className="btn-demote"
-                          onClick={() => onDemote(u.email)}
+                          className="btn-promote"
+                          onClick={() => onPromote(u.email, selectedRole, selectedClub)}
+                          disabled={selectedRole === 'club_manager' && !selectedClub}
                         >
-                          ⬇ Demote
+                          ⬆ Promote
                         </button>
-                      )}
-                    </div>
-                  )}
-                </td>
+
+                        {u.role === 'club_manager' && (
+                          <button
+                            className="btn-demote"
+                            onClick={() => onDemote(u.email)}
+                          >
+                            ⬇ Demote
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ borderTop: '1px solid hsla(var(--border-glass))', paddingTop: '2.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'hsl(var(--text-primary))' }}>🏛️ Club Management</h3>
+          <button 
+            className="btn-register" 
+            onClick={() => { setShowCreateClub(true); setError(''); }}
+            style={{ padding: '0.55rem 1.25rem', fontSize: '0.85rem' }}
+          >
+            ➕ Create New Club
+          </button>
+        </div>
+
+        <div style={{ overflowX: 'auto' }}>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Logo</th>
+                <th>Club Name</th>
+                <th>Category</th>
+                <th>Members</th>
+                <th>Actions</th>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            </thead>
+            <tbody>
+              {clubs.map((c) => (
+                <tr key={c.id}>
+                  <td>
+                    <ClubLogo club={c} category={c.category} size={28} />
+                  </td>
+                  <td style={{ fontWeight: 600, color: 'hsl(var(--text-primary))' }}>{c.name}</td>
+                  <td>
+                    <span className="club-category-badge" style={{ margin: 0, fontSize: '0.65rem', textTransform: 'uppercase' }}>
+                      {c.category}
+                    </span>
+                  </td>
+                  <td>{c.memberCount} members</td>
+                  <td>
+                    <button 
+                      className="btn-delete-small"
+                      onClick={() => onDeleteClub(c.id)}
+                    >
+                      🗑️ Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {clubs.length === 0 && (
+                <tr>
+                  <td colSpan="5" style={{ textAlign: 'center', color: 'hsl(var(--text-muted))', padding: '2rem' }}>
+                    No clubs found. Create one above!
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {showCreateClub && (
+        <CreateClubModal
+          onSubmit={async (clubData) => {
+            const success = await onCreateClub(clubData);
+            if (success) {
+              setShowCreateClub(false);
+            }
+          }}
+          onClose={() => { setShowCreateClub(false); setError(''); }}
+          loading={formLoading}
+          error={error}
+        />
+      )}
+    </div>
+  );
+}
+
+function CreateClubModal({ onSubmit, onClose, loading, error }) {
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('tech');
+  const [description, setDescription] = useState('');
+  const [icon, setIcon] = useState('🏛️');
+  const [instagram, setInstagram] = useState('');
+  const [linkedin, setLinkedin] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!name.trim()) { alert('Club name is required.'); return; }
+    if (!category) { alert('Category is required.'); return; }
+    onSubmit({
+      name: name.trim(),
+      category,
+      description: description.trim(),
+      icon: icon.trim(),
+      socialLinks: {
+        instagram: instagram.trim(),
+        linkedin: linkedin.trim()
+      }
+    });
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0 }}>
+            🏛️ Create New Club
+          </h2>
+          <button onClick={onClose} style={{
+            background: 'none', border: 'none', color: 'hsl(var(--text-muted))',
+            fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1
+          }}>✕</button>
+        </div>
+
+        {error && (
+          <div style={{
+            background: 'hsla(0, 80%, 55%, 0.12)', border: '1px solid hsla(0, 80%, 55%, 0.3)',
+            borderRadius: '8px', padding: '0.6rem 0.8rem', marginBottom: '1rem',
+            fontSize: '0.83rem', color: 'hsl(0, 80%, 65%)'
+          }}>{error}</div>
+        )}
+
+        <form className="modal-form" onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Club Name *</label>
+            <input 
+              type="text" 
+              value={name} 
+              onChange={e => setName(e.target.value)} 
+              placeholder="e.g. AI & ML Club" 
+              required 
+              style={{
+                width: '100%', padding: '0.85rem 1rem', background: 'rgba(15, 23, 42, 0.5)',
+                border: '1px solid hsla(var(--border-glass))', borderRadius: '8px', color: '#fff'
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div className="form-group">
+              <label>Category *</label>
+              <select 
+                value={category} 
+                onChange={e => setCategory(e.target.value)} 
+                required
+                style={{
+                  width: '100%', padding: '0.85rem 1rem', background: 'rgba(15, 23, 42, 0.5)',
+                  border: '1px solid hsla(var(--border-glass))', borderRadius: '8px', color: '#fff'
+                }}
+              >
+                <option value="tech">Tech</option>
+                <option value="music">Music & Arts</option>
+                <option value="speakers">Speakers</option>
+                <option value="motivation">Social & Motivation</option>
+                <option value="anime">Anime & Culture</option>
+                <option value="robotics">Robotics</option>
+                <option value="sports">Sports</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Icon / Emoji</label>
+              <input 
+                type="text" 
+                value={icon} 
+                onChange={e => setIcon(e.target.value)} 
+                placeholder="e.g. 🤖 or URL" 
+                style={{
+                  width: '100%', padding: '0.85rem 1rem', background: 'rgba(15, 23, 42, 0.5)',
+                  border: '1px solid hsla(var(--border-glass))', borderRadius: '8px', color: '#fff'
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Description</label>
+            <textarea 
+              value={description} 
+              onChange={e => setDescription(e.target.value)} 
+              placeholder="Brief overview of the club's goals and activities..."
+              style={{
+                width: '100%', padding: '0.85rem 1rem', background: 'rgba(15, 23, 42, 0.5)',
+                border: '1px solid hsla(var(--border-glass))', borderRadius: '8px', color: '#fff'
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div className="form-group">
+              <label>Instagram URL</label>
+              <input 
+                type="text" 
+                value={instagram} 
+                onChange={e => setInstagram(e.target.value)} 
+                placeholder="https://instagram.com/..." 
+                style={{
+                  width: '100%', padding: '0.85rem 1rem', background: 'rgba(15, 23, 42, 0.5)',
+                  border: '1px solid hsla(var(--border-glass))', borderRadius: '8px', color: '#fff'
+                }}
+              />
+            </div>
+            <div className="form-group">
+              <label>LinkedIn URL</label>
+              <input 
+                type="text" 
+                value={linkedin} 
+                onChange={e => setLinkedin(e.target.value)} 
+                placeholder="https://linkedin.com/in/..." 
+                style={{
+                  width: '100%', padding: '0.85rem 1rem', background: 'rgba(15, 23, 42, 0.5)',
+                  border: '1px solid hsla(var(--border-glass))', borderRadius: '8px', color: '#fff'
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="modal-actions">
+            <button type="button" className="btn-cancel" onClick={onClose} disabled={loading}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-submit" disabled={loading}>
+              {loading ? 'Creating...' : 'Create Club'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

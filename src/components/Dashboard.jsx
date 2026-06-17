@@ -39,6 +39,48 @@ function formatDate(dateStr) {
   } catch { return dateStr; }
 }
 
+function formatDateTime(dtStr) {
+  if (!dtStr) return '';
+  try {
+    return new Date(dtStr).toLocaleString('en-IN', {
+      weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  } catch { return dtStr; }
+}
+
+function getEventStatus(event) {
+  const now = new Date();
+  const end = event.eventEndDateTime ? new Date(event.eventEndDateTime) : null;
+  const start = event.eventStartDateTime ? new Date(event.eventStartDateTime) : (event.date ? new Date(event.date) : null);
+  const regDeadline = event.registrationDeadline ? new Date(event.registrationDeadline) : null;
+
+  if (end && now > end) return 'ended';
+  if (start && now >= start && (!end || now <= end)) return 'ongoing';
+  if (regDeadline && now > regDeadline) return 'reg_closed';
+  if (regDeadline && now <= regDeadline) return 'reg_open';
+  return 'upcoming';
+}
+
+function getStatusBadge(status) {
+  switch (status) {
+    case 'reg_open': return { text: '🟢 Registration Open', color: '140, 70%, 45%', bg: '140, 70%, 45%' };
+    case 'ongoing': return { text: '🔵 Happening Now', color: '210, 80%, 60%', bg: '210, 80%, 60%' };
+    case 'reg_closed': return { text: '🟡 Registration Closed', color: '40, 80%, 50%', bg: '40, 80%, 50%' };
+    case 'ended': return { text: '🔴 Ended', color: '0, 60%, 55%', bg: '0, 60%, 55%' };
+    default: return { text: '📅 Upcoming', color: '263, 70%, 60%', bg: '263, 70%, 60%' };
+  }
+}
+
+function getCardOpacity(status) {
+  switch (status) {
+    case 'ended': return 0.4;
+    case 'reg_closed': return 0.55;
+    default: return 1;
+  }
+}
+
+
 function ClubLogo({ club, category, size = 24, borderRadius = '50%' }) {
   const [error, setError] = useState(false);
   const icon = club?.icon;
@@ -168,18 +210,53 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents }) 
             </p>
           </div>
 
+          {/* Status Banner */}
+          {(() => {
+            const status = getEventStatus(event);
+            const badge = getStatusBadge(status);
+            return (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                padding: '0.6rem 0.85rem', borderRadius: '8px',
+                background: `hsla(${badge.bg}, 0.1)`,
+                border: `1px solid hsla(${badge.color}, 0.3)`
+              }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: `hsl(${badge.color})` }}>{badge.text}</span>
+                {event.registrationDeadline && status === 'reg_open' && (
+                  <span style={{ fontSize: '0.78rem', color: 'hsl(var(--text-muted))', marginLeft: 'auto' }}>
+                    ⏳ Reg. closes {formatDateTime(event.registrationDeadline)}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', background: 'rgba(255, 255, 255, 0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid hsla(var(--border-glass))' }}>
-            <div>
-              <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Date</div>
-              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>📅 {formatDate(event.date)}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Time</div>
-              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>🕐 {event.time}</div>
-            </div>
+            {event.eventStartDateTime ? (
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Event Start</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>🚀 {formatDateTime(event.eventStartDateTime)}</div>
+              </div>
+            ) : event.date ? (
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Date</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>📅 {formatDate(event.date)}</div>
+              </div>
+            ) : null}
+            {event.eventEndDateTime ? (
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Event End</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>🏁 {formatDateTime(event.eventEndDateTime)}</div>
+              </div>
+            ) : event.time ? (
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Time</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>🕐 {event.time}</div>
+              </div>
+            ) : null}
             <div>
               <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Venue</div>
-              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>📍 {event.venue}</div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>📍 {event.venue || 'TBA'}</div>
             </div>
             <div>
               <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Category</div>
@@ -187,7 +264,22 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents }) 
                 {getCategoryIcon(event.category)} {event.category}
               </div>
             </div>
+            {event.registrationDeadline && (
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Registration Deadline</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: getEventStatus(event) === 'reg_open' ? 'hsl(140, 60%, 50%)' : 'hsl(0, 60%, 55%)' }}>
+                  📝 {formatDateTime(event.registrationDeadline)}
+                </div>
+              </div>
+            )}
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Price</div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>
+                {event.price && event.price !== '0' && event.price.toLowerCase() !== 'free' ? `💰 ₹${event.price}` : '🆓 Free'}
+              </div>
+            </div>
           </div>
+
 
           {event.tags && event.tags.length > 0 && (
             <div>
@@ -301,13 +393,19 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
   const getRecommendedEvents = () => {
     if (!events) return [];
     
-    // Filter out past events
+    // Filter out ended events
     const upcomingEvents = events.filter(e => {
-      if (!e.date) return false;
-      const eventDate = new Date(e.date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      return eventDate >= today;
+      const status = getEventStatus(e);
+      if (status === 'ended') return false;
+
+      // Legacy fallback for events without start/end datetimes
+      if (!e.eventStartDateTime && !e.eventEndDateTime && e.date) {
+        const eventDate = new Date(e.date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (eventDate < today) return false;
+      }
+      return true;
     });
 
     const studentProgram = (user?.program || '').toLowerCase();
@@ -523,11 +621,14 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
             gap: '1.5rem'
           }}>
             {recommendedEvents.map(event => {
-              const daysLeft = getDaysRemaining(event.date);
+              const daysLeft = getDaysRemaining(event.registrationDeadline || event.date);
               const catColor = getCategoryColor(event.category);
               const eventClub = clubs.find(c => c.id === event.clubId);
               const clubName = eventClub ? eventClub.name : event.clubName || 'Unknown Club';
               const isAdmin = user && user.role === 'admin';
+              const status = getEventStatus(event);
+              const badge = getStatusBadge(status);
+              const opacity = getCardOpacity(status);
 
               return (
                 <div 
@@ -539,6 +640,8 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
                     display: 'flex',
                     flexDirection: 'column',
                     position: 'relative',
+                    opacity: opacity,
+                    transition: 'opacity 0.3s ease, box-shadow 0.3s ease',
                     border: event.pinned ? '1px solid hsla(var(--primary) / 0.5)' : '1px solid hsla(var(--border-glass))',
                     boxShadow: event.pinned ? '0 0 15px hsla(var(--primary) / 0.15)' : 'none'
                   }}
@@ -562,6 +665,25 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
                     </div>
                   )}
 
+                  {/* Status Badge */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '0.75rem',
+                    right: '0.75rem',
+                    background: `hsla(${badge.bg}, 0.15)`,
+                    border: `1px solid hsla(${badge.color}, 0.4)`,
+                    color: `hsl(${badge.color})`,
+                    fontSize: '0.62rem',
+                    fontWeight: 700,
+                    padding: '0.2rem 0.45rem',
+                    borderRadius: '4px',
+                    zIndex: 5,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.03em'
+                  }}>
+                    {badge.text}
+                  </div>
+
                   {event.posterUrl && (
                     <div style={{ height: '160px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))' }}>
                       <img
@@ -578,7 +700,7 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
                       <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0, flex: 1 }}>
                         {event.title}
                       </h4>
-                      {daysLeft !== null && (
+                      {daysLeft !== null && status !== 'ended' && (
                         <span className="countdown-badge">
                           ⏰ {daysLeft}d left
                         </span>
@@ -598,8 +720,25 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
                     </div>
 
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>
-                      <span>📅 {formatDate(event.date)}</span>
-                      <span>📍 {event.venue}</span>
+                      {event.eventStartDateTime && <span>🚀 {formatDateTime(event.eventStartDateTime)}</span>}
+                      {!event.eventStartDateTime && event.date && <span>📅 {formatDate(event.date)}</span>}
+                      {event.venue && <span>📍 {event.venue}</span>}
+                    </div>
+
+                    {/* Registration deadline & Price row */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.73rem', alignItems: 'center' }}>
+                      {event.registrationDeadline && (
+                        <span style={{ color: status === 'reg_closed' || status === 'ended' ? 'hsl(0, 60%, 55%)' : 'hsl(140, 60%, 50%)', fontWeight: 600 }}>
+                          📝 Reg. {status === 'reg_closed' || status === 'ended' ? 'closed' : `till ${formatDateTime(event.registrationDeadline)}`}
+                        </span>
+                      )}
+                      {event.price ? (
+                        <span style={{ fontWeight: 700, color: 'hsl(var(--accent))' }}>
+                          💰 {event.price === '0' || event.price.toLowerCase() === 'free' ? 'Free' : `₹${event.price}`}
+                        </span>
+                      ) : (
+                        <span style={{ fontWeight: 600, color: 'hsl(140, 60%, 50%)' }}>🆓 Free</span>
+                      )}
                     </div>
 
                     {isAdmin && (

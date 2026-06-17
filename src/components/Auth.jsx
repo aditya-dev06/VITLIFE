@@ -57,6 +57,7 @@ const Auth = ({ onLoginSuccess }) => {
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [smtpDown, setSmtpDown] = useState(false);
 
   useEffect(() => {
     if (email) {
@@ -76,6 +77,13 @@ const Auth = ({ onLoginSuccess }) => {
       return () => clearTimeout(timer);
     }
   }, [cooldown]);
+
+  useEffect(() => {
+    fetch('/api/health/smtp')
+      .then(r => r.json())
+      .then(d => setSmtpDown(!d.smtpHealthy))
+      .catch(() => setSmtpDown(true));
+  }, []);
 
   const handleCourseChange = (courseCode) => {
     if (selectedCourses.includes(courseCode)) {
@@ -680,6 +688,29 @@ const Auth = ({ onLoginSuccess }) => {
           <div className="auth-logo">VITHON</div>
           <div className="auth-subtitle">Computational & Data Science Hub</div>
         </div>
+
+        {smtpDown && (
+          <div style={{
+            background: 'linear-gradient(135deg, hsla(35, 90%, 55%, 0.15), hsla(0, 80%, 55%, 0.12))',
+            border: '1px solid hsla(35, 90%, 55%, 0.4)',
+            borderRadius: '12px',
+            padding: '1rem 1.25rem',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '0.75rem'
+          }}>
+            <span style={{ fontSize: '1.5rem', flexShrink: 0 }}>🔧</span>
+            <div>
+              <div style={{ fontWeight: 700, color: 'hsl(35, 90%, 60%)', fontSize: '0.9rem', marginBottom: '0.25rem' }}>
+                Maintenance Notice
+              </div>
+              <div style={{ fontSize: '0.82rem', color: 'hsl(var(--text-secondary))', lineHeight: 1.4 }}>
+                New registrations and password resets are temporarily unavailable. Existing users can still sign in normally.
+              </div>
+            </div>
+          </div>
+        )}
 
         {(authState === 'login' || authState === 'signup') && (
           <div className="auth-tabs">

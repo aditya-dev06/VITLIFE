@@ -121,29 +121,40 @@ if (smtpHost && smtpUser && smtpPass) {
   });
 }
 
+let smtpHealthy = false;
+if (transporter) {
+  transporter.verify()
+    .then(() => {
+      smtpHealthy = true;
+      console.log('✅ SMTP connection verified successfully.');
+    })
+    .catch((err) => {
+      smtpHealthy = false;
+      console.error('❌ SMTP connection failed:', err.message);
+    });
+} else {
+  console.warn('⚠️ SMTP not configured. Registration and password reset will be unavailable.');
+}
+
 const sendMailHelper = async (to, subject, text) => {
-  if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: `"VIT Bhopal Opportunity Hub" <${smtpUser}>`,
-        to,
-        subject,
-        text
-      });
-      console.log(`Email sent successfully to ${to}`);
-      return true;
-    } catch (err) {
-      console.error(`Nodemailer error sending to ${to}:`, err);
-    }
+  if (!transporter || !smtpHealthy) {
+    throw new Error('Email service is currently unavailable. Please try again later.');
   }
-  
-  // Fallback to console logs (extremely helpful for sandbox deployments on Render)
-  console.log(`\n================= MAIL FALLBACK (MAILER OFFLINE/UNCONFIGURED) =================`);
-  console.log(`TO: ${to}`);
-  console.log(`SUBJECT: ${subject}`);
-  console.log(`BODY:\n${text}`);
-  console.log(`===============================================================================\n`);
-  return true;
+  try {
+    await transporter.sendMail({
+      from: `"VIT Bhopal Opportunity Hub" <${smtpUser}>`,
+      to,
+      subject,
+      text
+    });
+    console.log(`Email sent successfully to ${to}`);
+    return true;
+  } catch (err) {
+    console.error(`Nodemailer error sending to ${to}:`, err);
+    // Mark SMTP as unhealthy on send failure
+    smtpHealthy = false;
+    throw new Error('Failed to send email. Please try again later.');
+  }
 };
 
 const generateSecurityCode = () => {
@@ -565,6 +576,44 @@ const saveClubs = async (clubs) => {
   fs.writeFileSync(CLUBS_FILE, JSON.stringify({ clubs }, null, 2), 'utf-8');
 };
 
+const deleteClub = async (clubId) => {
+  // Delete from clubs list in file
+  if (fs.existsSync(CLUBS_FILE)) {
+    try {
+      const fileData = JSON.parse(fs.readFileSync(CLUBS_FILE, 'utf-8'));
+      fileData.clubs = (fileData.clubs || []).filter(c => c.id !== clubId);
+      fs.writeFileSync(CLUBS_FILE, JSON.stringify(fileData, null, 2), 'utf-8');
+    } catch(e) {}
+  }
+
+  // Demote managers in local users file
+  try {
+    const users = loadUsers();
+    let updated = false;
+    for (const email in users) {
+      if (users[email].clubId === clubId) {
+        users[email].role = 'student';
+        delete users[email].clubId;
+        updated = true;
+      }
+    }
+    if (updated) {
+      saveUsers(users);
+    }
+  } catch(e) {}
+
+  // Delete from MongoDB
+  if (dbConnectingPromise) await dbConnectingPromise;
+  if (db) {
+    try {
+      await db.collection('clubs').deleteOne({ id: clubId });
+      await db.collection('users').updateMany({ clubId: clubId }, { $set: { role: 'student' }, $unset: { clubId: "" } });
+    } catch (err) {
+      console.error("MongoDB deleteClub error:", err);
+    }
+  }
+};
+
 
 // ========== EVENTS HELPERS ==========
 const getEvents = async (categoryFilter) => {
@@ -839,6 +888,9 @@ app.get('/api/db-status', (req, res) => {
 // 1. Register User (with email verification support & unverified recycling)
 app.post('/api/auth/register', async (req, res) => {
   try {
+    if (!smtpHealthy) {
+      return res.status(503).json({ error: '🔧 Registration is temporarily unavailable due to maintenance. Please try again later.' });
+    }
     const { name, email, password, isVitBhopal, courses, semester } = req.body;
 
     if (!name || !email || !password) {
@@ -900,7 +952,7 @@ app.post('/api/auth/register', async (req, res) => {
       xpPoints: 0,
       skillsProgress: {},
       role: isAdminEmail(lowerEmail) ? 'admin' : 'student',
-      verified: !transporter,
+      verified: false,
       verificationCode: hashedCode,
       verificationExpires: codeExpires,
       lastCodeSentAt: Date.now(),
@@ -909,14 +961,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     await saveUser(lowerEmail, newUser);
 
-    if (!transporter) {
-      return res.json({
-        success: true,
-        verified: true,
-        message: 'Registration successful! Please sign in using your password.',
-        email: lowerEmail
-      });
-    }
+
 
     // Send email or fallback to console log
     await sendMailHelper(
@@ -977,6 +1022,9 @@ app.post('/api/auth/verify', authRateLimiter(5, 15 * 60 * 1000), async (req, res
 // Resend Verification Code Endpoint
 app.post('/api/auth/resend-code', authRateLimiter(5, 15 * 60 * 1000), async (req, res) => {
   try {
+    if (!smtpHealthy) {
+      return res.status(503).json({ error: '🔧 Email service is temporarily unavailable. Please try again later.' });
+    }
     const { email } = req.body;
     if (!email) {
       return res.status(400).json({ error: 'Email is required.' });
@@ -992,11 +1040,7 @@ app.post('/api/auth/resend-code', authRateLimiter(5, 15 * 60 * 1000), async (req
       return res.status(400).json({ error: 'Account is already verified.' });
     }
 
-    if (!transporter) {
-      user.verified = true;
-      await saveUser(lowerEmail, user);
-      return res.json({ success: true, verified: true, message: 'Account auto-verified.' });
-    }
+
 
     // 60-second cooldown gate
     const now = Date.now();
@@ -1077,6 +1121,9 @@ app.post('/api/auth/login', async (req, res) => {
 // Forgot Password Request Endpoint
 app.post('/api/auth/forgot-password', authRateLimiter(5, 15 * 60 * 1000), async (req, res) => {
   try {
+    if (!smtpHealthy) {
+      return res.status(503).json({ error: '🔧 Password reset is temporarily unavailable due to maintenance. Please try again later.' });
+    }
     const { email } = req.body;
     if (!email) {
       return res.status(400).json({ error: 'Email is required.' });
@@ -1418,6 +1465,66 @@ app.put('/api/clubs/:id', authenticate, requireClubManager, async (req, res) => 
   }
 });
 
+app.post('/api/clubs', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { name, category, description, icon, socialLinks } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Club name is required.' });
+    }
+    if (!category || !category.trim()) {
+      return res.status(400).json({ error: 'Club category is required.' });
+    }
+
+    const clubs = await getClubs();
+    const cleanName = name.trim();
+    const baseId = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    let clubId = `club-${baseId}`;
+    
+    // De-duplicate if ID already exists
+    let counter = 1;
+    while (clubs.some(c => c.id === clubId)) {
+      clubId = `club-${baseId}-${counter}`;
+      counter++;
+    }
+
+    const newClub = {
+      id: clubId,
+      name: cleanName,
+      category: category.trim(),
+      description: (description || '').trim(),
+      icon: (icon || '🏛️').trim(),
+      memberCount: 0,
+      socialLinks: {
+        instagram: (socialLinks?.instagram || '').trim(),
+        linkedin: (socialLinks?.linkedin || '').trim()
+      }
+    };
+
+    clubs.push(newClub);
+    await saveClubs(clubs);
+
+    res.json({ success: true, message: 'Club created successfully.', club: newClub });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create club: ' + error.message });
+  }
+});
+
+app.delete('/api/clubs/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const clubs = await getClubs();
+    const club = clubs.find(c => c.id === id);
+    if (!club) {
+      return res.status(404).json({ error: 'Club not found.' });
+    }
+
+    await deleteClub(id);
+    res.json({ success: true, message: 'Club deleted successfully.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete club: ' + error.message });
+  }
+});
+
 // GET club managers / leaders and their designations
 app.get('/api/clubs/:id/managers', async (req, res) => {
   try {
@@ -1458,7 +1565,7 @@ app.get('/api/events', async (req, res) => {
 
 app.post('/api/events', authenticate, requireClubManager, async (req, res) => {
   try {
-    const { title, description, clubId, clubName, category, date, time, venue, posterUrl, registrationLink, tags } = req.body;
+    const { title, description, clubId, clubName, category, date, time, venue, posterUrl, registrationLink, tags, registrationDeadline, eventStartDateTime, eventEndDateTime, price } = req.body;
     if (!title || !clubId || !category || !date) {
       return res.status(400).json({ error: 'Title, clubId, category, and date are required.' });
     }
@@ -1480,6 +1587,10 @@ app.post('/api/events', authenticate, requireClubManager, async (req, res) => {
       category, date, time: time || '', venue: venue || '',
       posterUrl: posterUrl || '', registrationLink: registrationLink || '',
       tags: Array.isArray(tags) ? tags : [],
+      registrationDeadline: registrationDeadline || '',
+      eventStartDateTime: eventStartDateTime || '',
+      eventEndDateTime: eventEndDateTime || '',
+      price: price || '',
       createdBy: req.user.email,
       createdAt: new Date().toISOString()
     };
@@ -1582,6 +1693,11 @@ app.delete('/api/recruitments/:id', authenticate, async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete recruitment: ' + error.message });
   }
+});
+
+// SMTP Health Check Endpoint
+app.get('/api/health/smtp', (req, res) => {
+  res.json({ smtpHealthy });
 });
 
 // --- FILE UPLOAD ---
