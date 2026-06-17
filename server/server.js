@@ -31,19 +31,28 @@ if (!fs.existsSync(DATA_DIR)) {
 const MONGODB_URI = process.env.MONGODB_URI;
 let db = null;
 let client = null;
+let dbConnectionError = null;
+let dbConnectionStatus = "Initializing";
+let dbConnectingPromise = null;
 
 if (MONGODB_URI) {
   console.log("Connecting to MongoDB Atlas...");
+  dbConnectionStatus = "Connecting";
   client = new MongoClient(MONGODB_URI);
-  client.connect()
+  dbConnectingPromise = client.connect()
     .then(c => {
       db = c.db();
+      dbConnectionStatus = "Connected";
+      dbConnectionError = null;
       console.log("Successfully connected to MongoDB Database!");
     })
     .catch(err => {
+      dbConnectionStatus = "Failed";
+      dbConnectionError = err.message || String(err);
       console.error("Failed to connect to MongoDB Atlas, falling back to local files:", err);
     });
 } else {
+  dbConnectionStatus = "Local Fallback Mode (No MONGODB_URI)";
   console.log("No MONGODB_URI set, running in local fallback file mode.");
 }
 
@@ -270,6 +279,9 @@ const saveUsers = (users) => {
 // Database interface methods
 const findUserByEmail = async (email) => {
   const lowerEmail = email.toLowerCase().trim();
+  if (dbConnectingPromise) {
+    await dbConnectingPromise;
+  }
   if (db) {
     try {
       return await db.collection('users').findOne({ email: lowerEmail });
@@ -283,6 +295,9 @@ const findUserByEmail = async (email) => {
 
 const saveUser = async (email, userData) => {
   const lowerEmail = email.toLowerCase().trim();
+  if (dbConnectingPromise) {
+    await dbConnectingPromise;
+  }
   if (db) {
     try {
       await db.collection('users').updateOne(
@@ -301,6 +316,9 @@ const saveUser = async (email, userData) => {
 };
 
 const getOpportunities = async () => {
+  if (dbConnectingPromise) {
+    await dbConnectingPromise;
+  }
   if (db) {
     try {
       const data = await db.collection('opportunities').findOne({ type: 'metadata' });
@@ -330,6 +348,9 @@ const getOpportunities = async () => {
 
 const saveOpportunities = async (opportunitiesData) => {
   fs.writeFileSync(OPPORTUNITIES_FILE, JSON.stringify(opportunitiesData, null, 2), 'utf-8');
+  if (dbConnectingPromise) {
+    await dbConnectingPromise;
+  }
   if (db) {
     try {
       await db.collection('opportunities').updateOne(
@@ -444,6 +465,17 @@ const authenticate = async (req, res, next) => {
   req.user = user;
   next();
 };
+
+// ================= DIAGNOSTICS =================
+app.get('/api/db-status', (req, res) => {
+  res.json({
+    status: dbConnectionStatus,
+    connected: !!db,
+    error: dbConnectionError,
+    uriConfigured: !!MONGODB_URI,
+    uriObfuscated: MONGODB_URI ? MONGODB_URI.replace(/:([^@]+)@/, ':****@') : null
+  });
+});
 
 // ================= AUTH ROUTES =================
 
