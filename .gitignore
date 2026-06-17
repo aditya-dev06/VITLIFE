@@ -36,5 +36,6 @@ server/data/*.key
 server/data/admin_config.json
 server/uploads/
 .env
+.env.*
 
 
