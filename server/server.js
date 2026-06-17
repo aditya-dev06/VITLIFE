@@ -137,18 +137,13 @@ const sendMailHelper = async (to, subject, text) => {
     }
   }
   
-  // Developer Mode Fallback
-  const isProduction = process.env.NODE_ENV === 'production';
-  if (isProduction) {
-    throw new Error('Email delivery failed. Mailer is not configured or offline.');
-  } else {
-    console.log(`\n================= DEVELOPER MODE MAIL FALLBACK =================`);
-    console.log(`TO: ${to}`);
-    console.log(`SUBJECT: ${subject}`);
-    console.log(`BODY:\n${text}`);
-    console.log(`================================================================\n`);
-    return true;
-  }
+  // Fallback to console logs (extremely helpful for sandbox deployments on Render)
+  console.log(`\n================= MAIL FALLBACK (MAILER OFFLINE/UNCONFIGURED) =================`);
+  console.log(`TO: ${to}`);
+  console.log(`SUBJECT: ${subject}`);
+  console.log(`BODY:\n${text}`);
+  console.log(`===============================================================================\n`);
+  return true;
 };
 
 const generateSecurityCode = () => {
