@@ -1,0 +1,10 @@
+# nixpacks.toml
+# Force Nixpacks to use both Node.js and Python providers, and explicitly define the start command.
+
+providers = ["node", "python"]
+
+[phases.setup]
+nixPkgs = ["...", "python3"]
+
+[start]
+cmd = "npm start"
