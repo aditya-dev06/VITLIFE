@@ -1,0 +1,501 @@
+import express from 'express';
+import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
+import { fileURLToPath } from 'url';
+import { spawn } from 'child_process';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+app.use(cors());
+app.use(express.json());
+
+const DATA_DIR = path.join(__dirname, 'data');
+const OPPORTUNITIES_FILE = path.join(DATA_DIR, 'opportunities.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const SCRIPTS_DIR = path.join(path.dirname(__dirname), 'scripts');
+const PYTHON_SCRIPT = path.join(SCRIPTS_DIR, 'fetch_opportunities.py');
+
+// High-entropy secret generated dynamically on startup to sign session tokens securely
+const JWT_SECRET = crypto.randomBytes(64).toString('hex');
+
+// Ensure database directories and database files exist
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// Seed opportunities if empty
+const writeInitialSeeds = () => {
+  const seeds = {
+    lastUpdated: new Date().toISOString().replace('T', ' ').substring(0, 19),
+    count: 8,
+    opportunities: [
+      {
+        id: "c1",
+        title: "Smart India Hackathon (SIH) 2026",
+        type: "hackathon",
+        organization: "Ministry of Education, India",
+        link: "https://sih.gov.in/",
+        deadline: "Registration closes soon",
+        matchScore: 98,
+        description: "India's biggest national hackathon solving product development and digital solutions problems. Highly recognized for VIT Bhopal students.",
+        tags: ["Hackathon", "National", "VIT Recommended", "Team Event"]
+      },
+      {
+        id: "c2",
+        title: "Google Summer of Code (GSoC) 2026",
+        type: "internship",
+        organization: "Google & Open Source Organizations",
+        link: "https://summerofcode.withgoogle.com/",
+        deadline: "Applications open early next year",
+        matchScore: 95,
+        description: "A global program focused on bringing student developers into open-source software development. Work on computational data science or ML tools.",
+        tags: ["Internship", "Remote", "Stipend", "Open Source"]
+      },
+      {
+        id: "c3",
+        title: "IBM Data Science Professional Certificate",
+        type: "certificate",
+        organization: "IBM via Coursera",
+        link: "https://www.coursera.org/professional-certificates/ibm-data-science",
+        deadline: "Self-paced",
+        matchScore: 92,
+        description: "Get started in Data Science with Python, SQL, data visualization, analysis, and machine learning. Excellent for 2nd year portfolio building.",
+        tags: ["Course", "Free Audit", "Python", "SQL"]
+      },
+      {
+        id: "c4",
+        title: "Kaggle Machine Learning & Deep Learning Micro-Courses",
+        type: "course",
+        organization: "Kaggle",
+        link: "https://www.kaggle.com/learn",
+        deadline: "Self-paced",
+        matchScore: 94,
+        description: "Hands-on, bite-sized tutorials covering Python, Pandas, Machine Learning, Deep Learning, and Computer Vision. Includes free certificates of completion.",
+        tags: ["Course", "Free Certificate", "Hands-on", "Data Science"]
+      },
+      {
+        id: "c5",
+        title: "ISRO Computational Science & Data Analytics Summer Internship",
+        type: "internship",
+        organization: "ISRO - Indian Space Research Organisation",
+        link: "https://www.isro.gov.in/",
+        deadline: "Check local VIT coordinator / official site",
+        matchScore: 97,
+        description: "Prestigious computational and space data analysis internship. Perfect match for Integrated M.Tech Computational and Data Science students.",
+        tags: ["Internship", "Research", "Computational Science", "India"]
+      },
+      {
+        id: "c6",
+        title: "Hugging Face Deep RL and NLP Course",
+        type: "course",
+        organization: "Hugging Face",
+        link: "https://huggingface.co/learn",
+        deadline: "Self-paced",
+        matchScore: 90,
+        description: "Free, open-source course on Deep Reinforcement Learning and NLP using Transformers, Datasets, and Accelerate libraries. Ideal for AI specializations.",
+        tags: ["Course", "AI", "Transformers", "NLP"]
+      },
+      {
+        id: "c7",
+        title: "Devpost Global AI & LLM Hackathon Series",
+        type: "hackathon",
+        organization: "Devpost",
+        link: "https://devpost.com/hackathons?themes[]=AI%2FML",
+        deadline: "Ongoing weekly",
+        matchScore: 88,
+        description: "Build innovative AI/ML applications, agents, or models. Participate in global virtual hackathons with large cash prizes and networking.",
+        tags: ["Hackathon", "Remote", "AI/ML", "Cash Prizes"]
+      },
+      {
+        id: "c8",
+        title: "Unstop Data Science Hackathons & Hiring Challenges",
+        type: "hackathon",
+        organization: "Unstop",
+        link: "https://unstop.com/hackathons?filters=data-science",
+        deadline: "Varies by competition",
+        matchScore: 93,
+        description: "Explore and register for active hackathons, coding challenges, and internships curated for college students in India.",
+        tags: ["Hackathon", "India", "College Students", "Coding"]
+      }
+    ]
+  };
+  fs.writeFileSync(OPPORTUNITIES_FILE, JSON.stringify(seeds, null, 2), 'utf-8');
+};
+
+if (!fs.existsSync(OPPORTUNITIES_FILE)) {
+  writeInitialSeeds();
+}
+
+// User helper functions
+const loadUsers = () => {
+  if (!fs.existsSync(USERS_FILE)) {
+    fs.writeFileSync(USERS_FILE, JSON.stringify({}, null, 2), 'utf-8');
+    return {};
+  }
+  try {
+    return JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'));
+  } catch (e) {
+    return {};
+  }
+};
+
+const saveUsers = (users) => {
+  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
+};
+
+// PBKDF2 Password Hashing
+const generateSalt = () => {
+  return crypto.randomBytes(16).toString('hex');
+};
+
+const hashPassword = (password, salt) => {
+  const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512');
+  return hash.toString('hex');
+};
+
+// Custom Session Token generation and validation (zero dependencies, cryptographically secure)
+const generateToken = (email) => {
+  const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
+  const hmac = crypto.createHmac('sha256', JWT_SECRET);
+  hmac.update(`${email}:${expiresAt}`);
+  const signature = hmac.digest('hex');
+  const base64Email = Buffer.from(email).toString('base64');
+  return `${signature}.${base64Email}.${expiresAt}`;
+};
+
+const verifyToken = (token) => {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const [signature, base64Email, expiresAtStr] = parts;
+    const email = Buffer.from(base64Email, 'base64').toString('utf-8');
+    const expiresAt = parseInt(expiresAtStr, 10);
+
+    if (Date.now() > expiresAt) return null;
+
+    const hmac = crypto.createHmac('sha256', JWT_SECRET);
+    hmac.update(`${email}:${expiresAt}`);
+    const expectedSignature = hmac.digest('hex');
+
+    if (signature === expectedSignature) {
+      return email;
+    }
+  } catch (e) {
+    return null;
+  }
+  return null;
+};
+
+// Express Authenticated Route Middleware
+const authenticate = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Access denied. No token provided.' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  const email = verifyToken(token);
+  if (!email) {
+    return res.status(401).json({ error: 'Session expired. Please log in again.' });
+  }
+
+  const users = loadUsers();
+  const user = users[email.toLowerCase()];
+  if (!user) {
+    return res.status(401).json({ error: 'User does not exist.' });
+  }
+
+  req.user = user;
+  next();
+};
+
+// ================= AUTH ROUTES =================
+
+// 1. Register User
+app.post('/api/auth/register', (req, res) => {
+  try {
+    const { name, email, password, isVitBhopal, courses } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Name, email, and password are required.' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    }
+
+    const lowerEmail = email.trim().toLowerCase();
+
+    // Verification logic
+    if (isVitBhopal) {
+      // Prototype: firstname.registrationnumber@vitbhopal.ac.in
+      const vitRegex = /^[a-zA-Z.-]+\.[a-zA-Z0-9]+@vitbhopal\.ac\.in$/;
+      if (!vitRegex.test(lowerEmail)) {
+        return res.status(400).json({
+          error: 'College email must follow the prototype: firstname.registrationnumber@vitbhopal.ac.in'
+        });
+      }
+    } else {
+      const generalRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!generalRegex.test(lowerEmail)) {
+        return res.status(400).json({ error: 'Invalid email address format.' });
+      }
+    }
+
+    const users = loadUsers();
+    if (users[lowerEmail]) {
+      return res.status(400).json({ error: 'User already exists with this email.' });
+    }
+
+    // Hash password securely with dynamic salt
+    const salt = generateSalt();
+    const passwordHash = hashPassword(password, salt);
+
+    // Create user profile
+    users[lowerEmail] = {
+      name: name.trim(),
+      email: lowerEmail,
+      isVitBhopal: !!isVitBhopal,
+      courses: Array.isArray(courses) ? courses : [],
+      passwordHash,
+      salt,
+      xpPoints: 0,
+      skillsProgress: {}, // skillId -> 'To Do' | 'In Progress' | 'Completed'
+      createdAt: new Date().toISOString()
+    };
+
+    saveUsers(users);
+
+    const token = generateToken(lowerEmail);
+
+    // Remove sensitive data before sending back response
+    const userProfile = { ...users[lowerEmail] };
+    delete userProfile.passwordHash;
+    delete userProfile.salt;
+
+    res.json({ token, user: userProfile });
+  } catch (error) {
+    res.status(500).json({ error: 'Server registration error: ' + error.message });
+  }
+});
+
+// 2. Login User
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required.' });
+    }
+
+    const lowerEmail = email.trim().toLowerCase();
+    const users = loadUsers();
+    const user = users[lowerEmail];
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid email or password.' });
+    }
+
+    const hash = hashPassword(password, user.salt);
+    if (hash !== user.passwordHash) {
+      return res.status(400).json({ error: 'Invalid email or password.' });
+    }
+
+    const token = generateToken(lowerEmail);
+
+    const userProfile = { ...user };
+    delete userProfile.passwordHash;
+    delete userProfile.salt;
+
+    res.json({ token, user: userProfile });
+  } catch (error) {
+    res.status(500).json({ error: 'Server authentication error: ' + error.message });
+  }
+});
+
+// 3. Get User Profile Progress
+app.get('/api/user/profile', authenticate, (req, res) => {
+  const userProfile = { ...req.user };
+  delete userProfile.passwordHash;
+  delete userProfile.salt;
+  res.json(userProfile);
+});
+
+// 4. Update User Profile Progress / Stats
+app.post('/api/user/profile', authenticate, (req, res) => {
+  try {
+    const { xpPoints, skillsProgress, courses } = req.body;
+    const users = loadUsers();
+    const user = users[req.user.email];
+
+    if (xpPoints !== undefined) {
+      user.xpPoints = parseInt(xpPoints, 10) || 0;
+    }
+    if (skillsProgress !== undefined) {
+      user.skillsProgress = skillsProgress;
+    }
+    if (courses !== undefined) {
+      user.courses = Array.isArray(courses) ? courses : [];
+    }
+
+    users[req.user.email] = user;
+    saveUsers(users);
+
+    const userProfile = { ...user };
+    delete userProfile.passwordHash;
+    delete userProfile.salt;
+
+    res.json(userProfile);
+  } catch (error) {
+    res.status(500).json({ error: 'Server profile update error: ' + error.message });
+  }
+});
+
+// ================= OPPORTUNITY & SCRAPER ROUTES =================
+
+// 1. GET Route: Fetch opportunities (with personalization based on active courses)
+app.get('/api/opportunities', (req, res) => {
+  try {
+    if (!fs.existsSync(OPPORTUNITIES_FILE)) {
+      writeInitialSeeds();
+    }
+    const data = JSON.parse(fs.readFileSync(OPPORTUNITIES_FILE, 'utf-8'));
+    let opps = data.opportunities || [];
+
+    // Personalization check: If a valid authentication token is passed, boost match score for selected courses
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const email = verifyToken(token);
+      if (email) {
+        const users = loadUsers();
+        const user = users[email.toLowerCase()];
+        if (user && user.isVitBhopal && user.courses.length > 0) {
+          // Boost matching opportunities
+          opps = opps.map(opp => {
+            let boost = 0;
+            const text = (opp.title + " " + opp.description + " " + opp.tags.join(" ")).toLowerCase();
+            
+            user.courses.forEach(course => {
+              if (course === 'DBMS' && (text.includes('sql') || text.includes('database') || text.includes('dbms'))) {
+                boost += 10;
+              }
+              if (course === 'DSA' && (text.includes('dsa') || text.includes('algorithms') || text.includes('coding') || text.includes('structures'))) {
+                boost += 10;
+              }
+              if (course === 'Numerical Methods' && (text.includes('computational') || text.includes('mathematics') || text.includes('scientific') || text.includes('modeling'))) {
+                boost += 10;
+              }
+              if (course === 'OOP' && (text.includes('oop') || text.includes('object-oriented') || text.includes('programming') || text.includes('python'))) {
+                boost += 5;
+              }
+            });
+
+            if (boost > 0) {
+              return { 
+                ...opp, 
+                matchScore: Math.min(opp.matchScore + boost, 99),
+                tags: [...new Set([...opp.tags, "Course Match"])]
+              };
+            }
+            return opp;
+          });
+        }
+      }
+    }
+
+    res.json({
+      lastUpdated: data.lastUpdated,
+      count: opps.length,
+      opportunities: opps
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to read database: " + error.message });
+  }
+});
+
+// 2. POST Route: Trigger research and stream logs in real time
+app.post('/api/research', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/plain; charset=utf-8',
+    'Transfer-Encoding': 'chunked',
+    'X-Accel-Buffering': 'no',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+
+  res.write("STATUS_START: Starting scraper process...\n");
+
+  const pythonPath = process.platform === 'win32' 
+    ? path.join(path.dirname(__dirname), 'venv', 'Scripts', 'python.exe')
+    : 'python';
+
+  const cmd = fs.existsSync(pythonPath) ? pythonPath : 'python';
+
+  console.log(`Executing crawler: ${cmd} ${PYTHON_SCRIPT}`);
+  const child = spawn(cmd, [PYTHON_SCRIPT]);
+
+  child.stdout.on('data', (data) => {
+    res.write(data.toString());
+  });
+
+  child.stderr.on('data', (data) => {
+    res.write(`ERROR: ${data.toString()}`);
+  });
+
+  child.on('close', (code) => {
+    if (code === 0) {
+      res.write("\nSTATUS_SUCCESS: Scraper executed successfully and database updated!\n");
+    } else {
+      res.write(`\nSTATUS_FAILED: Scraper process exited with code ${code}\n`);
+    }
+    res.end();
+  });
+
+  child.on('error', (err) => {
+    res.write(`\nSTATUS_FAILED: Failed to start scraper process: ${err.message}\n`);
+    res.end();
+  });
+});
+
+// Serve frontend build static files in production
+const frontendBuild = path.join(path.dirname(__dirname), 'dist');
+if (fs.existsSync(frontendBuild)) {
+  app.use(express.static(frontendBuild));
+  app.get('/{*splat}', (req, res) => {
+    res.sendFile(path.join(frontendBuild, 'index.html'));
+  });
+}
+
+// 3. Scheduler: Run crawler automatically every 24 hours
+const runCrawlerSilently = () => {
+  const cmd = fs.existsSync(path.join(path.dirname(__dirname), 'venv', 'Scripts', 'python.exe'))
+    ? path.join(path.dirname(__dirname), 'venv', 'Scripts', 'python.exe')
+    : 'python';
+  
+  console.log(`[Scheduler] Triggering daily crawler run...`);
+  const child = spawn(cmd, [PYTHON_SCRIPT]);
+
+  child.stdout.on('data', (data) => {
+    console.log(`[Scheduler Scraper] ${data.toString().trim()}`);
+  });
+
+  child.on('close', (code) => {
+    console.log(`[Scheduler Scraper] Completed with exit code ${code}`);
+  });
+};
+
+const DAILY_INTERVAL = 24 * 60 * 60 * 1000;
+setInterval(runCrawlerSilently, DAILY_INTERVAL);
+
+app.listen(PORT, () => {
+  console.log(`=========================================`);
+  console.log(`Express Backend running on port ${PORT}`);
+  console.log(`=========================================`);
+});
