@@ -93,7 +93,7 @@ const Auth = ({ onLoginSuccess }) => {
     <div className="auth-wrapper">
       <div className="glass-panel auth-card">
         <div className="auth-brand">
-          <div className="auth-logo">Antigravity</div>
+          <div className="auth-logo">VITHON</div>
           <div className="auth-subtitle">Computational & Data Science Hub</div>
         </div>
 

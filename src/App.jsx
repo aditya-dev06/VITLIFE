@@ -463,7 +463,7 @@ function App() {
       <aside className="sidebar">
         <div className="brand">
           <div>
-            <div className="brand-logo">Antigravity</div>
+            <div className="brand-logo">VITHON</div>
             <div className="branch-badge">
               {user && user.isVitBhopal ? 'VIT Bhopal Student' : 'Global User'}
             </div>

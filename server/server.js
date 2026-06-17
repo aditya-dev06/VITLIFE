@@ -22,11 +22,21 @@ const SCRIPTS_DIR = path.join(path.dirname(__dirname), 'scripts');
 const PYTHON_SCRIPT = path.join(SCRIPTS_DIR, 'fetch_opportunities.py');
 
 // High-entropy secret generated dynamically on startup to sign session tokens securely
-const JWT_SECRET = crypto.randomBytes(64).toString('hex');
-
 // Ensure database directories and database files exist
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// Load or generate a persistent secret so session tokens remain valid across server restarts
+const SECRET_FILE = path.join(DATA_DIR, 'secret.key');
+let JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  if (fs.existsSync(SECRET_FILE)) {
+    JWT_SECRET = fs.readFileSync(SECRET_FILE, 'utf8').trim();
+  } else {
+    JWT_SECRET = crypto.randomBytes(64).toString('hex');
+    fs.writeFileSync(SECRET_FILE, JWT_SECRET, 'utf8');
+  }
 }
 
 // Seed opportunities if empty
