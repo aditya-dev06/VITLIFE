@@ -106,17 +106,14 @@ const upload = multer({
   }
 });
 
-// Email Configuration (Resend API or SMTP Transporter)
-const resendApiKey = process.env.RESEND_API_KEY;
-const resendFrom = process.env.RESEND_FROM || 'onboarding@resend.dev';
-
+// Email Configuration (SMTP Transporter)
 const smtpHost = process.env.SMTP_HOST;
 const smtpPort = parseInt(process.env.SMTP_PORT, 10) || 587;
 const smtpUser = process.env.SMTP_USER;
 const smtpPass = process.env.SMTP_PASS;
 
 let transporter = null;
-if (!resendApiKey && smtpHost && smtpUser && smtpPass) {
+if (smtpHost && smtpUser && smtpPass) {
   transporter = nodemailer.createTransport({
     host: smtpHost,
     port: smtpPort,
@@ -130,10 +127,7 @@ if (!resendApiKey && smtpHost && smtpUser && smtpPass) {
 
 let smtpHealthy = false;
 let smtpError = null;
-if (resendApiKey) {
-  smtpHealthy = true;
-  console.log('✅ Resend API email service configured.');
-} else if (transporter) {
+if (transporter) {
   transporter.verify()
     .then(() => {
       smtpHealthy = true;
@@ -150,64 +144,27 @@ if (resendApiKey) {
 }
 
 const sendMailHelper = async (to, subject, text) => {
-  if (!smtpHealthy) {
+  if (!smtpHealthy || !transporter) {
     throw new Error('Email service is currently unavailable. Please try again later.');
   }
 
-  if (resendApiKey) {
-    try {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          from: resendFrom,
-          to: to,
-          subject: subject,
-          text: text
-        })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        console.log(`Email sent successfully via Resend to ${to}: ${data.id}`);
-        return true;
-      } else {
-        console.error(`Resend API error sending to ${to}:`, data);
-        // Only set unhealthy if it's an authorization/authentication issue or server error (not 400 Bad Request)
-        if (res.status === 401 || res.status >= 500) {
-          smtpHealthy = false;
-        }
-        throw new Error(data.message || 'Failed to send email via Resend.');
-      }
-    } catch (err) {
-      console.error(`Resend connection error sending to ${to}:`, err);
-      // Connection timeouts/failures should set unhealthy
+  try {
+    await transporter.sendMail({
+      from: `"VIT Bhopal Opportunity Hub" <${smtpUser}>`,
+      to,
+      subject,
+      text
+    });
+    console.log(`Email sent successfully to ${to}`);
+    return true;
+  } catch (err) {
+    console.error(`Nodemailer error sending to ${to}:`, err);
+    // Only set unhealthy on connection/auth errors
+    const isConnectionOrAuthError = err.code === 'ECONNREFUSED' || err.code === 'EAUTH' || err.responseCode >= 500;
+    if (isConnectionOrAuthError) {
       smtpHealthy = false;
-      throw new Error('Failed to send email. Please try again later.');
     }
-  } else if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: `"VIT Bhopal Opportunity Hub" <${smtpUser}>`,
-        to,
-        subject,
-        text
-      });
-      console.log(`Email sent successfully to ${to}`);
-      return true;
-    } catch (err) {
-      console.error(`Nodemailer error sending to ${to}:`, err);
-      // Only set unhealthy on connection/auth errors
-      const isConnectionOrAuthError = err.code === 'ECONNREFUSED' || err.code === 'EAUTH' || err.responseCode >= 500;
-      if (isConnectionOrAuthError) {
-        smtpHealthy = false;
-      }
-      throw new Error('Failed to send email. Please try again later.');
-    }
-  } else {
-    throw new Error('Email service is not configured.');
+    throw new Error('Failed to send email. Please try again later.');
   }
 };
 
@@ -1757,8 +1714,7 @@ app.get('/api/health/smtp', (req, res) => {
     smtpHost: process.env.SMTP_HOST || null,
     smtpPort: process.env.SMTP_PORT || null,
     smtpUser: process.env.SMTP_USER || null,
-    hasPass: !!process.env.SMTP_PASS,
-    hasResendApiKey: !!process.env.RESEND_API_KEY
+    hasPass: !!process.env.SMTP_PASS
   });
 });
 
