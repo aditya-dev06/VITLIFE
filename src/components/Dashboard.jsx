@@ -1,4 +1,13 @@
 import { useState } from 'react';
+import BounceCards from './BounceCards';
+
+const eventTransformStyles = [
+  'rotate(5deg) translate(-45px)',
+  'rotate(2deg) translate(-22px)',
+  'rotate(-1deg)',
+  'rotate(-4deg) translate(22px)',
+  'rotate(3deg) translate(45px)'
+];
 
 const CATEGORIES = [
   { key: 'all', label: 'All', icon: '🌟' },
@@ -685,12 +694,18 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
                   </div>
 
                   {event.posterUrl && (
-                    <div style={{ height: '160px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))' }}>
-                      <img
-                        src={event.posterUrl}
-                        alt={event.title}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        onError={(e) => { e.target.style.display = 'none'; }}
+                    <div style={{ height: '160px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
+                      <BounceCards
+                        className="event-card-bounce"
+                        images={Array(5).fill(event.posterUrl)}
+                        containerWidth="100%"
+                        containerHeight={160}
+                        animationDelay={0.3}
+                        animationStagger={0.05}
+                        easeType="elastic.out(1, 0.7)"
+                        transformStyles={eventTransformStyles}
+                        enableHover={true}
+                        pushOffset={35}
                       />
                     </div>
                   )}

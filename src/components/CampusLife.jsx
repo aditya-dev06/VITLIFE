@@ -1,4 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
+import BounceCards from './BounceCards';
+
+const eventTransformStyles = [
+  'rotate(5deg) translate(-45px)',
+  'rotate(2deg) translate(-22px)',
+  'rotate(-1deg)',
+  'rotate(-4deg) translate(22px)',
+  'rotate(3deg) translate(45px)'
+];
 
 const CATEGORIES = [
   { key: 'all', label: 'All', icon: '🌟' },
@@ -740,10 +749,22 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
                       }}>
                         🔵 Happening Now
                       </div>
-                      {event.posterUrl && (
-                        <img src={event.posterUrl} alt={event.title} className="event-poster-dynamic"
-                          onError={(e) => { e.target.style.display = 'none'; }} />
-                      )}
+                      {event.posterUrl ? (
+                        <div style={{ height: '200px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
+                          <BounceCards
+                            className="event-card-bounce"
+                            images={Array(5).fill(event.posterUrl)}
+                            containerWidth="100%"
+                            containerHeight={200}
+                            animationDelay={0.3}
+                            animationStagger={0.05}
+                            easeType="elastic.out(1, 0.7)"
+                            transformStyles={eventTransformStyles}
+                            enableHover={true}
+                            pushOffset={35}
+                          />
+                        </div>
+                      ) : null}
                       <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', flexGrow: 1, gap: '0.5rem' }}>
                         <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0 }}>{event.title}</h3>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 600, color: `hsl(${catColor})` }}>
@@ -817,14 +838,31 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
                       {badge.text}
                     </div>
 
-                    {event.posterUrl && (
-                      <img
-                        src={event.posterUrl}
-                        alt={event.title}
-                        className="event-poster-dynamic"
-                        onError={(e) => { e.target.style.display = 'none'; }}
-                      />
-                    )}
+                     {event.posterUrl && (
+                       (status === 'ongoing' || status === 'reg_open' || status === 'upcoming') ? (
+                         <div style={{ height: '200px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
+                           <BounceCards
+                             className="event-card-bounce"
+                             images={Array(5).fill(event.posterUrl)}
+                             containerWidth="100%"
+                             containerHeight={200}
+                             animationDelay={0.3}
+                             animationStagger={0.05}
+                             easeType="elastic.out(1, 0.7)"
+                             transformStyles={eventTransformStyles}
+                             enableHover={true}
+                             pushOffset={35}
+                           />
+                         </div>
+                       ) : (
+                         <img
+                           src={event.posterUrl}
+                           alt={event.title}
+                           className="event-poster-dynamic"
+                           onError={(e) => { e.target.style.display = 'none'; }}
+                         />
+                       )
+                     )}
                     <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', flexGrow: 1, gap: '0.5rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.2rem' }}>
                         <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0, flex: 1 }}>
