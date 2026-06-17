@@ -1,4 +1,10 @@
 {
   "$schema": "https://schema.railpack.com",
-  "provider": "node"
+  "provider": "node",
+  "packages": {
+    "python": "3"
+  },
+  "buildAptPackages": [
+    "python3-venv"
+  ]
 }
