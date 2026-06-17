@@ -1,4 +1,4 @@
-import React from 'react';
+
 
 const VITBhopalGuide = ({ isVitBhopal, userSemester = 1, userProgram = '' }) => {
   const semNum = parseInt(userSemester, 10);

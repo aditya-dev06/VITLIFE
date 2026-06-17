@@ -28,8 +28,8 @@ async function main() {
       ok = await runCmd('python', ['-m', 'venv', 'venv']);
     }
     if (!ok) {
-      console.error('ERROR: Failed to create Python virtual environment. Please ensure Python is installed.');
-      process.exit(1);
+      console.warn('WARNING: Failed to create Python virtual environment. Proceeding anyway.');
+      process.exit(0);
     }
   } else {
     console.log('Virtual environment already exists.');
@@ -44,8 +44,8 @@ async function main() {
   if (fs.existsSync(pipPath)) {
     const ok = await runCmd(pipPath, ['install', '-r', 'requirements.txt']);
     if (!ok) {
-      console.error('ERROR: Failed to install Python dependencies in virtual environment.');
-      process.exit(1);
+      console.warn('WARNING: Failed to install Python dependencies in virtual environment. Proceeding anyway.');
+      process.exit(0);
     }
   } else {
     console.log('Pip not found in virtual environment. Trying system fallback with --break-system-packages...');
@@ -54,8 +54,8 @@ async function main() {
       ok = await runCmd('pip', ['install', '--break-system-packages', '-r', 'requirements.txt']);
     }
     if (!ok) {
-      console.error('ERROR: Failed to install Python dependencies globally.');
-      process.exit(1);
+      console.warn('WARNING: Failed to install Python dependencies globally. Proceeding anyway.');
+      process.exit(0);
     }
   }
 

@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Dashboard from './components/Dashboard';
 import Roadmap from './components/Roadmap';
 import Opportunities from './components/Opportunities';
 import VITBhopalGuide from './components/VITBhopalGuide';
-import PracticeArena from './components/PracticeArena';
+import CampusLife from './components/CampusLife';
 import Auth from './components/Auth';
 
 // Default Initial Skills Database
@@ -216,30 +216,26 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [token, setToken] = useState(localStorage.getItem('ds_ai_token'));
   const [user, setUser] = useState(null);
+  const [showEditProfile, setShowEditProfile] = useState(false);
   const [xpPoints, setXpPoints] = useState(0);
   const [skills, setSkills] = useState([]);
   const [opportunities, setOpportunities] = useState([]);
   const [lastUpdated, setLastUpdated] = useState('');
+  const [clubs, setClubs] = useState([]);
+  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Initialize and load user profile on token change or startup
-  useEffect(() => {
-    if (token) {
-      fetchUserProfile();
-    } else {
-      setSkills(INITIAL_SKILLS);
-      setXpPoints(0);
-      setUser(null);
-      setLoading(false);
-    }
-  }, [token]);
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('ds_ai_token');
+    localStorage.removeItem('ds_ai_user');
+    setToken(null);
+    setUser(null);
+    setSkills(INITIAL_SKILLS);
+    setXpPoints(0);
+    setActiveTab('dashboard');
+  }, []);
 
-  // Load opportunities on token load
-  useEffect(() => {
-    fetchOpportunities();
-  }, [token]);
-
-  const fetchUserProfile = async () => {
+  const fetchUserProfile = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch('/api/user/profile', {
@@ -277,9 +273,9 @@ function App() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, handleLogout]);
 
-  const fetchOpportunities = async () => {
+  const fetchOpportunities = useCallback(async () => {
     try {
       const headers = {};
       if (token) {
@@ -296,23 +292,66 @@ function App() {
     } catch (error) {
       console.error("Error communicating with backend: ", error);
     }
-  };
+  }, [token]);
+
+  const fetchClubs = useCallback(async () => {
+    try {
+      const res = await fetch('/api/clubs');
+      if (res.ok) {
+        const data = await res.json();
+        setClubs(data.clubs || []);
+      } else {
+        console.error("Failed to fetch clubs from Express API");
+      }
+    } catch (error) {
+      console.error("Error communicating with backend: ", error);
+    }
+  }, []);
+
+  const fetchEvents = useCallback(async () => {
+    try {
+      const res = await fetch('/api/events');
+      if (res.ok) {
+        const data = await res.json();
+        setEvents(data.events || []);
+      } else {
+        console.error("Failed to fetch events from Express API");
+      }
+    } catch (error) {
+      console.error("Error communicating with backend: ", error);
+    }
+  }, []);
+
+  // Initialize and load user profile on token change or startup
+  useEffect(() => {
+    if (token) {
+      Promise.resolve().then(() => {
+        fetchUserProfile();
+      });
+    } else {
+      Promise.resolve().then(() => {
+        setSkills(INITIAL_SKILLS);
+        setXpPoints(0);
+        setUser(null);
+        setLoading(false);
+      });
+    }
+  }, [token, fetchUserProfile]);
+
+  // Load opportunities on token load
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      fetchOpportunities();
+      fetchClubs();
+      fetchEvents();
+    });
+  }, [token, fetchOpportunities, fetchClubs, fetchEvents]);
 
   const handleLoginSuccess = (newToken, newUser) => {
     localStorage.setItem('ds_ai_token', newToken);
     localStorage.setItem('ds_ai_user', JSON.stringify(newUser));
     setToken(newToken);
     setUser(newUser);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('ds_ai_token');
-    localStorage.removeItem('ds_ai_user');
-    setToken(null);
-    setUser(null);
-    setSkills(INITIAL_SKILLS);
-    setXpPoints(0);
-    setActiveTab('dashboard');
   };
 
   // Sync skill status changes to the Express server
@@ -355,32 +394,7 @@ function App() {
     }
   };
 
-  // Sync XP changes to the Express server
-  const handleAddXp = async (amount) => {
-    const newXp = xpPoints + amount;
-    setXpPoints(newXp);
 
-    if (user) {
-      const updatedUser = { ...user, xpPoints: newXp };
-      setUser(updatedUser);
-      localStorage.setItem('ds_ai_user', JSON.stringify(updatedUser));
-    }
-
-    if (token) {
-      try {
-        await fetch('/api/user/profile', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ xpPoints: newXp })
-        });
-      } catch (err) {
-        console.error("Failed to sync XP with backend: ", err);
-      }
-    }
-  };
 
   const handleUpdateSemester = async (newSemester) => {
     const semNum = parseInt(newSemester, 10) || 1;
@@ -402,6 +416,37 @@ function App() {
         });
       } catch (err) {
         console.error("Failed to sync semester with backend: ", err);
+      }
+    }
+  };
+
+  const handleUpdateProfile = async (newName, newSemester) => {
+    if (!newName.trim()) return;
+    const semNum = parseInt(newSemester, 10) || 1;
+    if (user) {
+      const updatedUser = { ...user, name: newName.trim(), semester: semNum };
+      setUser(updatedUser);
+      localStorage.setItem('ds_ai_user', JSON.stringify(updatedUser));
+    }
+
+    if (token) {
+      try {
+        const res = await fetch('/api/user/profile', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ name: newName.trim(), semester: semNum })
+        });
+        if (res.ok) {
+          setShowEditProfile(false);
+        } else {
+          const err = await res.json();
+          alert(err.error || 'Failed to update profile.');
+        }
+      } catch (err) {
+        console.error("Failed to sync profile with backend: ", err);
       }
     }
   };
@@ -459,8 +504,17 @@ function App() {
             userProgram={user ? user.program : ''}
           />
         );
-      case 'practice':
-        return <PracticeArena onAddXp={handleAddXp} />;
+      case 'campus':
+        return (
+          <CampusLife 
+            user={user} 
+            token={token} 
+            clubs={clubs}
+            events={events}
+            fetchClubs={fetchClubs}
+            fetchEvents={fetchEvents}
+          />
+        );
       default:
         return (
           <Dashboard 
@@ -470,6 +524,10 @@ function App() {
             roadmapProgress={roadmapProgress}
             onNavigate={setActiveTab}
             onUpdateSemester={handleUpdateSemester}
+            clubs={clubs}
+            events={events}
+            fetchEvents={fetchEvents}
+            token={token}
           />
         );
     }
@@ -524,9 +582,9 @@ function App() {
                 🏫 {user && user.isVitBhopal ? 'VIT Bhopal Guide' : 'DS & AI Guide'}
               </button>
             </li>
-            <li className={`nav-item ${activeTab === 'practice' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('practice')}>
-                🏆 Practice Arena
+            <li className={`nav-item ${activeTab === 'campus' ? 'active' : ''}`}>
+              <button onClick={() => setActiveTab('campus')}>
+                🎪 Campus Life
               </button>
             </li>
           </ul>
@@ -539,8 +597,23 @@ function App() {
                 {user && user.name ? user.name.substring(0, 2).toUpperCase() : 'DS'}
               </div>
               <div className="user-info" style={{ overflow: 'hidden', textOverflow: 'ellipsis', width: 'calc(100% - 50px)' }}>
-                <div className="name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {user ? user.name : 'CDS Student'}
+                <div className="name" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{user ? user.name : 'CDS Student'}</span>
+                  {user && (
+                    <button
+                      onClick={() => setShowEditProfile(true)}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: '0.8rem', padding: '0.1rem', display: 'inline-flex',
+                        alignSelf: 'center', color: 'rgba(255,255,255,0.7)', transition: 'color 0.2s'
+                      }}
+                      title="Edit Profile"
+                      onMouseEnter={(e) => e.target.style.color = '#fff'}
+                      onMouseLeave={(e) => e.target.style.color = 'rgba(255,255,255,0.7)'}
+                    >
+                      ✏️
+                    </button>
+                  )}
                 </div>
                 <div className="college" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>
                   {user && user.isVitBhopal 
@@ -560,6 +633,79 @@ function App() {
       <main className="main-content">
         {renderActiveComponent()}
       </main>
+
+      {showEditProfile && (
+        <EditProfileModal
+          user={user}
+          onClose={() => setShowEditProfile(false)}
+          onSave={handleUpdateProfile}
+        />
+      )}
+    </div>
+  );
+}
+
+function EditProfileModal({ user, onClose, onSave }) {
+  const [name, setName] = useState(user?.name || '');
+  const [semester, setSemester] = useState(user?.semester || 1);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) { alert('Name cannot be empty.'); return; }
+    setLoading(true);
+    await onSave(name.trim(), parseInt(semester, 10) || 1);
+    setLoading(false);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0 }}>
+            ✏️ Edit Profile
+          </h2>
+          <button onClick={onClose} style={{
+            background: 'none', border: 'none', color: 'hsl(var(--text-muted))',
+            fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1
+          }}>✕</button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="modal-form">
+          <div className="form-group">
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'hsl(var(--text-secondary))', marginBottom: '0.4rem', display: 'block' }}>Name</label>
+            <input 
+              type="text" 
+              value={name} 
+              onChange={e => setName(e.target.value)} 
+              placeholder="Your name" 
+              required 
+            />
+          </div>
+
+          <div className="form-group">
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'hsl(var(--text-secondary))', marginBottom: '0.4rem', display: 'block' }}>Semester</label>
+            <select 
+              value={semester} 
+              onChange={e => setSemester(e.target.value)} 
+              required
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
+                <option key={sem} value={sem}>Semester {sem}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="modal-actions" style={{ marginTop: '1rem' }}>
+            <button type="submit" className="btn-submit" disabled={loading}>
+              {loading ? 'Saving...' : 'Save Changes'}
+            </button>
+            <button type="button" className="btn-cancel" onClick={onClose} disabled={loading}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

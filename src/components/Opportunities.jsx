@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const Opportunities = ({ initialOpportunities, lastUpdated, onRefreshData }) => {
   const [opportunities, setOpportunities] = useState(initialOpportunities);

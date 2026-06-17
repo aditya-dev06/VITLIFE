@@ -33,4 +33,8 @@ __pycache__/
 server/data/users.json
 server/data/secret.key
 server/data/*.key
+server/data/admin_config.json
+server/uploads/
+.env
+
 

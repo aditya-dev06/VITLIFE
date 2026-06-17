@@ -1,0 +1,436 @@
+{
+  "clubs": [
+    {
+      "id": "club-gdg",
+      "name": "GDG on Campus VIT Bhopal",
+      "category": "tech",
+      "description": "Google Developer Groups on Campus chapter at VIT Bhopal, fostering a community of developers through workshops, hackathons, and study jams on Google technologies.",
+      "icon": "🖥️",
+      "memberCount": 280,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-ai-ml",
+      "name": "AI & ML Club",
+      "category": "tech",
+      "description": "Dedicated to exploring artificial intelligence and machine learning through research projects, Kaggle competitions, and hands-on workshops at VIT Bhopal.",
+      "icon": "🖥️",
+      "memberCount": 210,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-android",
+      "name": "Android Club",
+      "category": "tech",
+      "description": "A passionate community of mobile app developers building innovative Android applications and learning Kotlin, Jetpack Compose, and modern development practices.",
+      "icon": "🖥️",
+      "memberCount": 175,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-linux",
+      "name": "Linux Club",
+      "category": "tech",
+      "description": "Promoting open-source culture and Linux-based development at VIT Bhopal through install-fests, kernel talks, and contributions to FOSS projects.",
+      "icon": "🖥️",
+      "memberCount": 120,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-owasp",
+      "name": "OWASP VITB",
+      "category": "tech",
+      "description": "The official OWASP student chapter focused on cybersecurity awareness, CTF competitions, and ethical hacking workshops to build a security-first mindset.",
+      "icon": "🖥️",
+      "memberCount": 145,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-csi",
+      "name": "CSI Chapter",
+      "category": "tech",
+      "description": "Computer Society of India student chapter organizing technical seminars, coding marathons, and industry speaker sessions to bridge the gap between academia and industry.",
+      "icon": "🖥️",
+      "memberCount": 190,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-software-dev",
+      "name": "Software Dev Club",
+      "category": "tech",
+      "description": "A hub for full-stack developers to collaborate on real-world projects, learn modern frameworks, and participate in open-source contributions.",
+      "icon": "🖥️",
+      "memberCount": 160,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-iot",
+      "name": "IoT Club",
+      "category": "tech",
+      "description": "Exploring the Internet of Things ecosystem through hands-on projects with Arduino, Raspberry Pi, and cloud-connected smart devices at VIT Bhopal.",
+      "icon": "🖥️",
+      "memberCount": 95,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-data-science",
+      "name": "Data Science Club",
+      "category": "tech",
+      "description": "Empowering students with data analytics, visualization, and statistical modeling skills through workshops, datasets challenges, and guest lectures from industry experts.",
+      "icon": "🖥️",
+      "memberCount": 185,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-competitive-programming",
+      "name": "Competitive Programming Club",
+      "category": "tech",
+      "description": "Sharpening problem-solving and algorithmic skills through regular contests on Codeforces, LeetCode, and CodeChef while preparing teams for ICPC regionals.",
+      "icon": "🖥️",
+      "memberCount": 230,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-music-band",
+      "name": "Music & Band Club",
+      "category": "music",
+      "description": "The heartbeat of campus culture, bringing together vocalists, instrumentalists, and beatboxers for jam sessions, open mics, and performances at VIT Bhopal fests.",
+      "icon": "🎵",
+      "memberCount": 135,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-dance",
+      "name": "Dance Club",
+      "category": "music",
+      "description": "A vibrant dance community covering contemporary, hip-hop, classical, and freestyle genres, performing at college fests and inter-university competitions.",
+      "icon": "🎵",
+      "memberCount": 150,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-dramatics",
+      "name": "Dramatics Club",
+      "category": "music",
+      "description": "Bringing stories to life through theatre, street plays, and nukkad naataks, cultivating the performing arts scene on campus with regular stage productions.",
+      "icon": "🎵",
+      "memberCount": 90,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-photography",
+      "name": "Photography Club",
+      "category": "music",
+      "description": "Capturing campus life and beyond through the lens, hosting photo walks, editing workshops, and exhibitions to nurture visual storytelling skills.",
+      "icon": "🎵",
+      "memberCount": 110,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-animation",
+      "name": "VIT Animation",
+      "category": "music",
+      "description": "A creative collective of 2D and 3D animators, motion graphics designers, and visual effects enthusiasts producing short films and animated content.",
+      "icon": "🎵",
+      "memberCount": 65,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-ela",
+      "name": "English Literary Association",
+      "category": "speakers",
+      "description": "Celebrating the art of the written and spoken word through poetry slams, essay competitions, creative writing workshops, and open mic nights.",
+      "icon": "🎤",
+      "memberCount": 100,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-debate",
+      "name": "Debate Society",
+      "category": "speakers",
+      "description": "Training eloquent speakers and critical thinkers through parliamentary and British-style debates, hosting inter-college debate tournaments on campus.",
+      "icon": "🎤",
+      "memberCount": 85,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-munsoc",
+      "name": "MUNSOC",
+      "category": "speakers",
+      "description": "The Model United Nations Society at VIT Bhopal, organizing MUN conferences and preparing delegates for national and international simulations of UN committees.",
+      "icon": "🎤",
+      "memberCount": 130,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-anchoring",
+      "name": "Anchoring Group",
+      "category": "speakers",
+      "description": "Grooming confident stage hosts and emcees who lead campus events, fests, and ceremonies with poise and engaging communication skills.",
+      "icon": "🎤",
+      "memberCount": 55,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-hla",
+      "name": "Hindi Literary Association",
+      "category": "speakers",
+      "description": "Promoting Hindi literature and oratory through kavi sammelans, story-writing contests, and nukkad naataks that celebrate the richness of Hindi culture.",
+      "icon": "🎤",
+      "memberCount": 75,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-rotaract",
+      "name": "Rotaract Club",
+      "category": "motivation",
+      "description": "A Rotary-affiliated community service club at VIT Bhopal organizing blood donation drives, literacy campaigns, and social impact projects for local communities.",
+      "icon": "💡",
+      "memberCount": 170,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-leo",
+      "name": "Leo Club",
+      "category": "motivation",
+      "description": "Lions Club International's youth wing empowering students through leadership development, community service initiatives, and environmental awareness campaigns.",
+      "icon": "💡",
+      "memberCount": 140,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-nss",
+      "name": "NSS - National Service Scheme",
+      "category": "motivation",
+      "description": "Engaging students in meaningful social service through village adoption programs, cleanliness drives, health camps, and disaster relief activities across Madhya Pradesh.",
+      "icon": "💡",
+      "memberCount": 250,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-yrc",
+      "name": "Youth Red Cross",
+      "category": "motivation",
+      "description": "Promoting humanitarian values through first-aid training, blood donation camps, health awareness sessions, and community outreach under the Red Cross banner.",
+      "icon": "💡",
+      "memberCount": 115,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-ecell",
+      "name": "Entrepreneurship Cell (E-Cell)",
+      "category": "motivation",
+      "description": "Fostering the startup culture at VIT Bhopal through pitch competitions, incubation support, mentorship programs, and entrepreneurship summits with industry leaders.",
+      "icon": "💡",
+      "memberCount": 200,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-otaku",
+      "name": "Otaku Club",
+      "category": "anime",
+      "description": "A haven for anime and manga enthusiasts hosting watch parties, cosplay events, fan-art contests, and discussions on the latest seasonal anime at VIT Bhopal.",
+      "icon": "/uploads/1781714973307-531017978.jpg",
+      "memberCount": 180,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-movie-making",
+      "name": "Movie Making Club",
+      "category": "anime",
+      "description": "Aspiring filmmakers crafting short films, documentaries, and music videos while learning cinematography, screenwriting, and post-production techniques.",
+      "icon": "🎌",
+      "memberCount": 70,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-gaming",
+      "name": "Gaming Club",
+      "category": "anime",
+      "description": "Uniting casual and competitive gamers through esports tournaments, LAN parties, and game development jams across PC, console, and mobile platforms.",
+      "icon": "🎌",
+      "memberCount": 220,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-robotics",
+      "name": "Robotics Club",
+      "category": "robotics",
+      "description": "Designing and building autonomous robots for national competitions like Robocon, while exploring ROS, computer vision, and mechanical design principles.",
+      "icon": "🤖",
+      "memberCount": 105,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-iot-embedded",
+      "name": "IoT & Embedded Systems Club",
+      "category": "robotics",
+      "description": "Diving deep into microcontrollers, sensor networks, and embedded firmware development for smart systems and industrial automation projects.",
+      "icon": "🤖",
+      "memberCount": 80,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-drone",
+      "name": "Drone Club",
+      "category": "robotics",
+      "description": "Building and flying custom drones for aerial photography, autonomous navigation challenges, and participating in national-level drone racing competitions.",
+      "icon": "🤖",
+      "memberCount": 60,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-sports",
+      "name": "Sports Club",
+      "category": "sports",
+      "description": "The umbrella sports body at VIT Bhopal coordinating inter-college tournaments, intramural leagues, and fitness events across multiple disciplines.",
+      "icon": "🏅",
+      "memberCount": 300,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-trekking",
+      "name": "Trekking Club",
+      "category": "sports",
+      "description": "Organizing adventurous treks, nature trails, and camping trips across Madhya Pradesh and beyond, promoting outdoor fitness and team bonding.",
+      "icon": "🏅",
+      "memberCount": 85,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-yoga",
+      "name": "Yoga Club",
+      "category": "sports",
+      "description": "Promoting holistic wellness through daily yoga sessions, meditation workshops, and International Yoga Day celebrations on campus.",
+      "icon": "🏅",
+      "memberCount": 65,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-cubing",
+      "name": "Cubing Club",
+      "category": "sports",
+      "description": "A community of speedcubers mastering Rubik's cubes and twisty puzzles, hosting campus-level competitions and teaching solving techniques to beginners.",
+      "icon": "🏅",
+      "memberCount": 45,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    },
+    {
+      "id": "club-cricket",
+      "name": "Cricket Club",
+      "category": "sports",
+      "description": "Nurturing cricketing talent through regular net practice, intra-campus leagues, and representing VIT Bhopal at inter-university cricket tournaments.",
+      "icon": "🏅",
+      "memberCount": 155,
+      "socialLinks": {
+        "instagram": "",
+        "linkedin": ""
+      }
+    }
+  ]
+}

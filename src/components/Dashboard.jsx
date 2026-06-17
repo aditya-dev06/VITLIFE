@@ -1,6 +1,267 @@
-import React from 'react';
+import { useState } from 'react';
 
-const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, onUpdateSemester }) => {
+const CATEGORIES = [
+  { key: 'all', label: 'All', icon: '🌟' },
+  { key: 'tech', label: 'Tech', icon: '🖥️', color: '180, 80%, 55%' },
+  { key: 'music', label: 'Music & Arts', icon: '🎵', color: '280, 70%, 60%' },
+  { key: 'speakers', label: 'Speakers', icon: '🎤', color: '30, 90%, 55%' },
+  { key: 'motivation', label: 'Social & Motivation', icon: '💡', color: '140, 60%, 50%' },
+  { key: 'anime', label: 'Anime & Culture', icon: '🎌', color: '330, 75%, 60%' },
+  { key: 'robotics', label: 'Robotics', icon: '🤖', color: '220, 75%, 55%' },
+  { key: 'sports', label: 'Sports', icon: '🏅', color: '50, 85%, 55%' },
+];
+
+function getCategoryColor(categoryKey) {
+  const cat = CATEGORIES.find(c => c.key === categoryKey);
+  return cat && cat.color ? cat.color : '263, 90%, 65%';
+}
+
+function getCategoryIcon(categoryKey) {
+  const cat = CATEGORIES.find(c => c.key === categoryKey);
+  return cat ? cat.icon : '🌟';
+}
+
+function getDaysRemaining(dateStr) {
+  if (!dateStr) return null;
+  const eventDate = new Date(dateStr);
+  const now = new Date();
+  const diff = eventDate - now;
+  if (diff <= 0) return null;
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  try {
+    return new Date(dateStr).toLocaleDateString('en-IN', {
+      weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
+    });
+  } catch { return dateStr; }
+}
+
+function ClubLogo({ club, category, size = 24, borderRadius = '50%' }) {
+  const [error, setError] = useState(false);
+  const icon = club?.icon;
+  
+  const isUrl = (str) => {
+    if (!str) return false;
+    return str.startsWith('http://') || str.startsWith('https://') || str.startsWith('/uploads/') || str.startsWith('/');
+  };
+
+  const containerStyle = {
+    width: `${size}px`,
+    height: `${size}px`,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'rgba(255, 255, 255, 0.05)',
+    border: '1px solid hsla(var(--border-glass))',
+    borderRadius: borderRadius,
+    overflow: 'hidden',
+    flexShrink: 0
+  };
+
+  if (!icon || error) {
+    const fallbackEmoji = icon && !isUrl(icon) ? icon : getCategoryIcon(category);
+    return (
+      <div style={containerStyle}>
+        <span style={{ fontSize: `${size * 0.55}px`, lineHeight: 1 }}>{fallbackEmoji}</span>
+      </div>
+    );
+  }
+
+  if (isUrl(icon)) {
+    return (
+      <div style={containerStyle}>
+        <img 
+          src={icon} 
+          alt={club?.name || ''} 
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+          onError={() => setError(true)} 
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div style={containerStyle}>
+      <span style={{ fontSize: `${size * 0.55}px`, lineHeight: 1 }}>{icon}</span>
+    </div>
+  );
+}
+
+function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents }) {
+  const isAdmin = user && user.role === 'admin';
+  const canDelete = isAdmin || (user && event.createdBy === user.email);
+  const catColor = getCategoryColor(event.category);
+  const regUrl = event.registrationLink || `mailto:${event.createdBy}`;
+
+  const handleTogglePin = async () => {
+    try {
+      const res = await fetch(`/api/events/${event.id}/pin`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        fetchEvents();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to toggle pin status.');
+      }
+    } catch {
+      alert('Network error toggling pin status.');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete this event?')) return;
+    try {
+      const res = await fetch(`/api/events/${event.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        fetchEvents();
+        onClose();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to delete event.');
+      }
+    } catch {
+      alert('Network error deleting event.');
+    }
+  };
+
+  const eventClub = clubs.find(c => c.id === event.clubId);
+  const clubName = eventClub ? eventClub.name : event.clubName || 'Unknown Club';
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '1.4rem', color: 'hsl(var(--text-primary))' }}>{event.title}</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem', fontSize: '0.85rem', fontWeight: 600, color: `hsl(${catColor})` }}>
+              <ClubLogo club={eventClub} category={event.category} size={24} borderRadius="50%" />
+              <span>Hosted by {clubName}</span>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'hsl(var(--text-muted))', fontSize: '1.25rem', cursor: 'pointer' }}>
+            ✕
+          </button>
+        </div>
+
+        {event.posterUrl && (
+          <div style={{ width: '100%', maxHeight: '300px', borderRadius: '8px', overflow: 'hidden', marginBottom: '1.25rem', border: '1px solid hsla(var(--border-glass))' }}>
+            <img src={event.posterUrl} alt={event.title} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+          </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div>
+            <h4 style={{ color: 'hsl(var(--text-primary))', marginBottom: '0.5rem', fontSize: '0.95rem' }}>Event Description</h4>
+            <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.88rem', lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap' }}>
+              {event.description}
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', background: 'rgba(255, 255, 255, 0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid hsla(var(--border-glass))' }}>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Date</div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>📅 {formatDate(event.date)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Time</div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>🕐 {event.time}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Venue</div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>📍 {event.venue}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Category</div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: `hsl(${catColor})`, textTransform: 'capitalize' }}>
+                {getCategoryIcon(event.category)} {event.category}
+              </div>
+            </div>
+          </div>
+
+          {event.tags && event.tags.length > 0 && (
+            <div>
+              <h4 style={{ color: 'hsl(var(--text-primary))', marginBottom: '0.5rem', fontSize: '0.95rem' }}>Tags</h4>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                {event.tags.map((tag, i) => (
+                  <span key={i} className="opp-tag">{tag}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}>
+            📧 <strong>Created by:</strong> {event.createdBy}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', borderTop: '1px solid hsla(var(--border-glass))', paddingTop: '1.25rem', marginTop: '0.5rem' }}>
+            <a
+              className="btn-register"
+              href={regUrl}
+              target={event.registrationLink ? "_blank" : undefined}
+              rel={event.registrationLink ? "noopener noreferrer" : undefined}
+              style={{ textDecoration: 'none', flexGrow: 1, textAlign: 'center', justifyContent: 'center' }}
+            >
+              {event.registrationLink ? '🔗 Register Now' : '✉️ Contact Host'}
+            </a>
+            
+            {isAdmin && (
+              <button
+                onClick={handleTogglePin}
+                title={event.pinned ? "Unpin Event" : "Pin Event"}
+                className={`btn-cancel`}
+                style={{ 
+                  padding: '0.55rem 1rem', 
+                  fontSize: '0.8rem', 
+                  borderColor: event.pinned ? 'hsl(var(--primary))' : 'hsla(var(--border-glass))',
+                  color: event.pinned ? 'hsl(var(--primary))' : 'hsl(var(--text-secondary))',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.25rem'
+                }}
+              >
+                {event.pinned ? '📍 Unpin' : '📌 Pin'}
+              </button>
+            )}
+
+            {canDelete && (
+              <button
+                onClick={handleDelete}
+                title="Delete event"
+                style={{
+                  background: 'hsla(0, 80%, 55%, 0.15)',
+                  border: '1px solid hsla(0, 80%, 55%, 0.3)', 
+                  borderRadius: '8px',
+                  padding: '0.55rem 1rem', 
+                  cursor: 'pointer', 
+                  fontSize: '0.8rem',
+                  color: 'hsl(0, 80%, 65%)', 
+                  transition: 'all 0.2s ease',
+                  fontWeight: 600
+                }}
+              >
+                🗑️ Delete
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, onUpdateSemester, clubs = [], events = [], fetchEvents, token }) => {
+  const [selectedEvent, setSelectedEvent] = useState(null);
   const inProgressSkills = stats.inProgressSkillsList || [];
   const activeOpportunities = opportunities ? opportunities.slice(0, 3) : [];
 
@@ -15,6 +276,92 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
     }
     return '';
   };
+
+  const handleTogglePin = async (event, e) => {
+    e.stopPropagation();
+    try {
+      const res = await fetch(`/api/events/${event.id}/pin`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        fetchEvents();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to toggle pin status.');
+      }
+    } catch {
+      alert('Network error toggling pin status.');
+    }
+  };
+
+  const getRecommendedEvents = () => {
+    if (!events) return [];
+    
+    // Filter out past events
+    const upcomingEvents = events.filter(e => {
+      if (!e.date) return false;
+      const eventDate = new Date(e.date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return eventDate >= today;
+    });
+
+    const studentProgram = (user?.program || '').toLowerCase();
+    const studentCourses = (user?.courses || []).map(c => c.toLowerCase());
+
+    const scored = upcomingEvents.map(event => {
+      let score = 0;
+      if (event.pinned) {
+        score += 10000;
+      }
+
+      const category = (event.category || '').toLowerCase();
+      const tags = (event.tags || []).map(t => t.toLowerCase());
+
+      const hasCseAiDs = studentProgram.includes('cse') || 
+                        studentProgram.includes('ai') || 
+                        studentProgram.includes('data science') || 
+                        studentProgram.includes('computational');
+
+      const hasDsaDbms = studentCourses.some(c => c.includes('dsa') || c.includes('dbms') || c.includes('data structures') || c.includes('database'));
+
+      if (hasCseAiDs || hasDsaDbms) {
+        if (category === 'tech') {
+          score += 100;
+        } else if (category === 'robotics') {
+          score += 80;
+        }
+      }
+
+      studentCourses.forEach(course => {
+        tags.forEach(tag => {
+          if (course.includes(tag) || tag.includes(course)) {
+            score += 50;
+          }
+        });
+        if (course.includes(category) || category.includes(course)) {
+          score += 50;
+        }
+      });
+
+      return { event, score };
+    });
+
+    scored.sort((a, b) => {
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+      return new Date(a.event.date) - new Date(b.event.date);
+    });
+
+    return scored.map(s => s.event);
+  };
+
+  const recommendedEvents = getRecommendedEvents();
 
   return (
     <div>
@@ -158,6 +505,127 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
         </div>
       </div>
 
+      {/* Upcoming Events Section */}
+      <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1.3rem' }}>Upcoming & Recommended Events</h3>
+            <p style={{ color: 'hsl(var(--text-muted))', fontSize: '0.85rem', margin: '0.25rem 0 0 0' }}>
+              Events recommended based on your program & courses. Sponsored events are featured at the top.
+            </p>
+          </div>
+        </div>
+
+        {recommendedEvents.length > 0 ? (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: '1.5rem'
+          }}>
+            {recommendedEvents.map(event => {
+              const daysLeft = getDaysRemaining(event.date);
+              const catColor = getCategoryColor(event.category);
+              const eventClub = clubs.find(c => c.id === event.clubId);
+              const clubName = eventClub ? eventClub.name : event.clubName || 'Unknown Club';
+              const isAdmin = user && user.role === 'admin';
+
+              return (
+                <div 
+                  key={event.id} 
+                  className="glass-card event-card" 
+                  onClick={() => setSelectedEvent(event)}
+                  style={{ 
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    position: 'relative',
+                    border: event.pinned ? '1px solid hsla(var(--primary) / 0.5)' : '1px solid hsla(var(--border-glass))',
+                    boxShadow: event.pinned ? '0 0 15px hsla(var(--primary) / 0.15)' : 'none'
+                  }}
+                >
+                  {event.pinned && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '0.75rem',
+                      left: '0.75rem',
+                      background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))',
+                      color: 'white',
+                      fontSize: '0.65rem',
+                      fontWeight: 800,
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '4px',
+                      zIndex: 5,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em'
+                    }}>
+                      📌 Featured
+                    </div>
+                  )}
+
+                  {event.posterUrl && (
+                    <div style={{ height: '160px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))' }}>
+                      <img
+                        src={event.posterUrl}
+                        alt={event.title}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                    </div>
+                  )}
+                  
+                  <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flexGrow: 1, gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                      <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0, flex: 1 }}>
+                        {event.title}
+                      </h4>
+                      {daysLeft !== null && (
+                        <span className="countdown-badge">
+                          ⏰ {daysLeft}d left
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      color: `hsl(${catColor})`
+                    }}>
+                      <ClubLogo club={eventClub} category={event.category} size={20} borderRadius="50%" />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{clubName}</span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>
+                      <span>📅 {formatDate(event.date)}</span>
+                      <span>📍 {event.venue}</span>
+                    </div>
+
+                    {isAdmin && (
+                      <div style={{ marginTop: 'auto', paddingTop: '0.75rem', display: 'flex', justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={(e) => handleTogglePin(event, e)}
+                          className="btn-promote"
+                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}
+                        >
+                          {event.pinned ? '📍 Unpin' : '📌 Pin'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <span style={{ fontSize: '2.5rem' }}>📅</span>
+            <p>No upcoming events recommended at this time.</p>
+          </div>
+        )}
+      </div>
+
       {/* Dashboard Main Split Layout */}
       <div className="dash-layout">
         {/* Left: Focus / Roadmap Tasks */}
@@ -227,6 +695,17 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
           </div>
         </div>
       </div>
+
+      {selectedEvent && (
+        <EventDetailsModal
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+          user={user}
+          token={token}
+          clubs={clubs}
+          fetchEvents={fetchEvents}
+        />
+      )}
     </div>
   );
 };

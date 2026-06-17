@@ -1,4 +1,4 @@
-import React from 'react';
+
 
 const Roadmap = ({ skills, userCourses = [], userSemester = 1, onUpdateSkillStatus }) => {
   const semNum = parseInt(userSemester, 10);
