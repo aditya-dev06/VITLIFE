@@ -900,7 +900,7 @@ app.post('/api/auth/register', async (req, res) => {
       xpPoints: 0,
       skillsProgress: {},
       role: isAdminEmail(lowerEmail) ? 'admin' : 'student',
-      verified: false,
+      verified: !transporter,
       verificationCode: hashedCode,
       verificationExpires: codeExpires,
       lastCodeSentAt: Date.now(),
@@ -908,6 +908,15 @@ app.post('/api/auth/register', async (req, res) => {
     };
 
     await saveUser(lowerEmail, newUser);
+
+    if (!transporter) {
+      return res.json({
+        success: true,
+        verified: true,
+        message: 'Registration successful! Please sign in using your password.',
+        email: lowerEmail
+      });
+    }
 
     // Send email or fallback to console log
     await sendMailHelper(
@@ -981,6 +990,12 @@ app.post('/api/auth/resend-code', authRateLimiter(5, 15 * 60 * 1000), async (req
 
     if (user.verified) {
       return res.status(400).json({ error: 'Account is already verified.' });
+    }
+
+    if (!transporter) {
+      user.verified = true;
+      await saveUser(lowerEmail, user);
+      return res.json({ success: true, verified: true, message: 'Account auto-verified.' });
     }
 
     // 60-second cooldown gate

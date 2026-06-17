@@ -163,10 +163,15 @@ const Auth = ({ onLoginSuccess }) => {
       }
 
       if (isSignUp) {
-        setEmail(data.email || email);
-        setAuthState('verify');
-        setSuccessMessage(data.message || 'Verification code sent to your email.');
-        setCooldown(60);
+        if (data.verified) {
+          setAuthState('login');
+          setSuccessMessage(data.message || 'Registration successful! Please sign in.');
+        } else {
+          setEmail(data.email || email);
+          setAuthState('verify');
+          setSuccessMessage(data.message || 'Verification code sent to your email.');
+          setCooldown(60);
+        }
       } else {
         handleLoginSuccess(data.token, data.user);
       }
