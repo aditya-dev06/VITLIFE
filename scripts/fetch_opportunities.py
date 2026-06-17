@@ -4,6 +4,7 @@ import re
 import sys
 import time
 from datetime import datetime
+import requests
 
 # Import duckduckgo_search safely
 try:
@@ -273,8 +274,6 @@ def fetch_from_duckduckgo():
     # Multiple highly targeted queries to grab active hackathons and opportunities
     queries = {
         "hackathon": [
-            "unstop hackathons",
-            "devpost AI hackathons",
             "hackerearth coding contests"
         ],
         "internship": [
@@ -389,6 +388,121 @@ def fetch_from_duckduckgo():
 
     return unique_items
 
+def fetch_devpost_hackathons(limit=15):
+    """
+    Fetches active, online-only hackathons directly from Devpost's JSON search API.
+    """
+    url = "https://devpost.com/api/hackathons"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    
+    results = []
+    # Devpost returns 9 per page, fetch up to 2 pages to meet limit
+    pages_to_fetch = [1, 2]
+    for page in pages_to_fetch:
+        params = {
+            "challenge_type[]": "online-only",
+            "status[]": "open",
+            "page": page
+        }
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=15)
+            if response.status_code == 200:
+                data = response.json()
+                hackathons = data.get("hackathons", [])
+                for h in hackathons:
+                    if len(results) >= limit:
+                        break
+                    
+                    dates = h.get("submission_period_dates", "N/A")
+                    time_left = h.get("time_left_to_submission", "")
+                    deadline = f"{dates} ({time_left})" if time_left else dates
+                    
+                    # Compute a matching score based on tags / themes
+                    themes = [t.get("name", "") for t in h.get("themes", [])]
+                    description = f"Themes: {', '.join(themes)}. Host: {h.get('organization_name')}"
+                    
+                    results.append({
+                        "id": f"devpost-{h.get('id')}",
+                        "title": h.get("title"),
+                        "type": "hackathon",
+                        "organization": h.get("organization_name") or "Devpost Host",
+                        "link": h.get("url"),
+                        "deadline": deadline,
+                        "matchScore": 85 if any(x in " ".join(themes).lower() for x in ["machine learning", "ai", "data science"]) else 75,
+                        "description": description,
+                        "tags": ["Hackathon", "Remote"] + themes[:2]
+                    })
+            else:
+                print(f"Failed to fetch page {page} from Devpost: {response.status_code}")
+        except Exception as e:
+            print(f"Error fetching page {page} from Devpost: {e}")
+            
+    return results
+
+def fetch_unstop_hackathons(limit=15):
+    """
+    Fetches active hackathons directly from Unstop's internal JSON API.
+    """
+    url = "https://unstop.com/api/public/opportunity/search-result"
+    params = {
+        "opportunity": "hackathons",
+        "oppstatus": "open",
+        "per_page": limit,
+        "page": 1
+    }
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://unstop.com/"
+    }
+    
+    results = []
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=15)
+        if response.status_code == 200:
+            data = response.json()
+            hackathons = data.get("data", {}).get("data", [])
+            for h in hackathons[:limit]:
+                # Parse deadline
+                end_date_str = h.get("end_date")
+                deadline = "N/A"
+                if end_date_str:
+                    try:
+                        # Convert ISO format to readable format
+                        dt = datetime.strptime(end_date_str.split("+")[0], "%Y-%m-%dT%H:%M:%S")
+                        deadline = dt.strftime("%b %d, %Y")
+                    except Exception:
+                        deadline = end_date_str
+                
+                remain = h.get("regnRequirements", {}).get("remain_days")
+                if remain:
+                    deadline = f"{deadline} ({remain})"
+                
+                org = h.get("organisation", {}).get("name") or "Unstop Host"
+                skills = [s.get("skill") for s in h.get("required_skills", [])]
+                desc = h.get("details", "")
+                # Strip HTML tags from description
+                desc_clean = re.sub('<[^<]+?>', '', desc)[:200] + "..." if desc else "Active competition on Unstop."
+                
+                results.append({
+                    "id": f"unstop-{h.get('id')}",
+                    "title": h.get("title"),
+                    "type": "hackathon",
+                    "organization": org,
+                    "link": h.get("seo_url") or f"https://unstop.com/o/{h.get('short_id')}",
+                    "deadline": deadline,
+                    "matchScore": 80,
+                    "description": desc_clean,
+                    "tags": ["Hackathon", "India"] + skills[:2]
+                })
+        else:
+            print(f"Failed to fetch from Unstop: Status code {response.status_code}")
+    except Exception as e:
+        print(f"Error fetching from Unstop: {e}")
+        
+    return results
+
 def main():
     print("=========================================")
     print("DATA SCIENCE & AI OPPORTUNITIES SCRAPER")
@@ -400,11 +514,33 @@ def main():
 
     # Fetch fresh items
     fresh_opportunities = []
+    
+    # 1. Fetch from Devpost API
     try:
-        fresh_opportunities = fetch_from_duckduckgo()
+        print("Fetching hackathons directly from Devpost API...")
+        devpost_items = fetch_devpost_hackathons(15)
+        fresh_opportunities.extend(devpost_items)
+        print(f"Added {len(devpost_items)} Devpost hackathons.")
     except Exception as e:
-        print(f"Overall scraping execution failed: {e}")
-        print("Using curated list and offline data sources...")
+        print(f"Devpost scraping failed: {e}")
+
+    # 2. Fetch from Unstop API
+    try:
+        print("Fetching hackathons directly from Unstop API...")
+        unstop_items = fetch_unstop_hackathons(15)
+        fresh_opportunities.extend(unstop_items)
+        print(f"Added {len(unstop_items)} Unstop hackathons.")
+    except Exception as e:
+        print(f"Unstop scraping failed: {e}")
+
+    # 3. Fetch from DuckDuckGo (internships, courses, certificates, extra contests)
+    try:
+        print("Fetching other opportunities from DuckDuckGo...")
+        ddg_items = fetch_from_duckduckgo()
+        fresh_opportunities.extend(ddg_items)
+        print(f"Added {len(ddg_items)} DuckDuckGo opportunities.")
+    except Exception as e:
+        print(f"DuckDuckGo scraping failed: {e}")
 
     # Combine fresh opportunities with curated items
     # Curated items are placed first as they are extremely high value/real
