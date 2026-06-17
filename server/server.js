@@ -8,6 +8,10 @@ import { spawn } from 'child_process';
 import { MongoClient } from 'mongodb';
 import multer from 'multer';
 import nodemailer from 'nodemailer';
+import dns from 'dns';
+
+// Force Node.js to prefer IPv4 over IPv6 to resolve connection unreachable errors on IPv4-only networks like Railway
+dns.setDefaultResultOrder('ipv4first');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
