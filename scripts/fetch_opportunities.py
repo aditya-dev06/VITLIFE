@@ -117,6 +117,41 @@ CURATED_OPPORTUNITIES = [
     }
 ]
 
+def is_relevant(title, body, opp_type):
+    text = (title + " " + body).lower()
+    
+    # Must contain at least one of these tech/education keywords
+    tech_keywords = [
+        "data", "science", "analytic", "machine", "learning", "ml", "ai ", "artificial", "intelligence",
+        "python", "code", "coding", "program", "develop", "software", "comput", "algorithm", "statistics",
+        "database", "sql", "hackathon", "intern", "course", "certific", "deep learning", "neural", "tensor",
+        "keras", "pytorch", "hacker", "contest", "compet", "web", "frontend", "backend", "fullstack", "study"
+    ]
+    
+    has_tech_keyword = any(kw in text for kw in tech_keywords)
+    
+    # Discard obviously irrelevant topics
+    irrelevant_keywords = [
+        "movie", "game", "play free", "tv show", "watch free", "poki", "plex.tv", "tubi", "gaming", 
+        "stream free", "showtime", "netflix", "arcade", "toy", "card game"
+    ]
+    has_irrelevant_keyword = any(kw in text for kw in irrelevant_keywords)
+    
+    if has_irrelevant_keyword:
+        return False
+
+    # For hackathons, it must look like a competition or coding event
+    if opp_type == "hackathon":
+        if not any(kw in text for kw in ["hack", "contest", "compet", "code", "coding", "challenge", "event"]):
+            return False
+            
+    # For internships, it must look like a job or intern program
+    if opp_type == "internship":
+        if not any(kw in text for kw in ["intern", "job", "career", "work", "hiring", "program", "position", "role", "placement", "opp", "fellowship"]):
+            return False
+
+    return has_tech_keyword
+
 def calculate_match_score(title, description):
     text = (title + " " + description).lower()
     score = 65  # Base score for matching queries
@@ -168,6 +203,10 @@ def fetch_from_duckduckgo():
 
                     # Filter out noise
                     if any(domain in link for domain in ["youtube.com", "facebook.com", "instagram.com", "twitter.com"]):
+                        continue
+
+                    # Filter out irrelevant search results (e.g. movies, games, general online freebies)
+                    if not is_relevant(title, body, opp_type):
                         continue
 
                     # Determine score
