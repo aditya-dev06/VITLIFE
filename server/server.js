@@ -434,7 +434,7 @@ app.post('/api/research', (req, res) => {
 
   const pythonPath = process.platform === 'win32' 
     ? path.join(path.dirname(__dirname), 'venv', 'Scripts', 'python.exe')
-    : 'python';
+    : path.join(path.dirname(__dirname), 'venv', 'bin', 'python');
 
   const cmd = fs.existsSync(pythonPath) ? pythonPath : 'python';
 
@@ -486,9 +486,11 @@ app.use((req, res, next) => {
 
 // 3. Scheduler: Run crawler automatically every 24 hours
 const runCrawlerSilently = () => {
-  const cmd = fs.existsSync(path.join(path.dirname(__dirname), 'venv', 'Scripts', 'python.exe'))
+  const pythonPath = process.platform === 'win32'
     ? path.join(path.dirname(__dirname), 'venv', 'Scripts', 'python.exe')
-    : 'python';
+    : path.join(path.dirname(__dirname), 'venv', 'bin', 'python');
+
+  const cmd = fs.existsSync(pythonPath) ? pythonPath : 'python';
   
   console.log(`[Scheduler] Triggering daily crawler run...`);
   const child = spawn(cmd, [PYTHON_SCRIPT]);

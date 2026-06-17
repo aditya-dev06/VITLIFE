@@ -10,7 +10,15 @@ try:
 except ImportError:
     print("duckduckgo_search library not found. Installing it now...")
     import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "duckduckgo_search"])
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "duckduckgo_search"])
+    except Exception:
+        print("Standard installation failed. Trying with --break-system-packages...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "--break-system-packages", "duckduckgo_search"])
+        except Exception as e:
+            print(f"Failed to install library: {e}")
+            raise e
     from duckduckgo_search import DDGS
 
 # Paths
