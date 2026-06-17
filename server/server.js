@@ -102,14 +102,17 @@ const upload = multer({
   }
 });
 
-// Email Transporter Configuration
+// Email Configuration (Resend API or SMTP Transporter)
+const resendApiKey = process.env.RESEND_API_KEY;
+const resendFrom = process.env.RESEND_FROM || 'onboarding@resend.dev';
+
 const smtpHost = process.env.SMTP_HOST;
 const smtpPort = parseInt(process.env.SMTP_PORT, 10) || 587;
 const smtpUser = process.env.SMTP_USER;
 const smtpPass = process.env.SMTP_PASS;
 
 let transporter = null;
-if (smtpHost && smtpUser && smtpPass) {
+if (!resendApiKey && smtpHost && smtpUser && smtpPass) {
   transporter = nodemailer.createTransport({
     host: smtpHost,
     port: smtpPort,
@@ -122,7 +125,10 @@ if (smtpHost && smtpUser && smtpPass) {
 }
 
 let smtpHealthy = false;
-if (transporter) {
+if (resendApiKey) {
+  smtpHealthy = true;
+  console.log('✅ Resend API email service configured.');
+} else if (transporter) {
   transporter.verify()
     .then(() => {
       smtpHealthy = true;
@@ -133,27 +139,61 @@ if (transporter) {
       console.error('❌ SMTP connection failed:', err.message);
     });
 } else {
-  console.warn('⚠️ SMTP not configured. Registration and password reset will be unavailable.');
+  console.warn('⚠️ Email service not configured. Registration and password reset will be unavailable.');
 }
 
 const sendMailHelper = async (to, subject, text) => {
-  if (!transporter || !smtpHealthy) {
+  if (!smtpHealthy) {
     throw new Error('Email service is currently unavailable. Please try again later.');
   }
-  try {
-    await transporter.sendMail({
-      from: `"VIT Bhopal Opportunity Hub" <${smtpUser}>`,
-      to,
-      subject,
-      text
-    });
-    console.log(`Email sent successfully to ${to}`);
-    return true;
-  } catch (err) {
-    console.error(`Nodemailer error sending to ${to}:`, err);
-    // Mark SMTP as unhealthy on send failure
-    smtpHealthy = false;
-    throw new Error('Failed to send email. Please try again later.');
+
+  if (resendApiKey) {
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: resendFrom,
+          to: to,
+          subject: subject,
+          text: text
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        console.log(`Email sent successfully via Resend to ${to}: ${data.id}`);
+        return true;
+      } else {
+        console.error(`Resend API error sending to ${to}:`, data);
+        smtpHealthy = false;
+        throw new Error(data.message || 'Failed to send email via Resend.');
+      }
+    } catch (err) {
+      console.error(`Resend connection error sending to ${to}:`, err);
+      smtpHealthy = false;
+      throw new Error('Failed to send email. Please try again later.');
+    }
+  } else if (transporter) {
+    try {
+      await transporter.sendMail({
+        from: `"VIT Bhopal Opportunity Hub" <${smtpUser}>`,
+        to,
+        subject,
+        text
+      });
+      console.log(`Email sent successfully to ${to}`);
+      return true;
+    } catch (err) {
+      console.error(`Nodemailer error sending to ${to}:`, err);
+      // Mark SMTP as unhealthy on send failure
+      smtpHealthy = false;
+      throw new Error('Failed to send email. Please try again later.');
+    }
+  } else {
+    throw new Error('Email service is not configured.');
   }
 };
 
