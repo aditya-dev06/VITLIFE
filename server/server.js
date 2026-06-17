@@ -1748,8 +1748,16 @@ app.delete('/api/recruitments/:id', authenticate, async (req, res) => {
 
 // SMTP Health Check Endpoint
 app.get('/api/health/smtp', (req, res) => {
-  res.json({ smtpHealthy });
+  res.json({
+    smtpHealthy,
+    smtpHost: process.env.SMTP_HOST || null,
+    smtpPort: process.env.SMTP_PORT || null,
+    smtpUser: process.env.SMTP_USER || null,
+    hasPass: !!process.env.SMTP_PASS,
+    hasResendApiKey: !!process.env.RESEND_API_KEY
+  });
 });
+
 
 // --- FILE UPLOAD ---
 app.post('/api/upload', authenticate, requireClubManager, (req, res) => {
