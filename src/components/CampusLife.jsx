@@ -256,7 +256,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
         setError(data.error || 'Failed to create club.');
         return false;
       }
-    } catch (err) {
+    } catch {
       setError('Network error creating club.');
       return false;
     } finally {
@@ -307,6 +307,24 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
         posterUrl = uploadResult.url;
       }
 
+      let schedulePosterUrl = formData.schedulePosterUrl ? ensureAbsoluteUrl(formData.schedulePosterUrl) : '';
+
+      if (formData.schedulePosterFile) {
+        const uploadData = new FormData();
+        uploadData.append('poster', formData.schedulePosterFile);
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: uploadData
+        });
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json();
+          throw new Error(err.error || 'Schedule poster upload failed');
+        }
+        const uploadResult = await uploadRes.json();
+        schedulePosterUrl = uploadResult.url;
+      }
+
       const body = {
         title: formData.title,
         description: formData.description,
@@ -317,6 +335,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
         time: formData.time,
         venue: formData.venue,
         posterUrl,
+        schedulePosterUrl,
         registrationLink: formData.registrationLink ? ensureAbsoluteUrl(formData.registrationLink) : '',
         tags: formData.tags ? formData.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
         registrationDeadline: formData.registrationDeadline || '',
@@ -1317,8 +1336,57 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, on
         </div>
 
         {event.posterUrl && (
-          <div style={{ width: '100%', maxHeight: '300px', borderRadius: '8px', overflow: 'hidden', marginBottom: '1.25rem', border: '1px solid hsla(var(--border-glass))' }}>
-            <img src={event.posterUrl} alt={event.title} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+          <div style={{ 
+            width: '100%', 
+            maxHeight: '400px', 
+            borderRadius: '8px', 
+            overflow: 'hidden', 
+            marginBottom: '1.25rem', 
+            border: '1px solid hsla(var(--border-glass))',
+            background: 'rgba(0, 0, 0, 0.2)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}>
+            <img 
+              src={event.posterUrl} 
+              alt={event.title} 
+              style={{ 
+                maxWidth: '100%', 
+                maxHeight: '400px', 
+                objectFit: 'contain', 
+                display: 'block' 
+              }} 
+            />
+          </div>
+        )}
+
+        {event.schedulePosterUrl && (
+          <div>
+            <h4 style={{ color: 'hsl(var(--text-primary))', marginBottom: '0.5rem', fontSize: '0.95rem' }}>📅 Event Schedule</h4>
+            <div style={{ 
+              width: '100%', 
+              maxHeight: '400px', 
+              borderRadius: '8px', 
+              overflow: 'hidden', 
+              marginBottom: '1.25rem', 
+              border: '1px solid hsla(var(--border-glass))',
+              background: 'rgba(0, 0, 0, 0.2)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}>
+              <img 
+                src={event.schedulePosterUrl} 
+                alt="Event Schedule" 
+                style={{ 
+                  maxWidth: '100%', 
+                  maxHeight: '400px', 
+                  objectFit: 'contain', 
+                  display: 'block' 
+                }} 
+              />
+            </div>
           </div>
         )}
 
@@ -1636,6 +1704,9 @@ function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
   const [posterMode, setPosterMode] = useState('url'); // 'url' | 'file'
   const [posterUrl, setPosterUrl] = useState('');
   const [posterFile, setPosterFile] = useState(null);
+  const [schedulePosterMode, setSchedulePosterMode] = useState('url'); // 'url' | 'file'
+  const [schedulePosterUrl, setSchedulePosterUrl] = useState('');
+  const [schedulePosterFile, setSchedulePosterFile] = useState(null);
   const [registrationLink, setRegistrationLink] = useState('');
   const [tags, setTags] = useState('');
   const [price, setPrice] = useState('');
@@ -1664,6 +1735,8 @@ function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
       venue: venue.trim(),
       posterUrl: posterMode === 'url' ? posterUrl.trim() : '',
       posterFile: posterMode === 'file' ? posterFile : null,
+      schedulePosterUrl: schedulePosterMode === 'url' ? schedulePosterUrl.trim() : '',
+      schedulePosterFile: schedulePosterMode === 'file' ? schedulePosterFile : null,
       registrationLink: registrationLink.trim(),
       tags: tags.trim(),
       registrationDeadline,
@@ -1800,6 +1873,40 @@ function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
             ) : (
               <input type="file" accept="image/jpeg,image/png,image/gif,image/webp"
                 onChange={e => setPosterFile(e.target.files?.[0] || null)}
+                style={{
+                  width: '100%', padding: '0.5rem', borderRadius: '8px',
+                  background: 'hsl(var(--bg-card))', border: '1px solid hsla(var(--border-glass))',
+                  color: 'hsl(var(--text-primary))', fontSize: '0.85rem'
+                }}
+              />
+            )}
+          </div>
+
+          <div className="form-group">
+            <label>Event Schedule Poster</label>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <button type="button" onClick={() => setSchedulePosterMode('url')}
+                style={{
+                  padding: '0.3rem 0.7rem', fontSize: '0.78rem', borderRadius: '6px', cursor: 'pointer',
+                  background: schedulePosterMode === 'url' ? 'hsl(var(--primary))' : 'hsla(var(--bg-card))',
+                  color: schedulePosterMode === 'url' ? '#fff' : 'hsl(var(--text-secondary))',
+                  border: '1px solid hsla(var(--border-glass))', transition: 'all 0.2s ease'
+                }}
+              >🔗 URL</button>
+              <button type="button" onClick={() => setSchedulePosterMode('file')}
+                style={{
+                  padding: '0.3rem 0.7rem', fontSize: '0.78rem', borderRadius: '6px', cursor: 'pointer',
+                  background: schedulePosterMode === 'file' ? 'hsl(var(--primary))' : 'hsla(var(--bg-card))',
+                  color: schedulePosterMode === 'file' ? '#fff' : 'hsl(var(--text-secondary))',
+                  border: '1px solid hsla(var(--border-glass))', transition: 'all 0.2s ease'
+                }}
+              >📁 Upload</button>
+            </div>
+            {schedulePosterMode === 'url' ? (
+              <input type="url" value={schedulePosterUrl} onChange={e => setSchedulePosterUrl(e.target.value)} placeholder="https://example.com/schedule-poster.jpg" />
+            ) : (
+              <input type="file" accept="image/jpeg,image/png,image/gif,image/webp"
+                onChange={e => setSchedulePosterFile(e.target.files?.[0] || null)}
                 style={{
                   width: '100%', padding: '0.5rem', borderRadius: '8px',
                   background: 'hsl(var(--bg-card))', border: '1px solid hsla(var(--border-glass))',

@@ -243,8 +243,57 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents }) 
         </div>
 
         {event.posterUrl && (
-          <div style={{ width: '100%', maxHeight: '300px', borderRadius: '8px', overflow: 'hidden', marginBottom: '1.25rem', border: '1px solid hsla(var(--border-glass))' }}>
-            <img src={event.posterUrl} alt={event.title} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+          <div style={{ 
+            width: '100%', 
+            maxHeight: '400px', 
+            borderRadius: '8px', 
+            overflow: 'hidden', 
+            marginBottom: '1.25rem', 
+            border: '1px solid hsla(var(--border-glass))',
+            background: 'rgba(0, 0, 0, 0.2)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}>
+            <img 
+              src={event.posterUrl} 
+              alt={event.title} 
+              style={{ 
+                maxWidth: '100%', 
+                maxHeight: '400px', 
+                objectFit: 'contain', 
+                display: 'block' 
+              }} 
+            />
+          </div>
+        )}
+
+        {event.schedulePosterUrl && (
+          <div>
+            <h4 style={{ color: 'hsl(var(--text-primary))', marginBottom: '0.5rem', fontSize: '0.95rem' }}>📅 Event Schedule</h4>
+            <div style={{ 
+              width: '100%', 
+              maxHeight: '400px', 
+              borderRadius: '8px', 
+              overflow: 'hidden', 
+              marginBottom: '1.25rem', 
+              border: '1px solid hsla(var(--border-glass))',
+              background: 'rgba(0, 0, 0, 0.2)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}>
+              <img 
+                src={event.schedulePosterUrl} 
+                alt="Event Schedule" 
+                style={{ 
+                  maxWidth: '100%', 
+                  maxHeight: '400px', 
+                  objectFit: 'contain', 
+                  display: 'block' 
+                }} 
+              />
+            </div>
           </div>
         )}
 
