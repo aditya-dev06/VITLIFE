@@ -692,10 +692,11 @@ const Auth = ({ onLoginSuccess }) => {
       <div className="glass-panel auth-card">
         <div className="auth-brand">
           <div className="auth-logo" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.1rem' }}>
-            <span>VIT</span>
+            <span className="logo-gradient-text">VIT</span>
             <RotatingText
               texts={['HON', 'LIFE']}
               mainClassName="auth-rotating-text"
+              elementLevelClassName="logo-gradient-text"
               staggerFrom="last"
               initial={{ y: "100%", opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}

@@ -555,10 +555,11 @@ function App() {
         <div className="brand">
           <div>
             <div className="brand-logo" style={{ display: 'flex', alignItems: 'center', gap: '0.1rem' }}>
-              <span>VIT</span>
+              <span className="logo-gradient-text">VIT</span>
               <RotatingText
                 texts={['HON', 'LIFE']}
                 mainClassName="brand-rotating-text"
+                elementLevelClassName="logo-gradient-text"
                 staggerFrom="last"
                 initial={{ y: "100%", opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
