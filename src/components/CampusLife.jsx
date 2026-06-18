@@ -599,6 +599,100 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
     }
   };
 
+  const handleUpdateEvent = async (eventId, formData) => {
+    setFormLoading(true);
+    setError('');
+    try {
+      let posterUrls = formData.posterUrls ? formData.posterUrls.map(ensureAbsoluteUrl).filter(Boolean) : [];
+
+      if (formData.posterFiles && formData.posterFiles.length > 0) {
+        const uploadPromises = formData.posterFiles.map(async (file) => {
+          const uploadData = new FormData();
+          uploadData.append('poster', file);
+          const uploadRes = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: uploadData
+          });
+          if (!uploadRes.ok) {
+            const err = await uploadRes.json();
+            throw new Error(err.error || 'Upload failed');
+          }
+          const uploadResult = await uploadRes.json();
+          return uploadResult.url;
+        });
+        const uploadedUrls = await Promise.all(uploadPromises);
+        posterUrls = [...posterUrls, ...uploadedUrls];
+      }
+
+      let schedulePosterUrl = formData.schedulePosterUrl ? ensureAbsoluteUrl(formData.schedulePosterUrl) : '';
+
+      if (formData.schedulePosterFile) {
+        const uploadData = new FormData();
+        uploadData.append('poster', formData.schedulePosterFile);
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: uploadData
+        });
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json();
+          throw new Error(err.error || 'Schedule poster upload failed');
+        }
+        const uploadResult = await uploadRes.json();
+        schedulePosterUrl = uploadResult.url;
+      }
+
+      if (posterUrls.length === 0 && formData.existingPosterUrls) {
+        posterUrls = formData.existingPosterUrls;
+      }
+      if (!schedulePosterUrl && formData.existingSchedulePosterUrl) {
+        schedulePosterUrl = formData.existingSchedulePosterUrl;
+      }
+
+      const body = {
+        title: formData.title,
+        description: formData.description,
+        category: formData.category,
+        date: formData.date,
+        time: formData.time,
+        venue: formData.venue,
+        posterUrl: posterUrls[0] || '',
+        posterUrls,
+        schedulePosterUrl,
+        registrationLink: formData.registrationLink ? ensureAbsoluteUrl(formData.registrationLink) : '',
+        tags: formData.tags ? formData.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        registrationDeadline: formData.registrationDeadline || '',
+        eventStartDateTime: formData.eventStartDateTime || '',
+        eventEndDateTime: formData.eventEndDateTime || '',
+        price: formData.price || ''
+      };
+
+      const res = await fetch(`/api/events/${eventId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        await fetchEvents();
+        return data.event;
+      } else {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to update event.');
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to update event.');
+      throw err;
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
   const handleStartEditClub = (club) => {
     setEditingClub(club);
   };
@@ -1192,6 +1286,8 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
           clubs={clubs}
           fetchEvents={fetchEvents}
           onDeleteEvent={handleDeleteEvent}
+          onUpdateEvent={(updated) => setSelectedEventDetails(updated)}
+          onUpdateEventSubmit={handleUpdateEvent}
         />
       )}
     </div>
@@ -1295,10 +1391,17 @@ function ClubDetailsModal({ club, onClose }) {
   );
 }
 
-function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, onDeleteEvent }) {
+function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, onDeleteEvent, onUpdateEvent, onUpdateEventSubmit }) {
   const [activePoster, setActivePoster] = useState(event.posterUrl);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+
   const isAdmin = user && user.role === 'admin';
   const canDelete = isAdmin || (user && event.createdBy === user.email);
+  const canEdit = isAdmin || 
+                  (user && event.createdBy === user.email) || 
+                  (user && user.role === 'club_manager' && user.clubId === event.clubId);
   const catColor = getCategoryColor(event.category);
   const regUrl = event.registrationLink || `mailto:${event.createdBy}`;
 
@@ -1569,6 +1672,26 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, on
               </button>
             )}
 
+            {canEdit && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowEditModal(true); }}
+                title="Edit event details"
+                style={{
+                  background: 'hsla(var(--primary) / 0.15)',
+                  border: '1px solid hsla(var(--primary) / 0.3)', 
+                  borderRadius: '8px',
+                  padding: '0.55rem 1rem', 
+                  cursor: 'pointer', 
+                  fontSize: '0.8rem',
+                  color: 'hsl(var(--primary))', 
+                  transition: 'all 0.2s ease',
+                  fontWeight: 600
+                }}
+              >
+                ✏️ Edit
+              </button>
+            )}
+
             {canDelete && (
               <button
                 onClick={(e) => { e.stopPropagation(); handleDelete(); }}
@@ -1591,6 +1714,30 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, on
           </div>
         </div>
       </div>
+
+      {showEditModal && (
+        <EditEventModal
+          event={event}
+          clubs={clubs}
+          user={user}
+          onClose={() => { setShowEditModal(false); setEditError(''); }}
+          loading={editLoading}
+          error={editError}
+          onSubmit={async (formData) => {
+            setEditLoading(true);
+            setEditError('');
+            try {
+              const updatedEvent = await onUpdateEventSubmit(event.id, formData);
+              onUpdateEvent(updatedEvent);
+              setShowEditModal(false);
+            } catch (err) {
+              setEditError(err.message || 'Failed to update event.');
+            } finally {
+              setEditLoading(false);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -2068,6 +2215,335 @@ function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
           >
             {loading ? '⏳ Creating...' : '🚀 Create Event'}
           </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Edit Event Modal
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function EditEventModal({ event, clubs, user, onClose, loading, error, onSubmit }) {
+  const formatForDateTimeLocal = (dateStr) => {
+    if (!dateStr) return '';
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dateStr)) return dateStr;
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '';
+      const pad = (num) => String(num).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    } catch {
+      return '';
+    }
+  };
+
+  const [title, setTitle] = useState(event.title || '');
+  const [description, setDescription] = useState(event.description || '');
+  const [clubId, setClubId] = useState(event.clubId || '');
+  const [category, setCategory] = useState(event.category || 'tech');
+  const [eventStart, setEventStart] = useState(() => formatForDateTimeLocal(event.eventStartDateTime));
+  const [eventEnd, setEventEnd] = useState(() => formatForDateTimeLocal(event.eventEndDateTime));
+  const [registrationDeadline, setRegistrationDeadline] = useState(() => formatForDateTimeLocal(event.registrationDeadline));
+  const [venue, setVenue] = useState(event.venue || '');
+  const [posterMode, setPosterMode] = useState('url'); // 'url' | 'file'
+  const [posterUrls, setPosterUrls] = useState(() => {
+    return event.posterUrls && event.posterUrls.length > 0
+      ? event.posterUrls
+      : (event.posterUrl ? [event.posterUrl] : ['']);
+  });
+  const [posterFiles, setPosterFiles] = useState([]);
+  const [schedulePosterMode, setSchedulePosterMode] = useState('url'); // 'url' | 'file'
+  const [schedulePosterUrl, setSchedulePosterUrl] = useState(event.schedulePosterUrl || '');
+  const [schedulePosterFile, setSchedulePosterFile] = useState(null);
+  const [registrationLink, setRegistrationLink] = useState(event.registrationLink || '');
+  const [tags, setTags] = useState(() => {
+    return event.tags ? event.tags.join(', ') : '';
+  });
+  const [price, setPrice] = useState(event.price || '');
+
+  const selectedClub = clubs.find(c => c.id === clubId);
+  const clubName = selectedClub ? selectedClub.name : '';
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!title.trim()) { alert('Title is required.'); return; }
+    if (!eventStart) { alert('Event start date/time is required.'); return; }
+    if (!clubId) { alert('Please select a club.'); return; }
+    if (!category) { alert('Please select a category.'); return; }
+
+    const legacyDate = eventStart ? eventStart.split('T')[0] : '';
+
+    onSubmit({
+      title: title.trim(),
+      description: description.trim(),
+      clubId,
+      clubName,
+      category,
+      date: legacyDate,
+      time: '',
+      venue: venue.trim(),
+      posterUrls: posterMode === 'url' ? posterUrls.map(u => u.trim()).filter(Boolean) : [],
+      posterFiles: posterMode === 'file' ? posterFiles : [],
+      schedulePosterUrl: schedulePosterMode === 'url' ? schedulePosterUrl.trim() : '',
+      schedulePosterFile: schedulePosterMode === 'file' ? schedulePosterFile : null,
+      registrationLink: registrationLink.trim(),
+      tags: tags.trim(),
+      registrationDeadline,
+      eventStartDateTime: eventStart,
+      eventEndDateTime: eventEnd,
+      price: price.trim(),
+      existingPosterUrls: event.posterUrls || [],
+      existingSchedulePosterUrl: event.schedulePosterUrl || ''
+    });
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0 }}>
+            ✏️ Edit Event
+          </h2>
+          <button onClick={onClose} style={{
+            background: 'none', border: 'none', color: 'hsl(var(--text-muted))',
+            fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1
+          }}>✕</button>
+        </div>
+
+        {error && (
+          <div style={{
+            background: 'hsla(0, 80%, 55%, 0.12)', border: '1px solid hsla(0, 80%, 55%, 0.3)',
+            borderRadius: '8px', padding: '0.6rem 0.8rem', marginBottom: '1rem',
+            fontSize: '0.83rem', color: 'hsl(0, 80%, 65%)'
+          }}>{error}</div>
+        )}
+
+        <form className="modal-form" onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Title *</label>
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Event title" required />
+          </div>
+
+          <div className="form-group">
+            <label>Description</label>
+            <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="What's this event about?" rows={3}
+              style={{
+                width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px',
+                background: 'hsla(var(--bg-card))', border: '1px solid hsla(var(--border-glass))',
+                color: 'hsl(var(--text-primary))', fontSize: '0.9rem', resize: 'vertical',
+                fontFamily: 'inherit'
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div className="form-group">
+              <label>Club *</label>
+              <select 
+                value={clubId} 
+                onChange={e => setClubId(e.target.value)} 
+                required
+                disabled={user?.role === 'club_manager'}
+                style={{
+                  width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px',
+                  background: 'hsl(var(--bg-card))', border: '1px solid hsla(var(--border-glass))',
+                  color: '#fff', fontSize: '0.9rem',
+                  opacity: user?.role === 'club_manager' ? 0.7 : 1,
+                  cursor: user?.role === 'club_manager' ? 'not-allowed' : 'default'
+                }}
+              >
+                <option value="">Select club...</option>
+                {clubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Category *</label>
+              <select value={category} onChange={e => setCategory(e.target.value)} required
+                style={{
+                  width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px',
+                  background: 'hsl(var(--bg-card))', border: '1px solid hsla(var(--border-glass))',
+                  color: 'hsl(var(--text-primary))', fontSize: '0.9rem'
+                }}
+              >
+                {CATEGORIES.filter(c => c.key !== 'all').map(c => (
+                  <option key={c.key} value={c.key}>{c.icon} {c.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div className="form-group">
+              <label>Event Start *</label>
+              <input type="datetime-local" value={eventStart} onChange={e => setEventStart(e.target.value)} required />
+            </div>
+            <div className="form-group">
+              <label>Event End</label>
+              <input type="datetime-local" value={eventEnd} onChange={e => setEventEnd(e.target.value)} />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div className="form-group">
+              <label>Registration Deadline</label>
+              <input type="datetime-local" value={registrationDeadline} onChange={e => setRegistrationDeadline(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>Price (₹)</label>
+              <input type="text" value={price} onChange={e => setPrice(e.target.value)} placeholder="0 or Free for no charge" />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Venue</label>
+            <input type="text" value={venue} onChange={e => setVenue(e.target.value)} placeholder="e.g., Auditorium, AB-1 Room 203" />
+          </div>
+
+          <div className="form-group">
+            <label>Posters (Multiple Allowed)</label>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <button type="button" onClick={() => setPosterMode('url')}
+                style={{
+                  padding: '0.3rem 0.7rem', fontSize: '0.78rem', borderRadius: '6px', cursor: 'pointer',
+                  background: posterMode === 'url' ? 'hsl(var(--primary))' : 'hsla(var(--bg-card))',
+                  color: posterMode === 'url' ? '#fff' : 'hsl(var(--text-secondary))',
+                  border: '1px solid hsla(var(--border-glass))', transition: 'all 0.2s ease'
+                }}
+              >🔗 URL</button>
+              <button type="button" onClick={() => setPosterMode('file')}
+                style={{
+                  padding: '0.3rem 0.7rem', fontSize: '0.78rem', borderRadius: '6px', cursor: 'pointer',
+                  background: posterMode === 'file' ? 'hsl(var(--primary))' : 'hsla(var(--bg-card))',
+                  color: posterMode === 'file' ? '#fff' : 'hsl(var(--text-secondary))',
+                  border: '1px solid hsla(var(--border-glass))', transition: 'all 0.2s ease'
+                }}
+              >📁 Upload</button>
+            </div>
+            {posterMode === 'url' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {posterUrls.map((url, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input type="url" value={url} onChange={e => {
+                      const next = [...posterUrls];
+                      next[idx] = e.target.value;
+                      setPosterUrls(next);
+                    }} placeholder="https://example.com/poster.jpg" />
+                    {posterUrls.length > 1 && (
+                      <button type="button" onClick={() => setPosterUrls(posterUrls.filter((_, i) => i !== idx))}
+                        style={{
+                          padding: '0 0.75rem', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.4)',
+                          background: 'rgba(239, 68, 68, 0.1)', color: 'rgb(248, 113, 113)', cursor: 'pointer'
+                        }}
+                      >✕</button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={() => setPosterUrls([...posterUrls, ''])}
+                  style={{
+                    alignSelf: 'flex-start', padding: '0.3rem 0.6rem', fontSize: '0.75rem', borderRadius: '6px',
+                    background: 'rgba(255, 255, 255, 0.05)', color: 'hsl(var(--text-secondary))',
+                    border: '1px solid hsla(var(--border-glass))', cursor: 'pointer'
+                  }}
+                >➕ Add Another Poster URL</button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {posterFiles.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    {posterFiles.map((file, idx) => (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid hsla(var(--border-glass))' }}>
+                        <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '80%' }}>
+                          🖼️ {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                        </span>
+                        <button type="button" onClick={() => setPosterFiles(posterFiles.filter((_, i) => i !== idx))}
+                          style={{
+                            background: 'transparent', border: 'none', color: 'rgb(248, 113, 113)', cursor: 'pointer', fontSize: '0.9rem'
+                          }}
+                        >✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <input type="file" accept="image/jpeg,image/png,image/gif,image/webp"
+                  multiple
+                  onChange={e => {
+                    const files = Array.from(e.target.files || []);
+                    const validFiles = [];
+                    for (const file of files) {
+                      if (file.size > 5 * 1024 * 1024) {
+                        alert(`File "${file.name}" exceeds the 5MB size limit.`);
+                      } else {
+                        validFiles.push(file);
+                      }
+                    }
+                    if (validFiles.length > 0) {
+                      setPosterFiles([...posterFiles, ...validFiles]);
+                    }
+                    e.target.value = '';
+                  }}
+                  style={{
+                    width: '100%', padding: '0.5rem', borderRadius: '8px',
+                    background: 'hsl(var(--bg-card))', border: '1px solid hsla(var(--border-glass))',
+                    color: 'hsl(var(--text-primary))', fontSize: '0.85rem'
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label>Event Schedule Poster</label>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <button type="button" onClick={() => setSchedulePosterMode('url')}
+                style={{
+                  padding: '0.3rem 0.7rem', fontSize: '0.78rem', borderRadius: '6px', cursor: 'pointer',
+                  background: schedulePosterMode === 'url' ? 'hsl(var(--primary))' : 'hsla(var(--bg-card))',
+                  color: schedulePosterMode === 'url' ? '#fff' : 'hsl(var(--text-secondary))',
+                  border: '1px solid hsla(var(--border-glass))', transition: 'all 0.2s ease'
+                }}
+              >🔗 URL</button>
+              <button type="button" onClick={() => setSchedulePosterMode('file')}
+                style={{
+                  padding: '0.3rem 0.7rem', fontSize: '0.78rem', borderRadius: '6px', cursor: 'pointer',
+                  background: schedulePosterMode === 'file' ? 'hsl(var(--primary))' : 'hsla(var(--bg-card))',
+                  color: schedulePosterMode === 'file' ? '#fff' : 'hsl(var(--text-secondary))',
+                  border: '1px solid hsla(var(--border-glass))', transition: 'all 0.2s ease'
+                }}
+              >📁 Upload</button>
+            </div>
+            {schedulePosterMode === 'url' ? (
+              <input type="url" value={schedulePosterUrl} onChange={e => setSchedulePosterUrl(e.target.value)} placeholder="https://example.com/schedule-poster.jpg" />
+            ) : (
+              <input type="file" accept="image/jpeg,image/png,image/gif,image/webp"
+                onChange={e => setSchedulePosterFile(e.target.files?.[0] || null)}
+                style={{
+                  width: '100%', padding: '0.5rem', borderRadius: '8px',
+                  background: 'hsl(var(--bg-card))', border: '1px solid hsla(var(--border-glass))',
+                  color: 'hsl(var(--text-primary))', fontSize: '0.85rem'
+                }}
+              />
+            )}
+          </div>
+
+          <div className="form-group">
+            <label>Registration Link</label>
+            <input type="url" value={registrationLink} onChange={e => setRegistrationLink(e.target.value)} placeholder="Google Form URL" />
+          </div>
+
+          <div className="form-group">
+            <label>Tags (comma-separated)</label>
+            <input type="text" value={tags} onChange={e => setTags(e.target.value)} placeholder="e.g., hackathon, AI, workshop" />
+          </div>
+
+          <div className="modal-actions" style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
+            <button type="button" className="btn-cancel" onClick={onClose} disabled={loading} style={{ flex: 1 }}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-submit" disabled={loading} style={{ flex: 1 }}>
+              {loading ? '⏳ Saving...' : '💾 Save Changes'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

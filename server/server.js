@@ -51,6 +51,7 @@ const CLUBS_FILE = path.join(DATA_DIR, 'clubs.json');
 const EVENTS_FILE = path.join(DATA_DIR, 'events.json');
 const RECRUITMENTS_FILE = path.join(DATA_DIR, 'recruitments.json');
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
+const ACTIVITY_LOGS_FILE = path.join(DATA_DIR, 'activity_logs.json');
 
 // Load Admin email dynamically from env or file config
 let ADMIN_EMAIL = process.env.ADMIN_EMAIL;
@@ -257,6 +258,9 @@ if (MONGODB_URI) {
 const SECRET_FILE = path.join(DATA_DIR, 'secret.key');
 let JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
+  console.warn("⚠️ WARNING: JWT_SECRET environment variable is not defined!");
+  console.warn("In serverless/stateless environments like Vercel, a missing JWT_SECRET will cause users to be logged out randomly because each instance generates its own key.");
+  console.warn("Please configure a persistent JWT_SECRET in your Vercel/environment variables.");
   if (fs.existsSync(SECRET_FILE)) {
     JWT_SECRET = fs.readFileSync(SECRET_FILE, 'utf8').trim();
   } else {
@@ -763,6 +767,72 @@ const updateEvent = async (eventId, updatedData) => {
   }
 };
 
+const deleteExpiredEvents = async () => {
+  try {
+    const now = new Date();
+    let eventsList = [];
+    
+    if (dbConnectingPromise) await dbConnectingPromise;
+    if (db) {
+      eventsList = await db.collection('events').find({}).toArray();
+    } else if (fs.existsSync(EVENTS_FILE)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf-8'));
+        eventsList = data.events || [];
+      } catch (e) {}
+    }
+
+    const expiredEvents = eventsList.filter(event => {
+      if (event.eventEndDateTime) {
+        return now > new Date(event.eventEndDateTime);
+      }
+      if (event.eventStartDateTime) {
+        const start = new Date(event.eventStartDateTime);
+        start.setHours(start.getHours() + 2); // Default to 2-hour duration
+        return now > start;
+      }
+      if (event.date) {
+        let eventDate = new Date(event.date);
+        if (event.time) {
+          const timeParts = event.time.match(/(\d+):(\d+)/);
+          if (timeParts) {
+            eventDate.setHours(parseInt(timeParts[1], 10), parseInt(timeParts[2], 10), 0, 0);
+          } else {
+            eventDate.setHours(23, 59, 59, 999);
+          }
+        } else {
+          eventDate.setHours(23, 59, 59, 999);
+        }
+        return now > eventDate;
+      }
+      return false;
+    });
+
+    for (const event of expiredEvents) {
+      console.log(`Auto-deleting expired event: ${event.title} (ID: ${event.id})`);
+      await deleteEvent(event.id);
+      
+      // Clear associated base64 image data from the 'uploads' collection
+      if (db) {
+        const cleanPosterUrls = [event.posterUrl, ...(event.posterUrls || [])].filter(Boolean);
+        for (const pUrl of cleanPosterUrls) {
+          if (pUrl.startsWith('/uploads/')) {
+            const filename = pUrl.replace('/uploads/', '');
+            await db.collection('uploads').deleteOne({ filename });
+            // Local fallback delete
+            const filePath = path.join(UPLOADS_DIR, filename);
+            if (fs.existsSync(filePath)) {
+              try { fs.unlinkSync(filePath); } catch (e) {}
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Auto-delete expired events failed:", err.message);
+  }
+};
+
 // ========== RECRUITMENTS HELPERS ==========
 const getRecruitments = async () => {
   if (dbConnectingPromise) await dbConnectingPromise;
@@ -955,6 +1025,40 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
+const logActivity = async (email, action, req) => {
+  const logEntry = {
+    email: email || 'anonymous',
+    action,
+    ip: req ? req.ip : 'unknown',
+    userAgent: (req && req.headers) ? req.headers['user-agent'] : 'unknown',
+    timestamp: new Date().toISOString()
+  };
+  console.log(`[Activity Log] ${logEntry.email} - ${logEntry.action} - IP: ${logEntry.ip}`);
+
+  if (dbConnectingPromise) await dbConnectingPromise;
+  if (db) {
+    try {
+      await db.collection('activity_logs').insertOne(logEntry);
+      return;
+    } catch (err) {
+      console.error("MongoDB logActivity error, falling back to file:", err);
+    }
+  }
+
+  // Fallback to local file
+  try {
+    let logs = [];
+    if (fs.existsSync(ACTIVITY_LOGS_FILE)) {
+      logs = JSON.parse(fs.readFileSync(ACTIVITY_LOGS_FILE, 'utf-8'));
+    }
+    logs.push(logEntry);
+    fs.writeFileSync(ACTIVITY_LOGS_FILE, JSON.stringify(logs, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn("Could not save activity log to disk fallback:", err.message);
+  }
+};
+
+
 // Migration: ensure existing admin user has role set
 (async () => {
   if (dbConnectingPromise) await dbConnectingPromise;
@@ -1057,6 +1161,7 @@ app.post('/api/auth/register', async (req, res) => {
     };
 
     await saveUser(lowerEmail, newUser);
+    await logActivity(lowerEmail, 'register_request', req);
 
 
 
@@ -1106,6 +1211,7 @@ app.post('/api/auth/verify', authRateLimiter(5, 15 * 60 * 1000), async (req, res
     delete user.lastCodeSentAt;
 
     await saveUser(lowerEmail, user);
+    await logActivity(lowerEmail, 'email_verified', req);
 
     const token = generateToken(lowerEmail, user.passwordHash);
 
@@ -1217,6 +1323,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     await saveUser(lowerEmail, user);
+    await logActivity(lowerEmail, 'login', req);
 
     const token = generateToken(lowerEmail, user.passwordHash);
 
@@ -1381,6 +1488,7 @@ app.post('/api/user/profile', authenticate, async (req, res) => {
     }
 
     await saveUser(req.user.email, user);
+    await logActivity(req.user.email, 'update_profile', req);
 
     const userProfile = { ...user };
     delete userProfile.passwordHash;
@@ -1596,6 +1704,7 @@ app.put('/api/clubs/:id', authenticate, requireClubManager, async (req, res) => 
 
     clubs[clubIndex] = club;
     await saveClubs(clubs);
+    await logActivity(req.user.email, `edit_club: ${id}`, req);
 
     res.json({ success: true, message: 'Club updated successfully.', club });
   } catch (error) {
@@ -1693,6 +1802,7 @@ app.get('/api/clubs/:id/managers', async (req, res) => {
 // --- EVENTS ---
 app.get('/api/events', async (req, res) => {
   try {
+    await deleteExpiredEvents();
     const category = req.query.category || null;
     const events = await getEvents(category);
     res.json({ events });
@@ -1746,6 +1856,7 @@ app.post('/api/events', authenticate, requireClubManager, async (req, res) => {
       createdAt: new Date().toISOString()
     };
     await saveEvent(eventData);
+    await logActivity(req.user.email, `create_event: ${eventData.id}`, req);
     res.json({ success: true, event: eventData });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create event: ' + error.message });
@@ -1758,15 +1869,87 @@ app.delete('/api/events/:id', authenticate, async (req, res) => {
     const event = events.find(e => e.id === req.params.id);
     if (!event) return res.status(404).json({ error: 'Event not found.' });
     
-    // Broken Object Level Authorization (IDOR) check
-    if (req.user.role !== 'admin' && (req.user.role !== 'club_manager' || req.user.clubId !== event.clubId)) {
+    // Broken Object Level Authorization (IDOR) check: Admin OR Club Manager OR Creator
+    const isAuthorized = req.user.role === 'admin' || 
+                         (req.user.role === 'club_manager' && req.user.clubId === event.clubId) ||
+                         (event.createdBy === req.user.email);
+
+    if (!isAuthorized) {
       return res.status(403).json({ error: 'Forbidden: You do not have permission to delete this event.' });
     }
     
     await deleteEvent(req.params.id);
+    await logActivity(req.user.email, `delete_event: ${req.params.id}`, req);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete event: ' + error.message });
+  }
+});
+
+app.put('/api/events/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const events = await getEvents();
+    const event = events.find(e => e.id === id);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+
+    // Authorization check: Admin OR Club Manager of the host club OR Event Creator
+    const isAuthorized = req.user.role === 'admin' || 
+                         (req.user.role === 'club_manager' && req.user.clubId === event.clubId) ||
+                         (event.createdBy === req.user.email);
+
+    if (!isAuthorized) {
+      return res.status(403).json({ error: 'Forbidden: You do not have permission to edit this event.' });
+    }
+
+    const { title, description, category, date, time, venue, posterUrl, posterUrls, schedulePosterUrl, registrationLink, tags, registrationDeadline, eventStartDateTime, eventEndDateTime, price } = req.body;
+
+    if (!title || !category || !date) {
+      return res.status(400).json({ error: 'Title, category, and date are required.' });
+    }
+
+    // URL Protocol Sanitization (XSS Defense)
+    if (posterUrl && !isValidHttpUrl(posterUrl)) {
+      return res.status(400).json({ error: 'Invalid poster URL protocol. Only HTTP/HTTPS is allowed.' });
+    }
+    if (posterUrls && Array.isArray(posterUrls)) {
+      for (const url of posterUrls) {
+        if (url && !isValidHttpUrl(url)) {
+          return res.status(400).json({ error: 'Invalid poster URL protocol in list. Only HTTP/HTTPS is allowed.' });
+        }
+      }
+    }
+    if (schedulePosterUrl && !isValidHttpUrl(schedulePosterUrl)) {
+      return res.status(400).json({ error: 'Invalid schedule poster URL protocol. Only HTTP/HTTPS is allowed.' });
+    }
+    if (registrationLink && !isValidHttpUrl(registrationLink)) {
+      return res.status(400).json({ error: 'Invalid registration link protocol. Only HTTP/HTTPS is allowed.' });
+    }
+
+    const updatedData = {
+      title,
+      description: description || '',
+      category,
+      date,
+      time: time || '',
+      venue: venue || '',
+      posterUrl: posterUrl || (posterUrls && posterUrls[0]) || '',
+      posterUrls: Array.isArray(posterUrls) ? posterUrls : (posterUrl ? [posterUrl] : []),
+      schedulePosterUrl: schedulePosterUrl || '',
+      registrationLink: registrationLink || '',
+      tags: Array.isArray(tags) ? tags : [],
+      registrationDeadline: registrationDeadline || '',
+      eventStartDateTime: eventStartDateTime || '',
+      eventEndDateTime: eventEndDateTime || '',
+      price: price || ''
+    };
+
+    await updateEvent(id, updatedData);
+    await logActivity(req.user.email, `edit_event: ${id}`, req);
+
+    res.json({ success: true, event: { ...event, ...updatedData } });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update event: ' + error.message });
   }
 });
 
@@ -1781,6 +1964,7 @@ app.put('/api/events/:id/pin', authenticate, requireAdmin, async (req, res) => {
     if (!event) return res.status(404).json({ error: 'Event not found.' });
     
     await updateEvent(id, { pinned: !!pinned });
+    await logActivity(req.user.email, `${pinned ? 'pin_event' : 'unpin_event'}: ${id}`, req);
     res.json({ success: true, message: `Event ${pinned ? 'pinned' : 'unpinned'} successfully.` });
   } catch (error) {
     res.status(500).json({ error: 'Failed to pin event: ' + error.message });
@@ -1822,6 +2006,7 @@ app.post('/api/recruitments', authenticate, requireClubManager, async (req, res)
       createdAt: new Date().toISOString()
     };
     await saveRecruitment(recData);
+    await logActivity(req.user.email, `create_recruitment: ${recData.id}`, req);
     res.json({ success: true, recruitment: recData });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create recruitment: ' + error.message });
@@ -1840,6 +2025,7 @@ app.delete('/api/recruitments/:id', authenticate, async (req, res) => {
     }
     
     await deleteRecruitment(req.params.id);
+    await logActivity(req.user.email, `delete_recruitment: ${req.params.id}`, req);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete recruitment: ' + error.message });
