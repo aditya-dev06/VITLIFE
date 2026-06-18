@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import RotatingText from './RotatingText';
 
 const COURSES_LIST = [
   { code: 'DSA', name: 'Data Structures & Algorithms' },
@@ -690,7 +691,21 @@ const Auth = ({ onLoginSuccess }) => {
     <div className="auth-wrapper">
       <div className="glass-panel auth-card">
         <div className="auth-brand">
-          <div className="auth-logo">VITHON</div>
+          <div className="auth-logo" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.1rem' }}>
+            <span>VIT</span>
+            <RotatingText
+              texts={['HON', 'LIFE']}
+              mainClassName="auth-rotating-text"
+              staggerFrom="last"
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "-120%", opacity: 0 }}
+              staggerDuration={0.025}
+              splitLevelClassName="overflow-hidden"
+              transition={{ type: "spring", damping: 30, stiffness: 400 }}
+              rotationInterval={2500}
+            />
+          </div>
           <div className="auth-subtitle">Computational & Data Science Hub</div>
         </div>
 
