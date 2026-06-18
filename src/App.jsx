@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import Dashboard from './components/Dashboard';
 import Roadmap from './components/Roadmap';
 import Opportunities from './components/Opportunities';
@@ -688,6 +689,7 @@ function App() {
           onSave={handleUpdateProfile}
         />
       )}
+      <SpeedInsights />
     </div>
   );
 }
