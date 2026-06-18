@@ -452,11 +452,11 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
 
         const smaaPass = new EffectPass(
           this.camera,
-          new SMAAEffect({
-            preset: SMAAPreset.MEDIUM,
-            searchImage: SMAAEffect.searchImageDataURL,
-            areaImage: SMAAEffect.areaImageDataURL
-          })
+          new SMAAEffect(
+            this.assets.smaa.search,
+            this.assets.smaa.area,
+            SMAAPreset.MEDIUM
+          )
         );
         this.renderPass.renderToScreen = false;
         this.bloomPass.renderToScreen = false;

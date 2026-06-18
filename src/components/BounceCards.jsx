@@ -150,7 +150,15 @@ export default function BounceCards({
             }
           }}
         >
-          <img className="image" src={src} alt={`card-${idx}`} />
+          <img 
+            className="image" 
+            src={src || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=500&q=80'} 
+            alt={`card-${idx}`} 
+            onError={(e) => { 
+              e.target.onerror = null; 
+              e.target.src = 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=500&q=80'; 
+            }} 
+          />
         </div>
       ))}
     </div>
