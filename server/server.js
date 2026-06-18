@@ -1585,7 +1585,7 @@ app.get('/api/events', async (req, res) => {
 
 app.post('/api/events', authenticate, requireClubManager, async (req, res) => {
   try {
-    const { title, description, clubId, clubName, category, date, time, venue, posterUrl, schedulePosterUrl, registrationLink, tags, registrationDeadline, eventStartDateTime, eventEndDateTime, price } = req.body;
+    const { title, description, clubId, clubName, category, date, time, venue, posterUrl, posterUrls, schedulePosterUrl, registrationLink, tags, registrationDeadline, eventStartDateTime, eventEndDateTime, price } = req.body;
     if (!title || !clubId || !category || !date) {
       return res.status(400).json({ error: 'Title, clubId, category, and date are required.' });
     }
@@ -1596,6 +1596,13 @@ app.post('/api/events', authenticate, requireClubManager, async (req, res) => {
     // URL Protocol Sanitization (XSS Defense)
     if (posterUrl && !isValidHttpUrl(posterUrl)) {
       return res.status(400).json({ error: 'Invalid poster URL protocol. Only HTTP/HTTPS is allowed.' });
+    }
+    if (posterUrls && Array.isArray(posterUrls)) {
+      for (const url of posterUrls) {
+        if (url && !isValidHttpUrl(url)) {
+          return res.status(400).json({ error: 'Invalid poster URL protocol in list. Only HTTP/HTTPS is allowed.' });
+        }
+      }
     }
     if (schedulePosterUrl && !isValidHttpUrl(schedulePosterUrl)) {
       return res.status(400).json({ error: 'Invalid schedule poster URL protocol. Only HTTP/HTTPS is allowed.' });
@@ -1608,7 +1615,8 @@ app.post('/api/events', authenticate, requireClubManager, async (req, res) => {
       id: `evt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       title, description: description || '', clubId, clubName: clubName || '',
       category, date, time: time || '', venue: venue || '',
-      posterUrl: posterUrl || '',
+      posterUrl: posterUrl || (posterUrls && posterUrls[0]) || '',
+      posterUrls: Array.isArray(posterUrls) ? posterUrls : (posterUrl ? [posterUrl] : []),
       schedulePosterUrl: schedulePosterUrl || '',
       registrationLink: registrationLink || '',
       tags: Array.isArray(tags) ? tags : [],

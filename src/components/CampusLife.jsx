@@ -289,23 +289,29 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
     setFormLoading(true);
     setError('');
     try {
-      let posterUrl = formData.posterUrl ? ensureAbsoluteUrl(formData.posterUrl) : '';
+      let posterUrls = formData.posterUrls ? formData.posterUrls.map(ensureAbsoluteUrl).filter(Boolean) : [];
 
-      if (formData.posterFile) {
-        const uploadData = new FormData();
-        uploadData.append('poster', formData.posterFile);
-        const uploadRes = await fetch('/api/upload', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: uploadData
+      if (formData.posterFiles && formData.posterFiles.length > 0) {
+        const uploadPromises = formData.posterFiles.map(async (file) => {
+          const uploadData = new FormData();
+          uploadData.append('poster', file);
+          const uploadRes = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: uploadData
+          });
+          if (!uploadRes.ok) {
+            const err = await uploadRes.json();
+            throw new Error(err.error || 'Upload failed');
+          }
+          const uploadResult = await uploadRes.json();
+          return uploadResult.url;
         });
-        if (!uploadRes.ok) {
-          const err = await uploadRes.json();
-          throw new Error(err.error || 'Upload failed');
-        }
-        const uploadResult = await uploadRes.json();
-        posterUrl = uploadResult.url;
+        const uploadedUrls = await Promise.all(uploadPromises);
+        posterUrls = [...posterUrls, ...uploadedUrls];
       }
+
+      const posterUrl = posterUrls[0] || '';
 
       let schedulePosterUrl = formData.schedulePosterUrl ? ensureAbsoluteUrl(formData.schedulePosterUrl) : '';
 
@@ -335,6 +341,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
         time: formData.time,
         venue: formData.venue,
         posterUrl,
+        posterUrls,
         schedulePosterUrl,
         registrationLink: formData.registrationLink ? ensureAbsoluteUrl(formData.registrationLink) : '',
         tags: formData.tags ? formData.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
@@ -771,23 +778,37 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
                       }}>
                         🔵 Happening Now
                       </div>
-                      {event.posterUrl ? (
-                        <div style={{ height: '200px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
-                          <BounceCards
-                            className="event-card-bounce"
-                            images={Array(5).fill(event.posterUrl)}
-                            containerWidth="100%"
-                            containerHeight={200}
-                            animationDelay={0.3}
-                            animationStagger={0.05}
-                            easeType="elastic.out(1, 0.7)"
-                            transformStyles={eventTransformStyles}
-                            enableHover={true}
-                            pushOffset={35}
-                            isHovered={hoveredEventId === event.id}
+                      {event.posterUrl && (
+                        (event.posterUrls && event.posterUrls.length > 1) ? (
+                          <div style={{ height: '200px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
+                            <BounceCards
+                              className="event-card-bounce"
+                              images={event.posterUrls}
+                              containerWidth="100%"
+                              containerHeight={200}
+                              animationDelay={0.3}
+                              animationStagger={0.05}
+                              easeType="elastic.out(1, 0.7)"
+                              transformStyles={eventTransformStyles}
+                              enableHover={true}
+                              pushOffset={35}
+                              isHovered={hoveredEventId === event.id}
+                            />
+                          </div>
+                        ) : (
+                          <img
+                            src={event.posterUrl}
+                            alt={event.title}
+                            style={{
+                              width: '100%',
+                              height: 'auto',
+                              display: 'block',
+                              borderBottom: '1px solid hsla(var(--border-glass))'
+                            }}
+                            onError={(e) => { e.target.style.display = 'none'; }}
                           />
-                        </div>
-                      ) : null}
+                        )
+                      )}
                       <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', flexGrow: 1, gap: '0.5rem' }}>
                         <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0 }}>{event.title}</h3>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 600, color: `hsl(${catColor})` }}>
@@ -864,11 +885,11 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
                     </div>
 
                      {event.posterUrl && (
-                       (status === 'ongoing' || status === 'reg_open' || status === 'upcoming') ? (
+                       (event.posterUrls && event.posterUrls.length > 1 && (status === 'ongoing' || status === 'reg_open' || status === 'upcoming')) ? (
                          <div style={{ height: '200px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
                            <BounceCards
                              className="event-card-bounce"
-                             images={Array(5).fill(event.posterUrl)}
+                             images={event.posterUrls}
                              containerWidth="100%"
                              containerHeight={200}
                              animationDelay={0.3}
@@ -884,7 +905,12 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
                          <img
                            src={event.posterUrl}
                            alt={event.title}
-                           className="event-poster-dynamic"
+                           style={{
+                             width: '100%',
+                             height: 'auto',
+                             display: 'block',
+                             borderBottom: '1px solid hsla(var(--border-glass))'
+                           }}
                            onError={(e) => { e.target.style.display = 'none'; }}
                          />
                        )
@@ -1267,6 +1293,7 @@ function ClubDetailsModal({ club, onClose }) {
 }
 
 function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, onDeleteEvent }) {
+  const [activePoster, setActivePoster] = useState(event.posterUrl);
   const isAdmin = user && user.role === 'admin';
   const canDelete = isAdmin || (user && event.createdBy === user.email);
   const catColor = getCategoryColor(event.category);
@@ -1335,7 +1362,7 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, on
           </button>
         </div>
 
-        {event.posterUrl && (
+        {activePoster && (
           <div style={{ 
             width: '100%', 
             maxHeight: '400px', 
@@ -1349,7 +1376,7 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, on
             alignItems: 'center'
           }}>
             <img 
-              src={event.posterUrl} 
+              src={activePoster} 
               alt={event.title} 
               style={{ 
                 maxWidth: '100%', 
@@ -1358,6 +1385,31 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, on
                 display: 'block' 
               }} 
             />
+          </div>
+        )}
+
+        {event.posterUrls && event.posterUrls.length > 1 && (
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
+            {event.posterUrls.map((url, idx) => (
+              <button 
+                key={idx} 
+                onClick={() => setActivePoster(url)}
+                style={{
+                  padding: 0,
+                  border: activePoster === url ? '2px solid hsl(var(--primary))' : '2px solid transparent',
+                  borderRadius: '6px',
+                  overflow: 'hidden',
+                  width: '60px',
+                  height: '60px',
+                  cursor: 'pointer',
+                  background: 'transparent',
+                  flexShrink: 0,
+                  transition: 'border-color 0.2s ease'
+                }}
+              >
+                <img src={url} alt={`Thumbnail ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </button>
+            ))}
           </div>
         )}
 
@@ -1702,8 +1754,8 @@ function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
   const [registrationDeadline, setRegistrationDeadline] = useState('');
   const [venue, setVenue] = useState('');
   const [posterMode, setPosterMode] = useState('url'); // 'url' | 'file'
-  const [posterUrl, setPosterUrl] = useState('');
-  const [posterFile, setPosterFile] = useState(null);
+  const [posterUrls, setPosterUrls] = useState(['']);
+  const [posterFiles, setPosterFiles] = useState([]);
   const [schedulePosterMode, setSchedulePosterMode] = useState('url'); // 'url' | 'file'
   const [schedulePosterUrl, setSchedulePosterUrl] = useState('');
   const [schedulePosterFile, setSchedulePosterFile] = useState(null);
@@ -1733,8 +1785,8 @@ function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
       date: legacyDate,
       time: '',
       venue: venue.trim(),
-      posterUrl: posterMode === 'url' ? posterUrl.trim() : '',
-      posterFile: posterMode === 'file' ? posterFile : null,
+      posterUrls: posterMode === 'url' ? posterUrls.map(u => u.trim()).filter(Boolean) : [],
+      posterFiles: posterMode === 'file' ? posterFiles : [],
       schedulePosterUrl: schedulePosterMode === 'url' ? schedulePosterUrl.trim() : '',
       schedulePosterFile: schedulePosterMode === 'file' ? schedulePosterFile : null,
       registrationLink: registrationLink.trim(),
@@ -1849,7 +1901,7 @@ function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
           </div>
 
           <div className="form-group">
-            <label>Poster</label>
+            <label>Posters (Multiple Allowed)</label>
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
               <button type="button" onClick={() => setPosterMode('url')}
                 style={{
@@ -1869,10 +1921,36 @@ function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
               >📁 Upload</button>
             </div>
             {posterMode === 'url' ? (
-              <input type="url" value={posterUrl} onChange={e => setPosterUrl(e.target.value)} placeholder="https://example.com/poster.jpg" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {posterUrls.map((url, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input type="url" value={url} onChange={e => {
+                      const next = [...posterUrls];
+                      next[idx] = e.target.value;
+                      setPosterUrls(next);
+                    }} placeholder="https://example.com/poster.jpg" />
+                    {posterUrls.length > 1 && (
+                      <button type="button" onClick={() => setPosterUrls(posterUrls.filter((_, i) => i !== idx))}
+                        style={{
+                          padding: '0 0.75rem', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.4)',
+                          background: 'rgba(239, 68, 68, 0.1)', color: 'rgb(248, 113, 113)', cursor: 'pointer'
+                        }}
+                      >✕</button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={() => setPosterUrls([...posterUrls, ''])}
+                  style={{
+                    alignSelf: 'flex-start', padding: '0.3rem 0.6rem', fontSize: '0.75rem', borderRadius: '6px',
+                    background: 'rgba(255, 255, 255, 0.05)', color: 'hsl(var(--text-secondary))',
+                    border: '1px solid hsla(var(--border-glass))', cursor: 'pointer'
+                  }}
+                >➕ Add Another Poster URL</button>
+              </div>
             ) : (
               <input type="file" accept="image/jpeg,image/png,image/gif,image/webp"
-                onChange={e => setPosterFile(e.target.files?.[0] || null)}
+                multiple
+                onChange={e => setPosterFiles(Array.from(e.target.files || []))}
                 style={{
                   width: '100%', padding: '0.5rem', borderRadius: '8px',
                   background: 'hsl(var(--bg-card))', border: '1px solid hsla(var(--border-glass))',

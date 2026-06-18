@@ -179,6 +179,7 @@ function ClubLogo({ club, category, size = 24, borderRadius = '50%' }) {
 }
 
 function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents }) {
+  const [activePoster, setActivePoster] = useState(event.posterUrl);
   const isAdmin = user && user.role === 'admin';
   const canDelete = isAdmin || (user && event.createdBy === user.email);
   const catColor = getCategoryColor(event.category);
@@ -242,7 +243,7 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents }) 
           </button>
         </div>
 
-        {event.posterUrl && (
+        {activePoster && (
           <div style={{ 
             width: '100%', 
             maxHeight: '400px', 
@@ -256,7 +257,7 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents }) 
             alignItems: 'center'
           }}>
             <img 
-              src={event.posterUrl} 
+              src={activePoster} 
               alt={event.title} 
               style={{ 
                 maxWidth: '100%', 
@@ -265,6 +266,31 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents }) 
                 display: 'block' 
               }} 
             />
+          </div>
+        )}
+
+        {event.posterUrls && event.posterUrls.length > 1 && (
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
+            {event.posterUrls.map((url, idx) => (
+              <button 
+                key={idx} 
+                onClick={() => setActivePoster(url)}
+                style={{
+                  padding: 0,
+                  border: activePoster === url ? '2px solid hsl(var(--primary))' : '2px solid transparent',
+                  borderRadius: '6px',
+                  overflow: 'hidden',
+                  width: '60px',
+                  height: '60px',
+                  cursor: 'pointer',
+                  background: 'transparent',
+                  flexShrink: 0,
+                  transition: 'border-color 0.2s ease'
+                }}
+              >
+                <img src={url} alt={`Thumbnail ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </button>
+            ))}
           </div>
         )}
 
@@ -796,21 +822,35 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
                   </div>
 
                   {event.posterUrl && (
-                    <div style={{ height: '160px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
-                      <BounceCards
-                        className="event-card-bounce"
-                        images={Array(5).fill(event.posterUrl)}
-                        containerWidth="100%"
-                        containerHeight={160}
-                        animationDelay={0.3}
-                        animationStagger={0.05}
-                        easeType="elastic.out(1, 0.7)"
-                        transformStyles={eventTransformStyles}
-                        enableHover={true}
-                        pushOffset={35}
-                        isHovered={hoveredEventId === event.id}
+                    (event.posterUrls && event.posterUrls.length > 1) ? (
+                      <div style={{ height: '160px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
+                        <BounceCards
+                          className="event-card-bounce"
+                          images={event.posterUrls}
+                          containerWidth="100%"
+                          containerHeight={160}
+                          animationDelay={0.3}
+                          animationStagger={0.05}
+                          easeType="elastic.out(1, 0.7)"
+                          transformStyles={eventTransformStyles}
+                          enableHover={true}
+                          pushOffset={35}
+                          isHovered={hoveredEventId === event.id}
+                        />
+                      </div>
+                    ) : (
+                      <img
+                        src={event.posterUrl}
+                        alt={event.title}
+                        style={{
+                          width: '100%',
+                          height: 'auto',
+                          display: 'block',
+                          borderBottom: '1px solid hsla(var(--border-glass))'
+                        }}
+                        onError={(e) => { e.target.style.display = 'none'; }}
                       />
-                    </div>
+                    )
                   )}
                   
                   <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flexGrow: 1, gap: '0.5rem' }}>
