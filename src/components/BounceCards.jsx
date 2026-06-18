@@ -18,7 +18,8 @@ export default function BounceCards({
     'rotate(2deg) translate(170px)'
   ],
   enableHover = true,
-  pushOffset = 60
+  pushOffset = 60,
+  isHovered = false
 }) {
   const containerRef = useRef(null);
   useEffect(() => {
@@ -115,6 +116,14 @@ export default function BounceCards({
     });
   };
 
+  useEffect(() => {
+    if (isHovered) {
+      pushSiblings(2); // Focus center card index by default
+    } else {
+      resetSiblings();
+    }
+  }, [isHovered]);
+
   return (
     <div
       className={`bounceCardsContainer ${className}`}
@@ -133,7 +142,13 @@ export default function BounceCards({
             transform: transformStyles[idx] ?? 'none'
           }}
           onMouseEnter={() => pushSiblings(idx)}
-          onMouseLeave={resetSiblings}
+          onMouseLeave={() => {
+            if (isHovered) {
+              pushSiblings(2);
+            } else {
+              resetSiblings();
+            }
+          }}
         >
           <img className="image" src={src} alt={`card-${idx}`} />
         </div>
@@ -141,3 +156,4 @@ export default function BounceCards({
     </div>
   );
 }
+

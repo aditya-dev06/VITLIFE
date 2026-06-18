@@ -363,6 +363,7 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents }) 
 
 const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, onUpdateSemester, clubs = [], events = [], fetchEvents, token }) => {
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [hoveredEventId, setHoveredEventId] = useState(null);
   const inProgressSkills = stats.inProgressSkillsList || [];
   const activeOpportunities = opportunities ? opportunities.slice(0, 3) : [];
 
@@ -644,6 +645,8 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
                   key={event.id} 
                   className="glass-card event-card" 
                   onClick={() => setSelectedEvent(event)}
+                  onMouseEnter={() => setHoveredEventId(event.id)}
+                  onMouseLeave={() => setHoveredEventId(null)}
                   style={{ 
                     cursor: 'pointer',
                     display: 'flex',
@@ -706,6 +709,7 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
                         transformStyles={eventTransformStyles}
                         enableHover={true}
                         pushOffset={35}
+                        isHovered={hoveredEventId === event.id}
                       />
                     </div>
                   )}

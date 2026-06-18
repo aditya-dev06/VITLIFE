@@ -175,6 +175,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
   const [editingClub, setEditingClub] = useState(null);
   const [selectedClubDetails, setSelectedClubDetails] = useState(null);
   const [selectedEventDetails, setSelectedEventDetails] = useState(null);
+  const [hoveredEventId, setHoveredEventId] = useState(null);
 
   // ─── Data Fetching ───────────────────────────────────────────────
   const fetchRecruitments = async () => {
@@ -733,6 +734,8 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
                       key={`ongoing-${event.id}`}
                       className="glass-card event-card event-masonry-card"
                       onClick={() => setSelectedEventDetails(event)}
+                      onMouseEnter={() => setHoveredEventId(event.id)}
+                      onMouseLeave={() => setHoveredEventId(null)}
                       style={{
                         cursor: 'pointer', position: 'relative',
                         border: '1px solid hsla(0, 80%, 55%, 0.5)',
@@ -762,6 +765,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
                             transformStyles={eventTransformStyles}
                             enableHover={true}
                             pushOffset={35}
+                            isHovered={hoveredEventId === event.id}
                           />
                         </div>
                       ) : null}
@@ -803,6 +807,8 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
                     key={event.id} 
                     className="glass-card event-card event-masonry-card"
                     onClick={() => setSelectedEventDetails(event)}
+                    onMouseEnter={() => setHoveredEventId(event.id)}
+                    onMouseLeave={() => setHoveredEventId(null)}
                     style={{ 
                       cursor: 'pointer',
                       position: 'relative',
@@ -852,6 +858,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
                              transformStyles={eventTransformStyles}
                              enableHover={true}
                              pushOffset={35}
+                             isHovered={hoveredEventId === event.id}
                            />
                          </div>
                        ) : (

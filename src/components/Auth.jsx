@@ -79,7 +79,12 @@ const Auth = ({ onLoginSuccess }) => {
   }, [cooldown]);
 
   useEffect(() => {
-    fetch('/api/health/smtp')
+    fetch(`/api/health/smtp?t=${Date.now()}`, {
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    })
       .then(r => r.json())
       .then(d => setSmtpDown(!d.smtpHealthy))
       .catch(() => setSmtpDown(true));

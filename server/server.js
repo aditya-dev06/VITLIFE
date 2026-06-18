@@ -1717,6 +1717,7 @@ app.delete('/api/recruitments/:id', authenticate, async (req, res) => {
 
 // SMTP Health Check Endpoint
 app.get('/api/health/smtp', (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.json({
     smtpHealthy,
     smtpError,
