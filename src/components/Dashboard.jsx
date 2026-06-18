@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import BounceCards from './BounceCards';
 import Hyperspeed from './Hyperspeed';
 
@@ -478,7 +478,6 @@ function DashboardEventCardItem({
   event,
   clubs,
   user,
-  token,
   setSelectedEvent,
   handleTogglePin
 }) {
@@ -511,12 +510,6 @@ function DashboardEventCardItem({
   const hasMultiplePosters = event.posterUrls && event.posterUrls.length > 1;
   const showBounce = hasMultiplePosters;
 
-  useEffect(() => {
-    if (showBounce) {
-      setCardWidth('280px');
-    }
-  }, [showBounce]);
-
   return (
     <div
       className="glass-card event-card"
@@ -532,7 +525,7 @@ function DashboardEventCardItem({
         transition: 'opacity 0.3s ease, box-shadow 0.3s ease, transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), width 0.3s ease',
         border: event.pinned ? '1px solid hsla(var(--primary) / 0.5)' : '1px solid hsla(var(--border-glass))',
         boxShadow: event.pinned ? '0 0 15px hsla(var(--primary) / 0.15)' : 'none',
-        width: cardWidth
+        width: showBounce ? '280px' : cardWidth
       }}
     >
       {/* Pinned Badge */}

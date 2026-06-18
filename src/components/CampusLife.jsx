@@ -198,12 +198,6 @@ function EventCardItem({
   const hasMultiplePosters = event.posterUrls && event.posterUrls.length > 1;
   const showBounce = hasMultiplePosters && (isOngoingSection || status === 'ongoing' || status === 'reg_open' || status === 'upcoming');
 
-  useEffect(() => {
-    if (showBounce) {
-      setCardWidth('280px');
-    }
-  }, [showBounce]);
-
   return (
     <div
       className="glass-card event-card event-masonry-card"
@@ -222,7 +216,7 @@ function EventCardItem({
           ? '0 0 20px hsla(0, 80%, 55%, 0.15), inset 0 0 20px hsla(0, 80%, 55%, 0.03)'
           : (event.pinned ? '0 0 15px hsla(var(--primary) / 0.15)' : 'none'),
         animation: isOngoingSection ? 'pulse-border 3s ease-in-out infinite' : 'none',
-        width: cardWidth,
+        width: showBounce ? '280px' : cardWidth,
         display: 'flex',
         flexDirection: 'column'
       }}

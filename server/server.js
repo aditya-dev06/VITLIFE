@@ -76,26 +76,24 @@ const isAdminEmail = (email) => {
 };
 
 // Ensure database directories exist
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-// Ensure uploads directory exists
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-}
-
-// Multer config for poster uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
-  filename: (req, file, cb) => {
-    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1E9)}${path.extname(file.originalname)}`;
-    cb(null, uniqueName);
+if (!process.env.VERCEL) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(UPLOADS_DIR)) {
+      fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    }
+  } catch (err) {
+    console.warn("Could not create directories locally:", err.message);
   }
-});
+}
+
+// Multer config for poster uploads (Using Memory Storage to support read-only Vercel environments)
+const storage = multer.memoryStorage();
 const upload = multer({
   storage,
-  limits: { fileSize: 3 * 1024 * 1024 }, // 3MB max
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max (matching frontend limit)
   fileFilter: (req, file, cb) => {
     const allowed = /jpeg|jpg|png|webp/;
     const ext = allowed.test(path.extname(file.originalname).toLowerCase());
@@ -217,6 +215,22 @@ let dbConnectionError = null;
 let dbConnectionStatus = "Initializing";
 let dbConnectingPromise = null;
 
+const ensureIndexes = async (database) => {
+  try {
+    await database.collection('uploads').createIndex({ filename: 1 }, { unique: true });
+    await database.collection('users').createIndex({ email: 1 }, { unique: true });
+    await database.collection('clubs').createIndex({ id: 1 }, { unique: true });
+    await database.collection('events').createIndex({ id: 1 }, { unique: true });
+    await database.collection('events').createIndex({ clubId: 1 });
+    await database.collection('events').createIndex({ date: 1 });
+    await database.collection('recruitments').createIndex({ id: 1 }, { unique: true });
+    await database.collection('recruitments').createIndex({ clubId: 1 });
+    console.log("✅ Database indexes verified/created successfully.");
+  } catch (err) {
+    console.error("❌ Failed to verify database indexes:", err.message);
+  }
+};
+
 if (MONGODB_URI) {
   console.log("Connecting to MongoDB Atlas...");
   dbConnectionStatus = "Connecting";
@@ -227,6 +241,7 @@ if (MONGODB_URI) {
       dbConnectionStatus = "Connected";
       dbConnectionError = null;
       console.log("Successfully connected to MongoDB Database!");
+      ensureIndexes(db).catch(err => console.error("Index creation error:", err.message));
     })
     .catch(err => {
       dbConnectionStatus = "Failed";
@@ -246,7 +261,11 @@ if (!JWT_SECRET) {
     JWT_SECRET = fs.readFileSync(SECRET_FILE, 'utf8').trim();
   } else {
     JWT_SECRET = crypto.randomBytes(64).toString('hex');
-    fs.writeFileSync(SECRET_FILE, JWT_SECRET, 'utf8');
+    try {
+      fs.writeFileSync(SECRET_FILE, JWT_SECRET, 'utf8');
+    } catch (err) {
+      console.warn("Could not save persistent secret key to disk fallback:", err.message);
+    }
   }
 }
 
@@ -434,7 +453,11 @@ const writeInitialSeeds = () => {
       }
     ]
   };
-  fs.writeFileSync(OPPORTUNITIES_FILE, JSON.stringify(seeds, null, 2), 'utf-8');
+  try {
+    fs.writeFileSync(OPPORTUNITIES_FILE, JSON.stringify(seeds, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn("Could not save initial seeds to disk fallback:", err.message);
+  }
 };
 
 if (!fs.existsSync(OPPORTUNITIES_FILE)) {
@@ -444,7 +467,11 @@ if (!fs.existsSync(OPPORTUNITIES_FILE)) {
 // User helper functions (local file fallback fallback)
 const loadUsers = () => {
   if (!fs.existsSync(USERS_FILE)) {
-    fs.writeFileSync(USERS_FILE, JSON.stringify({}, null, 2), 'utf-8');
+    try {
+      fs.writeFileSync(USERS_FILE, JSON.stringify({}, null, 2), 'utf-8');
+    } catch (err) {
+      console.warn("Could not create empty users file fallback:", err.message);
+    }
     return {};
   }
   try {
@@ -455,7 +482,11 @@ const loadUsers = () => {
 };
 
 const saveUsers = (users) => {
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
+  try {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn("Could not save users to disk fallback:", err.message);
+  }
 };
 
 // Database interface methods
@@ -529,7 +560,6 @@ const getOpportunities = async () => {
 };
 
 const saveOpportunities = async (opportunitiesData) => {
-  fs.writeFileSync(OPPORTUNITIES_FILE, JSON.stringify(opportunitiesData, null, 2), 'utf-8');
   if (dbConnectingPromise) {
     await dbConnectingPromise;
   }
@@ -546,9 +576,15 @@ const saveOpportunities = async (opportunitiesData) => {
         { upsert: true }
       );
       console.log("Successfully synced opportunities to MongoDB Atlas!");
+      return;
     } catch (err) {
       console.error("MongoDB saveOpportunities error:", err);
     }
+  }
+  try {
+    fs.writeFileSync(OPPORTUNITIES_FILE, JSON.stringify(opportunitiesData, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn("Could not save opportunities to disk fallback:", err.message);
   }
 };
 
@@ -586,11 +622,27 @@ const saveClubs = async (clubs) => {
       console.error("MongoDB saveClubs error, falling back to file:", err);
     }
   }
-  fs.writeFileSync(CLUBS_FILE, JSON.stringify({ clubs }, null, 2), 'utf-8');
+  try {
+    fs.writeFileSync(CLUBS_FILE, JSON.stringify({ clubs }, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn("Could not save clubs to disk fallback:", err.message);
+  }
 };
 
 const deleteClub = async (clubId) => {
-  // Delete from clubs list in file
+  // Delete from MongoDB
+  if (dbConnectingPromise) await dbConnectingPromise;
+  if (db) {
+    try {
+      await db.collection('clubs').deleteOne({ id: clubId });
+      await db.collection('users').updateMany({ clubId: clubId }, { $set: { role: 'student' }, $unset: { clubId: "" } });
+      return; // Return early if MongoDB succeeds
+    } catch (err) {
+      console.error("MongoDB deleteClub error:", err);
+    }
+  }
+
+  // Fallback to local files
   if (fs.existsSync(CLUBS_FILE)) {
     try {
       const fileData = JSON.parse(fs.readFileSync(CLUBS_FILE, 'utf-8'));
@@ -614,17 +666,6 @@ const deleteClub = async (clubId) => {
       saveUsers(users);
     }
   } catch(e) {}
-
-  // Delete from MongoDB
-  if (dbConnectingPromise) await dbConnectingPromise;
-  if (db) {
-    try {
-      await db.collection('clubs').deleteOne({ id: clubId });
-      await db.collection('users').updateMany({ clubId: clubId }, { $set: { role: 'student' }, $unset: { clubId: "" } });
-    } catch (err) {
-      console.error("MongoDB deleteClub error:", err);
-    }
-  }
 };
 
 
@@ -651,24 +692,43 @@ const getEvents = async (categoryFilter) => {
 };
 
 const saveEvent = async (eventData) => {
-  // Save to local file
+  // Sync to MongoDB
+  if (dbConnectingPromise) await dbConnectingPromise;
+  if (db) {
+    try {
+      await db.collection('events').insertOne(eventData);
+      return; // Return early if MongoDB succeeds
+    } catch (err) {
+      console.error("MongoDB saveEvent error:", err);
+    }
+  }
+
+  // Fallback to local file
   let fileData = { events: [] };
   if (fs.existsSync(EVENTS_FILE)) {
     try { fileData = JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf-8')); } catch(e) {}
   }
   fileData.events.push(eventData);
-  fs.writeFileSync(EVENTS_FILE, JSON.stringify(fileData, null, 2), 'utf-8');
-  // Sync to MongoDB
-  if (dbConnectingPromise) await dbConnectingPromise;
-  if (db) {
-    try { await db.collection('events').insertOne(eventData); } catch (err) {
-      console.error("MongoDB saveEvent error:", err);
-    }
+  try {
+    fs.writeFileSync(EVENTS_FILE, JSON.stringify(fileData, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn("Could not save event to disk fallback:", err.message);
   }
 };
 
 const deleteEvent = async (eventId) => {
-  // Delete from file
+  // Delete from MongoDB
+  if (dbConnectingPromise) await dbConnectingPromise;
+  if (db) {
+    try {
+      await db.collection('events').deleteOne({ id: eventId });
+      return; // Return early if MongoDB succeeds
+    } catch (err) {
+      console.error("MongoDB deleteEvent error:", err);
+    }
+  }
+
+  // Fallback to local file
   if (fs.existsSync(EVENTS_FILE)) {
     try {
       const fileData = JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf-8'));
@@ -676,17 +736,21 @@ const deleteEvent = async (eventId) => {
       fs.writeFileSync(EVENTS_FILE, JSON.stringify(fileData, null, 2), 'utf-8');
     } catch(e) {}
   }
-  // Delete from MongoDB
-  if (dbConnectingPromise) await dbConnectingPromise;
-  if (db) {
-    try { await db.collection('events').deleteOne({ id: eventId }); } catch (err) {
-      console.error("MongoDB deleteEvent error:", err);
-    }
-  }
 };
 
 const updateEvent = async (eventId, updatedData) => {
-  // Update in local file
+  // Update in MongoDB
+  if (dbConnectingPromise) await dbConnectingPromise;
+  if (db) {
+    try {
+      await db.collection('events').updateOne({ id: eventId }, { $set: updatedData });
+      return; // Return early if MongoDB succeeds
+    } catch (err) {
+      console.error("MongoDB updateEvent error:", err);
+    }
+  }
+
+  // Fallback to local file
   if (fs.existsSync(EVENTS_FILE)) {
     try {
       const fileData = JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf-8'));
@@ -696,15 +760,6 @@ const updateEvent = async (eventId, updatedData) => {
         fs.writeFileSync(EVENTS_FILE, JSON.stringify(fileData, null, 2), 'utf-8');
       }
     } catch(e) {}
-  }
-  // Update in MongoDB
-  if (dbConnectingPromise) await dbConnectingPromise;
-  if (db) {
-    try {
-      await db.collection('events').updateOne({ id: eventId }, { $set: updatedData });
-    } catch (err) {
-      console.error("MongoDB updateEvent error:", err);
-    }
   }
 };
 
@@ -727,33 +782,47 @@ const getRecruitments = async () => {
 };
 
 const saveRecruitment = async (recData) => {
+  if (dbConnectingPromise) await dbConnectingPromise;
+  if (db) {
+    try {
+      await db.collection('recruitments').insertOne(recData);
+      return; // Return early if MongoDB succeeds
+    } catch (err) {
+      console.error("MongoDB saveRecruitment error:", err);
+    }
+  }
+
+  // Fallback to local file
   let fileData = { recruitments: [] };
   if (fs.existsSync(RECRUITMENTS_FILE)) {
     try { fileData = JSON.parse(fs.readFileSync(RECRUITMENTS_FILE, 'utf-8')); } catch(e) {}
   }
   fileData.recruitments.push(recData);
-  fs.writeFileSync(RECRUITMENTS_FILE, JSON.stringify(fileData, null, 2), 'utf-8');
-  if (dbConnectingPromise) await dbConnectingPromise;
-  if (db) {
-    try { await db.collection('recruitments').insertOne(recData); } catch (err) {
-      console.error("MongoDB saveRecruitment error:", err);
-    }
+  try {
+    fs.writeFileSync(RECRUITMENTS_FILE, JSON.stringify(fileData, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn("Could not save recruitment to disk fallback:", err.message);
   }
 };
 
 const deleteRecruitment = async (recId) => {
+  if (dbConnectingPromise) await dbConnectingPromise;
+  if (db) {
+    try {
+      await db.collection('recruitments').deleteOne({ id: recId });
+      return; // Return early if MongoDB succeeds
+    } catch (err) {
+      console.error("MongoDB deleteRecruitment error:", err);
+    }
+  }
+
+  // Fallback to local file
   if (fs.existsSync(RECRUITMENTS_FILE)) {
     try {
       const fileData = JSON.parse(fs.readFileSync(RECRUITMENTS_FILE, 'utf-8'));
       fileData.recruitments = (fileData.recruitments || []).filter(r => r.id !== recId);
       fs.writeFileSync(RECRUITMENTS_FILE, JSON.stringify(fileData, null, 2), 'utf-8');
     } catch(e) {}
-  }
-  if (dbConnectingPromise) await dbConnectingPromise;
-  if (db) {
-    try { await db.collection('recruitments').deleteOne({ id: recId }); } catch (err) {
-      console.error("MongoDB deleteRecruitment error:", err);
-    }
   }
 };
 
@@ -1391,6 +1460,12 @@ app.post('/api/research', (req, res) => {
     'Connection': 'keep-alive'
   });
 
+  if (process.env.VERCEL) {
+    res.write("STATUS_FAILED: Scraper daemon is not supported in the serverless production environment. Please run the research scraper in your local development environment.\n");
+    res.end();
+    return;
+  }
+
   res.write("STATUS_START: Starting scraper process...\n");
 
   const pythonPath = process.platform === 'win32' 
@@ -1787,7 +1862,7 @@ app.get('/api/health/smtp', (req, res) => {
 
 // --- FILE UPLOAD ---
 app.post('/api/upload', authenticate, requireClubManager, (req, res) => {
-  upload.single('poster')(req, res, (err) => {
+  upload.single('poster')(req, res, async (err) => {
     if (err instanceof multer.MulterError) {
       return res.status(400).json({ error: 'Upload error: ' + err.message });
     } else if (err) {
@@ -1796,7 +1871,34 @@ app.post('/api/upload', authenticate, requireClubManager, (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded.' });
     }
-    res.json({ success: true, url: `/uploads/${req.file.filename}` });
+
+    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1E9)}${path.extname(req.file.originalname)}`;
+    const base64Data = req.file.buffer.toString('base64');
+
+    if (dbConnectingPromise) await dbConnectingPromise;
+    if (db) {
+      try {
+        await db.collection('uploads').insertOne({
+          filename: uniqueName,
+          contentType: req.file.mimetype,
+          data: base64Data,
+          uploadDate: new Date()
+        });
+        return res.json({ success: true, url: `/uploads/${uniqueName}` });
+      } catch (dbErr) {
+        console.error("MongoDB Atlas upload failed, attempting local fallback:", dbErr);
+      }
+    }
+
+    // Local fallback: write to disk if MongoDB is down or not configured (e.g. local dev)
+    try {
+      const filePath = path.join(UPLOADS_DIR, uniqueName);
+      await fs.promises.writeFile(filePath, req.file.buffer);
+      res.json({ success: true, url: `/uploads/${uniqueName}` });
+    } catch (fsErr) {
+      console.error("Local fallback upload failed:", fsErr);
+      res.status(500).json({ error: 'Failed to save upload locally.' });
+    }
   });
 });
 
@@ -1911,10 +2013,36 @@ app.use(express.static(frontendBuild, {
   maxAge: '1d', // Cache index.html / files under dist for 1 day
   etag: true
 }));
-app.use('/uploads', express.static(UPLOADS_DIR, {
-  maxAge: '365d', // Cache user-uploaded posters for 1 year
-  etag: true
-}));
+// Serve uploaded files dynamically from MongoDB Atlas or local disk fallback
+app.get('/uploads/:filename', async (req, res) => {
+  const { filename } = req.params;
+  // Sanitize the filename to prevent path traversal
+  const safeFilename = path.basename(filename);
+
+  if (dbConnectingPromise) await dbConnectingPromise;
+  if (db) {
+    try {
+      const fileDoc = await db.collection('uploads').findOne({ filename: safeFilename });
+      if (fileDoc) {
+        const imgBuffer = Buffer.from(fileDoc.data, 'base64');
+        res.setHeader('Content-Type', fileDoc.contentType || 'image/jpeg');
+        res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+        return res.send(imgBuffer);
+      }
+    } catch (dbErr) {
+      console.error("MongoDB Atlas retrieve upload error:", dbErr);
+    }
+  }
+
+  // Local fallback: serve from disk if it exists
+  const filePath = path.join(UPLOADS_DIR, safeFilename);
+  if (fs.existsSync(filePath)) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+    return res.sendFile(filePath);
+  }
+
+  res.status(404).json({ error: 'File not found.' });
+});
 
 // Fallback all non-API GET requests to index.html for React routing
 app.use((req, res, next) => {
@@ -1961,11 +2089,15 @@ const runCrawlerSilently = () => {
   });
 };
 
-const DAILY_INTERVAL = 24 * 60 * 60 * 1000;
-setInterval(runCrawlerSilently, DAILY_INTERVAL);
+if (!process.env.VERCEL) {
+  const DAILY_INTERVAL = 24 * 60 * 60 * 1000;
+  setInterval(runCrawlerSilently, DAILY_INTERVAL);
 
-app.listen(PORT, () => {
-  console.log(`=========================================`);
-  console.log(`Express Backend running on port ${PORT}`);
-  console.log(`=========================================`);
-});
+  app.listen(PORT, () => {
+    console.log(`=========================================`);
+    console.log(`Express Backend running on port ${PORT}`);
+    console.log(`=========================================`);
+  });
+}
+
+export default app;
