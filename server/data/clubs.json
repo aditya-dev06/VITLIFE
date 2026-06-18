@@ -315,9 +315,9 @@
     {
       "id": "club-movie-making",
       "name": "Movie Making Club",
-      "category": "anime",
+      "category": "cultural",
       "description": "Aspiring filmmakers crafting short films, documentaries, and music videos while learning cinematography, screenwriting, and post-production techniques.",
-      "icon": "🎌",
+      "icon": "🎬",
       "memberCount": 70,
       "socialLinks": {
         "instagram": "",
@@ -327,9 +327,9 @@
     {
       "id": "club-gaming",
       "name": "Gaming Club",
-      "category": "anime",
+      "category": "cultural",
       "description": "Uniting casual and competitive gamers through esports tournaments, LAN parties, and game development jams across PC, console, and mobile platforms.",
-      "icon": "🎌",
+      "icon": "🎮",
       "memberCount": 220,
       "socialLinks": {
         "instagram": "",

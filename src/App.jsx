@@ -215,6 +215,7 @@ const INITIAL_SKILLS = [
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [token, setToken] = useState(localStorage.getItem('ds_ai_token'));
   const [user, setUser] = useState(null);
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -226,6 +227,11 @@ function App() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const handleTabClick = (tab) => {
+    setActiveTab(tab);
+    setMobileMenuOpen(false);
+  };
+
   const handleLogout = useCallback(() => {
     localStorage.removeItem('ds_ai_token');
     localStorage.removeItem('ds_ai_user');
@@ -234,6 +240,7 @@ function App() {
     setSkills(INITIAL_SKILLS);
     setXpPoints(0);
     setActiveTab('dashboard');
+    setMobileMenuOpen(false);
   }, []);
 
   const fetchUserProfile = useCallback(async () => {
@@ -506,6 +513,10 @@ function App() {
           />
         );
       case 'campus':
+        if (!user || !user.isVitBhopal) {
+          setActiveTab('dashboard');
+          return null;
+        }
         return (
           <CampusLife 
             user={user} 
@@ -551,13 +562,16 @@ function App() {
   return (
     <div className="app-container">
       {/* Sidebar Navigation */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${mobileMenuOpen ? 'open' : ''}`}>
+        <div className="sidebar-mobile-close" onClick={() => setMobileMenuOpen(false)}>
+          ✕
+        </div>
         <div className="brand">
           <div>
             <div className="brand-logo" style={{ display: 'flex', alignItems: 'center', gap: '0.1rem' }}>
               <span className="logo-gradient-text">VIT</span>
               <RotatingText
-                texts={['HON', 'LIFE']}
+                texts={user && user.isVitBhopal ? ['HON', 'LIFE'] : ['HON']}
                 mainClassName="brand-rotating-text"
                 staggerFrom="last"
                 initial={{ y: "100%", opacity: 0 }}
@@ -578,30 +592,32 @@ function App() {
         <nav>
           <ul className="nav-list">
             <li className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('dashboard')}>
+              <button onClick={() => handleTabClick('dashboard')}>
                 🏠 Dashboard
               </button>
             </li>
             <li className={`nav-item ${activeTab === 'roadmap' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('roadmap')}>
+              <button onClick={() => handleTabClick('roadmap')}>
                 🗺️ Skill Roadmap
               </button>
             </li>
             <li className={`nav-item ${activeTab === 'opportunities' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('opportunities')}>
+              <button onClick={() => handleTabClick('opportunities')}>
                 🎯 Opportunities Hub
               </button>
             </li>
             <li className={`nav-item ${activeTab === 'guide' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('guide')}>
+              <button onClick={() => handleTabClick('guide')}>
                 🏫 {user && user.isVitBhopal ? 'VIT Bhopal Guide' : 'DS & AI Guide'}
               </button>
             </li>
-            <li className={`nav-item ${activeTab === 'campus' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('campus')}>
-                🎪 Campus Life
-              </button>
-            </li>
+            {user && user.isVitBhopal && (
+              <li className={`nav-item ${activeTab === 'campus' ? 'active' : ''}`}>
+                <button onClick={() => handleTabClick('campus')}>
+                  🎪 Campus Life
+                </button>
+              </li>
+            )}
           </ul>
         </nav>
 
@@ -644,11 +660,27 @@ function App() {
         </div>
       </aside>
 
+      {/* Backdrop overlay for mobile */}
+      {mobileMenuOpen && (
+        <div className="sidebar-overlay" onClick={() => setMobileMenuOpen(false)}></div>
+      )}
+
       {/* Main Panel View */}
       <main className="main-content">
+        {/* Mobile Header */}
+        <div className="mobile-header">
+          <button className="mobile-menu-toggle" onClick={() => setMobileMenuOpen(true)}>
+            ☰
+          </button>
+          <div className="mobile-brand-title">
+            <span className="logo-gradient-text">VIT</span>
+            <span style={{ color: 'hsl(var(--accent))', fontWeight: 800 }}>HON</span>
+          </div>
+          <div style={{ width: '40px' }}></div>
+        </div>
+
         {renderActiveComponent()}
       </main>
-
       {showEditProfile && (
         <EditProfileModal
           user={user}

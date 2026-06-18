@@ -17,6 +17,58 @@
       ],
       "createdBy": "adityaorinals@gmail.com",
       "createdAt": "2026-06-17T16:31:28.224Z"
+    },
+    {
+      "id": "evt-1781770509432-7pt5710ex",
+      "title": "wdfgh",
+      "description": "dfghj",
+      "clubId": "club-linux",
+      "clubName": "Linux Club",
+      "category": "tech",
+      "date": "2026-06-18",
+      "time": "",
+      "venue": "fghj",
+      "posterUrl": "/uploads/1781770509369-78082761.jpg",
+      "posterUrls": [
+        "/uploads/1781770509369-78082761.jpg",
+        "/uploads/1781770509374-176850664.jpg",
+        "/uploads/1781770509384-500024050.jpg"
+      ],
+      "schedulePosterUrl": "/uploads/1781770509413-148964470.jpg",
+      "registrationLink": "",
+      "tags": [
+        "fgyui"
+      ],
+      "registrationDeadline": "2026-06-17T13:44",
+      "eventStartDateTime": "2026-06-18T13:43",
+      "eventEndDateTime": "2026-06-19T13:44",
+      "price": "",
+      "createdBy": "aditya.25mip10104@vitbhopal.ac.in",
+      "createdAt": "2026-06-18T08:15:09.433Z"
+    },
+    {
+      "id": "evt-1781771269454-d4zc92ma2",
+      "title": "dfg",
+      "description": "fgh",
+      "clubId": "club-drone",
+      "clubName": "Drone Club",
+      "category": "tech",
+      "date": "2026-06-18",
+      "time": "",
+      "venue": "ghjk",
+      "posterUrl": "/uploads/1781771269429-13755807.jpg",
+      "posterUrls": [
+        "/uploads/1781771269429-13755807.jpg"
+      ],
+      "schedulePosterUrl": "",
+      "registrationLink": "",
+      "tags": [],
+      "registrationDeadline": "2026-06-18T13:57",
+      "eventStartDateTime": "2026-06-18T13:57",
+      "eventEndDateTime": "2026-06-18T13:57",
+      "price": "",
+      "createdBy": "aditya.25mip10104@vitbhopal.ac.in",
+      "createdAt": "2026-06-18T08:27:49.454Z"
     }
   ]
 }

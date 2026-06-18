@@ -17,24 +17,44 @@ const getRegNumberAndProgram = (emailStr) => {
     const progMatch = regNum.match(/^\d{2}([A-Z]{3})/);
     let program = 'VIT Bhopal Student';
     let isBim = false;
+    let isIntegrated = false;
     if (progMatch) {
       const code = progMatch[1];
-      const programMap = {
-        'BIM': 'Integrated M.Tech CSE (Computational & Data Science)',
-        'BCE': 'B.Tech Computer Science & Engineering',
-        'BDS': 'B.Tech CSE (Data Science)',
-        'BAI': 'B.Tech CSE (AI & ML)',
-        'BCY': 'B.Tech CSE (Cyber Security)',
-        'BEC': 'B.Tech Electronics & Communication Engineering',
-        'BEE': 'B.Tech Electrical & Electronics Engineering',
-        'BME': 'B.Tech Mechanical Engineering',
-        'BBA': 'Bachelor of Business Administration',
-        'MCA': 'Master of Computer Applications'
-      };
-      program = programMap[code] || `B.Tech/M.Tech (${code}) Student`;
-      if (code === 'BIM') isBim = true;
+      if (code === 'MCA') {
+        program = 'Master of Computer Applications';
+      } else if (code === 'BBA') {
+        program = 'Bachelor of Business Administration';
+      } else {
+        const typeChar = code.charAt(0);
+        const branchPart = code.slice(1);
+        const branchMap = {
+          'CE': 'Computer Science & Engineering',
+          'DS': 'Computer Science & Engineering (Data Science)',
+          'AI': 'Computer Science & Engineering (AI & ML)',
+          'CY': 'Computer Science & Engineering (Cyber Security)',
+          'IM': 'Computer Science & Engineering (Computational & Data Science)',
+          'IP': 'Computer Science & Engineering (Computational & Data Science)',
+          'EC': 'Electronics & Communication Engineering',
+          'EE': 'Electrical & Electronics Engineering',
+          'ME': 'Mechanical Engineering'
+        };
+        const branchName = branchMap[branchPart] || `Computer Science & Engineering (${branchPart})`;
+        
+        if (typeChar === 'B') {
+          program = `B.Tech ${branchName}`;
+        } else if (typeChar === 'M') {
+          program = `Integrated M.Tech ${branchName}`;
+          isIntegrated = true;
+        } else {
+          program = `B.Tech/M.Tech (${code}) Student`;
+        }
+        
+        if (branchPart === 'IM' || code === 'BIM' || code === 'MIM') {
+          isBim = true;
+        }
+      }
     }
-    return { regNum, program, isBim };
+    return { regNum, program, isBim, isIntegrated };
   }
   return null;
 };
@@ -631,7 +651,7 @@ const Auth = ({ onLoginSuccess }) => {
                     {isVitBhopal ? (
                       (() => {
                         const parsed = getRegNumberAndProgram(email);
-                        const maxSem = (parsed && parsed.isBim) ? 10 : 8;
+                        const maxSem = (parsed && (parsed.isIntegrated || parsed.isBim)) ? 10 : 8;
                         const options = [];
                         for (let i = 1; i <= maxSem; i++) {
                           options.push(
@@ -694,7 +714,7 @@ const Auth = ({ onLoginSuccess }) => {
           <div className="auth-logo" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.1rem' }}>
             <span className="logo-gradient-text">VIT</span>
             <RotatingText
-              texts={['HON', 'LIFE']}
+              texts={isVitBhopal ? ['HON', 'LIFE'] : ['HON']}
               mainClassName="auth-rotating-text"
               staggerFrom="last"
               initial={{ y: "100%", opacity: 0 }}
@@ -706,7 +726,12 @@ const Auth = ({ onLoginSuccess }) => {
               rotationInterval={4500}
             />
           </div>
-          <div className="auth-subtitle">Computational & Data Science Hub</div>
+          <div className="auth-subtitle">
+            {(() => {
+              const parsed = getRegNumberAndProgram(email);
+              return parsed ? `${parsed.program} Hub` : 'Computational & Data Science Hub';
+            })()}
+          </div>
         </div>
 
         {smtpDown && (

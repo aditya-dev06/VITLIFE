@@ -42,7 +42,8 @@ const RotatingText = forwardRef((props, ref) => {
   };
 
   const elements = useMemo(() => {
-    const currentText = texts[currentTextIndex];
+    const safeIndex = currentTextIndex >= texts.length ? 0 : currentTextIndex;
+    const currentText = texts[safeIndex] || '';
     if (splitBy === 'characters') {
       const words = currentText.split(' ');
       return words.map((word, i) => ({
@@ -137,10 +138,16 @@ const RotatingText = forwardRef((props, ref) => {
   );
 
   useEffect(() => {
-    if (!auto) return;
+    if (currentTextIndex >= texts.length) {
+      setCurrentTextIndex(0);
+    }
+  }, [texts.length, currentTextIndex]);
+
+  useEffect(() => {
+    if (!auto || texts.length <= 1) return;
     const intervalId = setInterval(next, rotationInterval);
     return () => clearInterval(intervalId);
-  }, [next, rotationInterval, auto]);
+  }, [next, rotationInterval, auto, texts.length]);
 
   return (
     <motion.span className={cn('text-rotate', mainClassName)} {...rest} layout transition={transition}>

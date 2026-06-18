@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import BounceCards from './BounceCards';
 import Hyperspeed from './Hyperspeed';
 
@@ -52,7 +52,8 @@ const CATEGORIES = [
   { key: 'music', label: 'Music & Arts', icon: '🎵', color: '280, 70%, 60%' },
   { key: 'speakers', label: 'Speakers', icon: '🎤', color: '30, 90%, 55%' },
   { key: 'motivation', label: 'Social & Motivation', icon: '💡', color: '140, 60%, 50%' },
-  { key: 'anime', label: 'Anime & Culture', icon: '🎌', color: '330, 75%, 60%' },
+  { key: 'anime', label: 'Anime', icon: '🎌', color: '330, 75%, 60%' },
+  { key: 'cultural', label: 'Cultural', icon: '🎭', color: '345, 80%, 60%' },
   { key: 'robotics', label: 'Robotics', icon: '🤖', color: '220, 75%, 55%' },
   { key: 'sports', label: 'Sports', icon: '🏅', color: '50, 85%, 55%' },
 ];
@@ -473,9 +474,192 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents }) 
   );
 }
 
+function DashboardEventCardItem({
+  event,
+  clubs,
+  user,
+  token,
+  setSelectedEvent,
+  handleTogglePin
+}) {
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [cardWidth, setCardWidth] = useState('280px'); // default width before image loads
+  const [isHovered, setIsHovered] = useState(false);
+
+  const daysLeft = getDaysRemaining(event.registrationDeadline || event.date);
+  const catColor = getCategoryColor(event.category);
+  const eventClub = clubs.find(c => c.id === event.clubId);
+  const clubName = eventClub ? eventClub.name : event.clubName || 'Unknown Club';
+  const isAdmin = user && user.role === 'admin';
+  const status = getEventStatus(event);
+  const badge = getStatusBadge(status);
+  const opacity = getCardOpacity(status);
+
+  const handleImageLoad = (e) => {
+    const { naturalWidth, naturalHeight } = e.target;
+    if (naturalWidth && naturalHeight) {
+      const aspect = naturalWidth / naturalHeight;
+      let calculatedWidth = Math.round(240 * aspect);
+      
+      // Enforce clean min and max constraints
+      calculatedWidth = Math.max(180, Math.min(320, calculatedWidth));
+      setCardWidth(`${calculatedWidth}px`);
+      setImageLoaded(true);
+    }
+  };
+
+  const hasMultiplePosters = event.posterUrls && event.posterUrls.length > 1;
+  const showBounce = hasMultiplePosters;
+
+  useEffect(() => {
+    if (showBounce) {
+      setCardWidth('280px');
+    }
+  }, [showBounce]);
+
+  return (
+    <div
+      className="glass-card event-card"
+      onClick={() => setSelectedEvent(event)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative',
+        opacity: opacity,
+        transition: 'opacity 0.3s ease, box-shadow 0.3s ease, transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), width 0.3s ease',
+        border: event.pinned ? '1px solid hsla(var(--primary) / 0.5)' : '1px solid hsla(var(--border-glass))',
+        boxShadow: event.pinned ? '0 0 15px hsla(var(--primary) / 0.15)' : 'none',
+        width: cardWidth
+      }}
+    >
+      {/* Pinned Badge */}
+      {event.pinned && (
+        <div style={{
+          position: 'absolute', top: '0.75rem', left: '0.75rem',
+          background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))',
+          color: 'white', fontSize: '0.65rem', fontWeight: 800,
+          padding: '0.25rem 0.5rem', borderRadius: '4px', zIndex: 5,
+          textTransform: 'uppercase', letterSpacing: '0.05em'
+        }}>
+          📌 Featured
+        </div>
+      )}
+
+      {/* Status Badge */}
+      <div style={{
+        position: 'absolute', top: '0.75rem', right: '0.75rem',
+        background: `hsla(${badge.bg}, 0.15)`,
+        border: `1px solid hsla(${badge.color}, 0.4)`,
+        color: `hsl(${badge.color})`,
+        fontSize: '0.62rem', fontWeight: 700,
+        padding: '0.2rem 0.45rem', borderRadius: '4px', zIndex: 5,
+        textTransform: 'uppercase', letterSpacing: '0.03em'
+      }}>
+        {badge.text}
+      </div>
+
+      {/* Poster Image */}
+      {event.posterUrl && (
+        showBounce ? (
+          <div style={{ height: '160px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
+            <BounceCards
+              className="event-card-bounce"
+              images={event.posterUrls}
+              containerWidth="100%"
+              containerHeight={160}
+              animationDelay={0.3}
+              animationStagger={0.05}
+              easeType="elastic.out(1, 0.7)"
+              transformStyles={eventTransformStyles}
+              enableHover={true}
+              pushOffset={35}
+              isHovered={isHovered}
+            />
+          </div>
+        ) : (
+          <img
+            src={event.posterUrl}
+            alt={event.title}
+            onLoad={handleImageLoad}
+            loading="lazy"
+            style={{
+              width: '100%',
+              height: 'auto',
+              display: 'block',
+              borderBottom: '1px solid hsla(var(--border-glass))',
+              opacity: imageLoaded ? 1 : 0.3,
+              transition: 'opacity 0.3s ease',
+              margin: '0 auto'
+            }}
+            onError={(e) => { e.target.style.display = 'none'; }}
+          />
+        )
+      )}
+
+      {/* Details */}
+      <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flexGrow: 1, gap: '0.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+          <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0, flex: 1 }}>
+            {event.title}
+          </h4>
+          {daysLeft !== null && status !== 'ended' && (
+            <span className="countdown-badge">
+              ⏰ {daysLeft}d left
+            </span>
+          )}
+        </div>
+
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '0.5rem',
+          fontSize: '0.8rem', fontWeight: 600, color: `hsl(${catColor})`
+        }}>
+          <ClubLogo club={eventClub} category={event.category} size={20} borderRadius="50%" />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{clubName}</span>
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>
+          {event.eventStartDateTime && <span>🚀 {formatDateTime(event.eventStartDateTime)}</span>}
+          {!event.eventStartDateTime && event.date && <span>📅 {formatDate(event.date)}</span>}
+          {event.venue && <span>📍 {event.venue}</span>}
+        </div>
+
+        {/* Registration deadline & Price row */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.73rem', alignItems: 'center' }}>
+          {event.registrationDeadline && (
+            <span style={{ color: status === 'reg_closed' || status === 'ended' ? 'hsl(0, 60%, 55%)' : 'hsl(140, 60%, 50%)', fontWeight: 600 }}>
+              📝 Reg. {status === 'reg_closed' || status === 'ended' ? 'closed' : `till ${formatDateTime(event.registrationDeadline)}`}
+            </span>
+          )}
+          {event.price ? (
+            <span style={{ fontWeight: 700, color: 'hsl(var(--accent))' }}>
+              💰 {event.price === '0' || event.price.toLowerCase() === 'free' ? 'Free' : `₹${event.price}`}
+            </span>
+          ) : (
+            <span style={{ fontWeight: 600, color: 'hsl(140, 60%, 50%)' }}>🆓 Free</span>
+          )}
+        </div>
+
+        {isAdmin && (
+          <div style={{ marginTop: 'auto', paddingTop: '0.75rem', display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              onClick={(e) => handleTogglePin(event, e)}
+              className="btn-promote"
+              style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}
+            >
+              {event.pinned ? '📍 Unpin' : '📌 Pin'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, onUpdateSemester, clubs = [], events = [], fetchEvents, token }) => {
   const [selectedEvent, setSelectedEvent] = useState(null);
-  const [hoveredEventId, setHoveredEventId] = useState(null);
   const inProgressSkills = stats.inProgressSkillsList || [];
   const activeOpportunities = opportunities ? opportunities.slice(0, 3) : [];
 
@@ -673,8 +857,9 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
               >
                 {user && user.isVitBhopal ? (
                   (() => {
-                    const isBim = user.email && user.email.toLowerCase().includes('bim');
-                    const maxSem = isBim ? 10 : 8;
+                    const isIntegrated = (user.program && user.program.startsWith('Integrated M.Tech')) || 
+                                         (user.email && (user.email.toLowerCase().includes('bim') || user.email.toLowerCase().includes('mim')));
+                    const maxSem = isIntegrated ? 10 : 8;
                     const options = [];
                     for (let i = 1; i <= maxSem; i++) {
                       options.push(<option key={i} value={i.toString()} style={{ backgroundColor: '#18181b' }}>Sem {i}</option>);
@@ -739,189 +924,45 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
       </div>
 
       {/* Upcoming Events Section */}
-      <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: '1.3rem' }}>Upcoming & Recommended Events</h3>
-            <p style={{ color: 'hsl(var(--text-muted))', fontSize: '0.85rem', margin: '0.25rem 0 0 0' }}>
-              Events recommended based on your program & courses. Sponsored events are featured at the top.
-            </p>
+      {user && user.isVitBhopal && (
+        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.3rem' }}>Upcoming & Recommended Events</h3>
+              <p style={{ color: 'hsl(var(--text-muted))', fontSize: '0.85rem', margin: '0.25rem 0 0 0' }}>
+                Events recommended based on your program & courses. Sponsored events are featured at the top.
+              </p>
+            </div>
           </div>
+
+          {recommendedEvents.length > 0 ? (
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '1.5rem',
+              width: '100%',
+              alignItems: 'flex-start'
+            }}>
+              {recommendedEvents.map(event => (
+                <DashboardEventCardItem
+                  key={event.id}
+                  event={event}
+                  clubs={clubs}
+                  user={user}
+                  token={token}
+                  setSelectedEvent={setSelectedEvent}
+                  handleTogglePin={handleTogglePin}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <span style={{ fontSize: '2.5rem' }}>📅</span>
+              <p>No upcoming events recommended at this time.</p>
+            </div>
+          )}
         </div>
-
-        {recommendedEvents.length > 0 ? (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-            gap: '1.5rem'
-          }}>
-            {recommendedEvents.map(event => {
-              const daysLeft = getDaysRemaining(event.registrationDeadline || event.date);
-              const catColor = getCategoryColor(event.category);
-              const eventClub = clubs.find(c => c.id === event.clubId);
-              const clubName = eventClub ? eventClub.name : event.clubName || 'Unknown Club';
-              const isAdmin = user && user.role === 'admin';
-              const status = getEventStatus(event);
-              const badge = getStatusBadge(status);
-              const opacity = getCardOpacity(status);
-
-              return (
-                <div 
-                  key={event.id} 
-                  className="glass-card event-card" 
-                  onClick={() => setSelectedEvent(event)}
-                  onMouseEnter={() => setHoveredEventId(event.id)}
-                  onMouseLeave={() => setHoveredEventId(null)}
-                  style={{ 
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    position: 'relative',
-                    opacity: opacity,
-                    transition: 'opacity 0.3s ease, box-shadow 0.3s ease',
-                    border: event.pinned ? '1px solid hsla(var(--primary) / 0.5)' : '1px solid hsla(var(--border-glass))',
-                    boxShadow: event.pinned ? '0 0 15px hsla(var(--primary) / 0.15)' : 'none'
-                  }}
-                >
-                  {event.pinned && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '0.75rem',
-                      left: '0.75rem',
-                      background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))',
-                      color: 'white',
-                      fontSize: '0.65rem',
-                      fontWeight: 800,
-                      padding: '0.25rem 0.5rem',
-                      borderRadius: '4px',
-                      zIndex: 5,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em'
-                    }}>
-                      📌 Featured
-                    </div>
-                  )}
-
-                  {/* Status Badge */}
-                  <div style={{
-                    position: 'absolute',
-                    top: '0.75rem',
-                    right: '0.75rem',
-                    background: `hsla(${badge.bg}, 0.15)`,
-                    border: `1px solid hsla(${badge.color}, 0.4)`,
-                    color: `hsl(${badge.color})`,
-                    fontSize: '0.62rem',
-                    fontWeight: 700,
-                    padding: '0.2rem 0.45rem',
-                    borderRadius: '4px',
-                    zIndex: 5,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.03em'
-                  }}>
-                    {badge.text}
-                  </div>
-
-                  {event.posterUrl && (
-                    (event.posterUrls && event.posterUrls.length > 1) ? (
-                      <div style={{ height: '160px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
-                        <BounceCards
-                          className="event-card-bounce"
-                          images={event.posterUrls}
-                          containerWidth="100%"
-                          containerHeight={160}
-                          animationDelay={0.3}
-                          animationStagger={0.05}
-                          easeType="elastic.out(1, 0.7)"
-                          transformStyles={eventTransformStyles}
-                          enableHover={true}
-                          pushOffset={35}
-                          isHovered={hoveredEventId === event.id}
-                        />
-                      </div>
-                    ) : (
-                      <img
-                        src={event.posterUrl}
-                        alt={event.title}
-                        style={{
-                          width: '100%',
-                          height: 'auto',
-                          display: 'block',
-                          borderBottom: '1px solid hsla(var(--border-glass))'
-                        }}
-                        onError={(e) => { e.target.style.display = 'none'; }}
-                      />
-                    )
-                  )}
-                  
-                  <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flexGrow: 1, gap: '0.5rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
-                      <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0, flex: 1 }}>
-                        {event.title}
-                      </h4>
-                      {daysLeft !== null && status !== 'ended' && (
-                        <span className="countdown-badge">
-                          ⏰ {daysLeft}d left
-                        </span>
-                      )}
-                    </div>
-
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      fontSize: '0.8rem',
-                      fontWeight: 600,
-                      color: `hsl(${catColor})`
-                    }}>
-                      <ClubLogo club={eventClub} category={event.category} size={20} borderRadius="50%" />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{clubName}</span>
-                    </div>
-
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>
-                      {event.eventStartDateTime && <span>🚀 {formatDateTime(event.eventStartDateTime)}</span>}
-                      {!event.eventStartDateTime && event.date && <span>📅 {formatDate(event.date)}</span>}
-                      {event.venue && <span>📍 {event.venue}</span>}
-                    </div>
-
-                    {/* Registration deadline & Price row */}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.73rem', alignItems: 'center' }}>
-                      {event.registrationDeadline && (
-                        <span style={{ color: status === 'reg_closed' || status === 'ended' ? 'hsl(0, 60%, 55%)' : 'hsl(140, 60%, 50%)', fontWeight: 600 }}>
-                          📝 Reg. {status === 'reg_closed' || status === 'ended' ? 'closed' : `till ${formatDateTime(event.registrationDeadline)}`}
-                        </span>
-                      )}
-                      {event.price ? (
-                        <span style={{ fontWeight: 700, color: 'hsl(var(--accent))' }}>
-                          💰 {event.price === '0' || event.price.toLowerCase() === 'free' ? 'Free' : `₹${event.price}`}
-                        </span>
-                      ) : (
-                        <span style={{ fontWeight: 600, color: 'hsl(140, 60%, 50%)' }}>🆓 Free</span>
-                      )}
-                    </div>
-
-                    {isAdmin && (
-                      <div style={{ marginTop: 'auto', paddingTop: '0.75rem', display: 'flex', justifyContent: 'flex-end' }}>
-                        <button
-                          onClick={(e) => handleTogglePin(event, e)}
-                          className="btn-promote"
-                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}
-                        >
-                          {event.pinned ? '📍 Unpin' : '📌 Pin'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="empty-state">
-            <span style={{ fontSize: '2.5rem' }}>📅</span>
-            <p>No upcoming events recommended at this time.</p>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Dashboard Main Split Layout */}
       <div className="dash-layout">

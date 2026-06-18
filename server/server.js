@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -37,6 +38,7 @@ if (fs.existsSync(envPath)) {
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+app.use(compression());
 app.use(cors());
 app.use(express.json());
 
@@ -768,19 +770,34 @@ const parseVitBhopalEmail = (email) => {
   
   if (progMatch) {
     const code = progMatch[1];
-    const programMap = {
-      'BIM': 'Integrated M.Tech CSE (Computational & Data Science)',
-      'BCE': 'B.Tech Computer Science & Engineering',
-      'BDS': 'B.Tech CSE (Data Science)',
-      'BAI': 'B.Tech CSE (AI & ML)',
-      'BCY': 'B.Tech CSE (Cyber Security)',
-      'BEC': 'B.Tech Electronics & Communication Engineering',
-      'BEE': 'B.Tech Electrical & Electronics Engineering',
-      'BME': 'B.Tech Mechanical Engineering',
-      'BBA': 'Bachelor of Business Administration',
-      'MCA': 'Master of Computer Applications'
-    };
-    program = programMap[code] || `B.Tech/M.Tech (${code}) Student`;
+    if (code === 'MCA') {
+      program = 'Master of Computer Applications';
+    } else if (code === 'BBA') {
+      program = 'Bachelor of Business Administration';
+    } else {
+      const typeChar = code.charAt(0);
+      const branchPart = code.slice(1);
+      const branchMap = {
+        'CE': 'Computer Science & Engineering',
+        'DS': 'Computer Science & Engineering (Data Science)',
+        'AI': 'Computer Science & Engineering (AI & ML)',
+        'CY': 'Computer Science & Engineering (Cyber Security)',
+        'IM': 'Computer Science & Engineering (Computational & Data Science)',
+        'IP': 'Computer Science & Engineering (Computational & Data Science)',
+        'EC': 'Electronics & Communication Engineering',
+        'EE': 'Electrical & Electronics Engineering',
+        'ME': 'Mechanical Engineering'
+      };
+      const branchName = branchMap[branchPart] || `Computer Science & Engineering (${branchPart})`;
+      
+      if (typeChar === 'B') {
+        program = `B.Tech ${branchName}`;
+      } else if (typeChar === 'M') {
+        program = `Integrated M.Tech ${branchName}`;
+      } else {
+        program = `B.Tech/M.Tech (${code}) Student`;
+      }
+    }
   }
 
   return { registrationNumber, program };
@@ -1120,8 +1137,17 @@ app.post('/api/auth/login', async (req, res) => {
     // Ensure admin email always gets admin role
     if (isAdminEmail(lowerEmail) && user.role !== 'admin') {
       user.role = 'admin';
-      await saveUser(lowerEmail, user);
     }
+
+    // Dynamic program update on login
+    if (user.isVitBhopal) {
+      const parsed = parseVitBhopalEmail(lowerEmail);
+      if (parsed && user.program !== parsed.program) {
+        user.program = parsed.program;
+      }
+    }
+
+    await saveUser(lowerEmail, user);
 
     const token = generateToken(lowerEmail, user.passwordHash);
 
@@ -1238,8 +1264,19 @@ app.post('/api/auth/reset-password', authRateLimiter(5, 15 * 60 * 1000), async (
 });
 
 // 3. Get User Profile Progress
-app.get('/api/user/profile', authenticate, (req, res) => {
+app.get('/api/user/profile', authenticate, async (req, res) => {
   const userProfile = { ...req.user };
+  if (userProfile.isVitBhopal) {
+    const parsed = parseVitBhopalEmail(userProfile.email);
+    if (parsed && userProfile.program !== parsed.program) {
+      userProfile.program = parsed.program;
+      const user = await findUserByEmail(userProfile.email);
+      if (user) {
+        user.program = parsed.program;
+        await saveUser(userProfile.email, user);
+      }
+    }
+  }
   delete userProfile.passwordHash;
   delete userProfile.salt;
   res.json(userProfile);
@@ -1440,7 +1477,7 @@ app.get('/api/clubs/:id', async (req, res) => {
 app.put('/api/clubs/:id', authenticate, requireClubManager, async (req, res) => {
   try {
     const { id } = req.params;
-    const { description, icon, memberCount, socialLinks } = req.body;
+    const { description, icon, memberCount, socialLinks, category } = req.body;
 
     if (req.user.role !== 'admin' && req.user.clubId !== id) {
       return res.status(403).json({ error: 'Access denied. You are not authorized to edit this club.' });
@@ -1462,6 +1499,12 @@ app.put('/api/clubs/:id', authenticate, requireClubManager, async (req, res) => 
 
     if (description !== undefined) club.description = description;
     if (icon !== undefined) club.icon = icon;
+    if (category !== undefined) {
+      if (!category.trim()) {
+        return res.status(400).json({ error: 'Club category cannot be empty.' });
+      }
+      club.category = category.trim();
+    }
     if (memberCount !== undefined) {
       const parsedCount = parseInt(memberCount, 10);
       if (isNaN(parsedCount) || parsedCount < 0) {
@@ -1864,8 +1907,14 @@ app.post('/api/admin/demote', authenticate, requireAdmin, async (req, res) => {
 const frontendBuild = path.join(path.dirname(__dirname), 'dist');
 console.log(`Serving static files from: ${frontendBuild} (Exists: ${fs.existsSync(frontendBuild)})`);
 
-app.use(express.static(frontendBuild));
-app.use('/uploads', express.static(UPLOADS_DIR));
+app.use(express.static(frontendBuild, {
+  maxAge: '1d', // Cache index.html / files under dist for 1 day
+  etag: true
+}));
+app.use('/uploads', express.static(UPLOADS_DIR, {
+  maxAge: '365d', // Cache user-uploaded posters for 1 year
+  etag: true
+}));
 
 // Fallback all non-API GET requests to index.html for React routing
 app.use((req, res, next) => {

@@ -15,7 +15,8 @@ const CATEGORIES = [
   { key: 'music', label: 'Music & Arts', icon: '🎵', color: '280, 70%, 60%' },
   { key: 'speakers', label: 'Speakers', icon: '🎤', color: '30, 90%, 55%' },
   { key: 'motivation', label: 'Social & Motivation', icon: '💡', color: '140, 60%, 50%' },
-  { key: 'anime', label: 'Anime & Culture', icon: '🎌', color: '330, 75%, 60%' },
+  { key: 'anime', label: 'Anime', icon: '🎌', color: '330, 75%, 60%' },
+  { key: 'cultural', label: 'Cultural', icon: '🎭', color: '345, 80%, 60%' },
   { key: 'robotics', label: 'Robotics', icon: '🤖', color: '220, 75%, 55%' },
   { key: 'sports', label: 'Sports', icon: '🏅', color: '50, 85%, 55%' },
 ];
@@ -159,6 +160,237 @@ function ClubLogo({ club, category, size = 24, borderRadius = '50%' }) {
   );
 }
 
+function EventCardItem({
+  event,
+  clubs,
+  token,
+  isAdmin,
+  fetchEvents,
+  setSelectedEventDetails,
+  isOngoingSection = false
+}) {
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [cardWidth, setCardWidth] = useState('280px'); // default width before image loads
+  const [isHovered, setIsHovered] = useState(false);
+
+  const catColor = getCategoryColor(event.category);
+  const eventClub = clubs.find(c => c.id === event.clubId);
+  const clubName = eventClub ? eventClub.name : event.clubName || 'Unknown Club';
+
+  const status = getEventStatus(event);
+  const badge = getStatusBadge(status);
+  const opacity = isOngoingSection ? 1 : getCardOpacity(status);
+  const daysLeft = isOngoingSection ? null : getDaysRemaining(event.registrationDeadline || event.date);
+
+  const handleImageLoad = (e) => {
+    const { naturalWidth, naturalHeight } = e.target;
+    if (naturalWidth && naturalHeight) {
+      const aspect = naturalWidth / naturalHeight;
+      let calculatedWidth = Math.round(240 * aspect);
+      
+      // Enforce constraints
+      calculatedWidth = Math.max(180, Math.min(320, calculatedWidth));
+      setCardWidth(`${calculatedWidth}px`);
+      setImageLoaded(true);
+    }
+  };
+
+  const hasMultiplePosters = event.posterUrls && event.posterUrls.length > 1;
+  const showBounce = hasMultiplePosters && (isOngoingSection || status === 'ongoing' || status === 'reg_open' || status === 'upcoming');
+
+  useEffect(() => {
+    if (showBounce) {
+      setCardWidth('280px');
+    }
+  }, [showBounce]);
+
+  return (
+    <div
+      className="glass-card event-card event-masonry-card"
+      onClick={() => setSelectedEventDetails(event)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        cursor: 'pointer',
+        position: 'relative',
+        opacity: opacity,
+        transition: 'opacity 0.3s ease, box-shadow 0.3s ease, transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), width 0.3s ease',
+        border: isOngoingSection 
+          ? '1px solid hsla(0, 80%, 55%, 0.5)' 
+          : (event.pinned ? '1px solid hsla(var(--primary) / 0.5)' : '1px solid hsla(var(--border-glass))'),
+        boxShadow: isOngoingSection
+          ? '0 0 20px hsla(0, 80%, 55%, 0.15), inset 0 0 20px hsla(0, 80%, 55%, 0.03)'
+          : (event.pinned ? '0 0 15px hsla(var(--primary) / 0.15)' : 'none'),
+        animation: isOngoingSection ? 'pulse-border 3s ease-in-out infinite' : 'none',
+        width: cardWidth,
+        display: 'flex',
+        flexDirection: 'column'
+      }}
+    >
+      {/* Absolute Badges */}
+      {isOngoingSection ? (
+        <div style={{
+          position: 'absolute', top: '0.75rem', left: '0.75rem',
+          background: 'linear-gradient(135deg, hsl(210, 80%, 55%), hsl(190, 80%, 50%))',
+          color: 'white', fontSize: '0.65rem', fontWeight: 800,
+          padding: '0.25rem 0.5rem', borderRadius: '4px', zIndex: 5,
+          textTransform: 'uppercase', letterSpacing: '0.05em'
+        }}>
+          🔵 Happening Now
+        </div>
+      ) : (
+        <>
+          {event.pinned && (
+            <div style={{
+              position: 'absolute', top: '0.75rem', left: '0.75rem',
+              background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))',
+              color: 'white', fontSize: '0.65rem', fontWeight: 800,
+              padding: '0.25rem 0.5rem', borderRadius: '4px', zIndex: 5,
+              textTransform: 'uppercase', letterSpacing: '0.05em'
+            }}>
+              📌 Featured
+            </div>
+          )}
+          <div style={{
+            position: 'absolute', top: '0.75rem', right: '0.75rem',
+            background: `hsla(${badge.bg}, 0.15)`,
+            border: `1px solid hsla(${badge.color}, 0.4)`,
+            color: `hsl(${badge.color})`,
+            fontSize: '0.62rem', fontWeight: 700,
+            padding: '0.2rem 0.45rem', borderRadius: '4px', zIndex: 5,
+            textTransform: 'uppercase', letterSpacing: '0.03em'
+          }}>
+            {badge.text}
+          </div>
+        </>
+      )}
+
+      {/* Poster Image or Stack */}
+      {event.posterUrl && (
+        showBounce ? (
+          <div style={{ height: '200px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
+            <BounceCards
+              className="event-card-bounce"
+              images={event.posterUrls}
+              containerWidth="100%"
+              containerHeight={200}
+              animationDelay={0.3}
+              animationStagger={0.05}
+              easeType="elastic.out(1, 0.7)"
+              transformStyles={eventTransformStyles}
+              enableHover={true}
+              pushOffset={35}
+              isHovered={isHovered}
+            />
+          </div>
+        ) : (
+          <img
+            src={event.posterUrl}
+            alt={event.title}
+            onLoad={handleImageLoad}
+            loading="lazy"
+            style={{
+              width: '100%',
+              height: 'auto',
+              display: 'block',
+              borderBottom: '1px solid hsla(var(--border-glass))',
+              opacity: imageLoaded ? 1 : 0.3,
+              transition: 'opacity 0.3s ease',
+              margin: '0 auto'
+            }}
+            onError={(e) => { e.target.style.display = 'none'; }}
+          />
+        )
+      )}
+
+      {/* Card Details */}
+      <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', flexGrow: 1, gap: '0.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.2rem' }}>
+          <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0, flex: 1 }}>
+            {event.title}
+          </h3>
+          {daysLeft !== null && status !== 'ended' && (
+            <span className="countdown-badge">
+              ⏰ {daysLeft}d left
+            </span>
+          )}
+        </div>
+
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '0.5rem',
+          marginBottom: '0.3rem', fontSize: '0.8rem', fontWeight: 600,
+          color: `hsl(${catColor})`
+        }}>
+          <ClubLogo club={eventClub} category={event.category} size={24} borderRadius="50%" />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{clubName}</span>
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginBottom: '0.3rem' }}>
+          {isOngoingSection ? (
+            <>
+              {event.venue && <span>📍 {event.venue}</span>}
+              {event.eventEndDateTime && <span>🏁 Ends {formatDateTime(event.eventEndDateTime)}</span>}
+            </>
+          ) : (
+            <>
+              {event.eventStartDateTime && <span>🚀 {formatDateTime(event.eventStartDateTime)}</span>}
+              {!event.eventStartDateTime && event.date && <span>📅 {formatDate(event.date)}</span>}
+              {event.venue && <span>📍 {event.venue}</span>}
+            </>
+          )}
+        </div>
+
+        {/* Registration deadline & Price row */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.78rem', alignItems: 'center' }}>
+          {event.registrationDeadline && (
+            <span style={{ color: status === 'reg_closed' || status === 'ended' ? 'hsl(0, 60%, 55%)' : 'hsl(140, 60%, 50%)', fontWeight: 600 }}>
+              📝 Reg. {status === 'reg_closed' || status === 'ended' ? 'closed' : `till ${formatDateTime(event.registrationDeadline)}`}
+            </span>
+          )}
+          {event.price ? (
+            <span style={{ fontWeight: 700, color: 'hsl(var(--accent))' }}>
+              💰 {event.price === '0' || event.price.toLowerCase() === 'free' ? 'Free' : `₹${event.price}`}
+            </span>
+          ) : (
+            <span style={{ fontWeight: 600, color: 'hsl(140, 60%, 50%)' }}>🆓 Free</span>
+          )}
+        </div>
+
+        {isAdmin && !isOngoingSection && (
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto', paddingTop: '0.5rem', justifyContent: 'flex-end' }}>
+            <button
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  const res = await fetch(`/api/events/${event.id}/pin`, {
+                    method: 'PUT',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${token}`
+                    }
+                  });
+                  if (res.ok) {
+                    await fetchEvents();
+                  } else {
+                    const data = await res.json();
+                    alert(data.error || 'Failed to toggle pin.');
+                  }
+                } catch {
+                  alert('Network error toggling pin.');
+                }
+              }}
+              className="btn-promote"
+              style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}
+            >
+              {event.pinned ? '📍 Unpin' : '📌 Pin'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function CampusLife({ user, token, clubs = [], events = [], fetchClubs, fetchEvents }) {
   const isAdmin = user && user.role === 'admin';
   const isManager = user && (user.role === 'club_manager' || user.role === 'admin');
@@ -175,7 +407,6 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
   const [editingClub, setEditingClub] = useState(null);
   const [selectedClubDetails, setSelectedClubDetails] = useState(null);
   const [selectedEventDetails, setSelectedEventDetails] = useState(null);
-  const [hoveredEventId, setHoveredEventId] = useState(null);
 
   // ─── Data Fetching ───────────────────────────────────────────────
   const fetchRecruitments = async () => {
@@ -402,6 +633,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
       const body = {
         description: clubData.description,
         icon: finalIcon,
+        category: clubData.category,
         memberCount: clubData.memberCount,
         socialLinks: {
           instagram: clubData.socialLinks?.instagram ? ensureAbsoluteUrl(clubData.socialLinks.instagram) : '',
@@ -635,81 +867,68 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
                 const catColor = getCategoryColor(club.category);
                 const canEditClub = isAdmin || (user && user.role === 'club_manager' && user.clubId === club.id);
                 return (
-                  <div 
-                    key={club.id} 
-                    className="glass-card club-card" 
+                  <div
+                    key={club.id}
+                    className="club-flip-wrapper"
+                    style={{ '--cat-color': catColor }}
                     onClick={() => setSelectedClubDetails(club)}
-                    style={{ '--cat-color': catColor, display: 'flex', flexDirection: 'column', cursor: 'pointer' }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                      <ClubLogo club={club} category={club.category} size={48} borderRadius="12px" />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <h3 style={{
-                          fontSize: '1.05rem', fontWeight: 700,
-                          color: 'hsl(var(--text-primary))',
-                          margin: 0,
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-                        }}>
-                          {club.name}
-                        </h3>
-                        <span style={{
-                          display: 'inline-block',
-                          fontSize: '0.7rem', fontWeight: 600,
-                          padding: '2px 8px',
-                          borderRadius: '999px',
-                          background: `hsla(${catColor} / 0.15)`,
-                          color: `hsl(${catColor})`,
-                          marginTop: '4px',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.04em'
-                        }}>
-                          {club.category}
-                        </span>
-                      </div>
-                    </div>
-                    <p style={{
-                      fontSize: '0.85rem', lineHeight: 1.55,
-                      color: 'hsl(var(--text-secondary))',
-                      marginBottom: '0.75rem',
-                      display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden'
-                    }}>
-                      {club.description}
-                    </p>
+                    <div className="club-flip-inner">
 
-                    {club.socialLinks && (club.socialLinks.instagram || club.socialLinks.linkedin) && (
-                      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', fontSize: '0.8rem' }}>
-                        {club.socialLinks.instagram && (
-                          <a href={club.socialLinks.instagram} target="_blank" rel="noopener noreferrer" style={{ color: 'hsl(var(--text-muted))', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>
-                            📸 Instagram
-                          </a>
-                        )}
-                        {club.socialLinks.instagram && club.socialLinks.linkedin && <span style={{ color: 'hsla(var(--border-glass))' }}>|</span>}
-                        {club.socialLinks.linkedin && (
-                          <a href={club.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" style={{ color: 'hsl(var(--text-muted))', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>
-                            🔗 LinkedIn
-                          </a>
-                        )}
+                      {/* ── FRONT: logo + name only ── */}
+                      <div className="club-flip-front">
+                        <ClubLogo club={club} category={club.category} size={72} borderRadius="18px" />
+                        <p className="cf-name">{club.name}</p>
+                        <span className="cf-hint">hover to learn more ✦</span>
                       </div>
-                    )}
 
-                    <div style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      borderTop: '1px solid hsla(var(--border-glass))',
-                      paddingTop: '0.6rem', marginTop: 'auto'
-                    }}>
-                      <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}>
-                        👥 {club.memberCount} members
-                      </span>
-                      {canEditClub && (
-                        <button 
-                          type="button" 
-                          onClick={(e) => { e.stopPropagation(); handleStartEditClub(club); }}
-                          className="btn-promote"
-                          style={{ padding: '0.25rem 0.55rem', fontSize: '0.75rem' }}
-                        >
-                          ⚙️ Edit Club
-                        </button>
-                      )}
+                      {/* ── BACK: all the details ── */}
+                      <div className="club-flip-back">
+                        {/* Mini header */}
+                        <div className="cf-back-header">
+                          <ClubLogo club={club} category={club.category} size={28} borderRadius="8px" />
+                          <p className="cf-back-name">{club.name}</p>
+                          <span className="cf-badge">{club.category}</span>
+                        </div>
+
+                        {/* Description */}
+                        <p className="cf-desc">{club.description}</p>
+
+                        {/* Footer: members + socials + edit */}
+                        <div className="cf-footer">
+                          <span className="cf-members">👥 {club.memberCount} members</span>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            {/* Social icons */}
+                            {club.socialLinks && (
+                              <div className="cf-social">
+                                {club.socialLinks.instagram && (
+                                  <a href={club.socialLinks.instagram} target="_blank" rel="noopener noreferrer" title="Instagram" onClick={e => e.stopPropagation()}>📸</a>
+                                )}
+                                {club.socialLinks.linkedin && (
+                                  <a href={club.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" title="LinkedIn" onClick={e => e.stopPropagation()}>🔗</a>
+                                )}
+                                {club.socialLinks.twitter && (
+                                  <a href={club.socialLinks.twitter} target="_blank" rel="noopener noreferrer" title="Twitter" onClick={e => e.stopPropagation()}>🐦</a>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Edit button (admins / club managers) */}
+                            {canEditClub && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); handleStartEditClub(club); }}
+                                className="btn-promote"
+                                style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
+                              >
+                                ⚙️ Edit
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
                     </div>
                   </div>
                 );
@@ -751,81 +970,18 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
                 🔴 Ongoing / Today's Events
               </h3>
               <div className="event-masonry-grid">
-                {ongoingEvents.map(event => {
-                  const catColor = getCategoryColor(event.category);
-                  const eventClub = clubs.find(c => c.id === event.clubId);
-                  const clubName = eventClub ? eventClub.name : event.clubName || 'Unknown Club';
-                  return (
-                    <div
-                      key={`ongoing-${event.id}`}
-                      className="glass-card event-card event-masonry-card"
-                      onClick={() => setSelectedEventDetails(event)}
-                      onMouseEnter={() => setHoveredEventId(event.id)}
-                      onMouseLeave={() => setHoveredEventId(null)}
-                      style={{
-                        cursor: 'pointer', position: 'relative',
-                        border: '1px solid hsla(0, 80%, 55%, 0.5)',
-                        boxShadow: '0 0 20px hsla(0, 80%, 55%, 0.15), inset 0 0 20px hsla(0, 80%, 55%, 0.03)',
-                        animation: 'pulse-border 3s ease-in-out infinite'
-                      }}
-                    >
-                      <div style={{
-                        position: 'absolute', top: '0.75rem', left: '0.75rem',
-                        background: 'linear-gradient(135deg, hsl(210, 80%, 55%), hsl(190, 80%, 50%))',
-                        color: 'white', fontSize: '0.65rem', fontWeight: 800,
-                        padding: '0.25rem 0.5rem', borderRadius: '4px', zIndex: 5,
-                        textTransform: 'uppercase', letterSpacing: '0.05em'
-                      }}>
-                        🔵 Happening Now
-                      </div>
-                      {event.posterUrl && (
-                        (event.posterUrls && event.posterUrls.length > 1) ? (
-                          <div style={{ height: '200px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
-                            <BounceCards
-                              className="event-card-bounce"
-                              images={event.posterUrls}
-                              containerWidth="100%"
-                              containerHeight={200}
-                              animationDelay={0.3}
-                              animationStagger={0.05}
-                              easeType="elastic.out(1, 0.7)"
-                              transformStyles={eventTransformStyles}
-                              enableHover={true}
-                              pushOffset={35}
-                              isHovered={hoveredEventId === event.id}
-                            />
-                          </div>
-                        ) : (
-                          <img
-                            src={event.posterUrl}
-                            alt={event.title}
-                            style={{
-                              width: '100%',
-                              height: 'auto',
-                              display: 'block',
-                              borderBottom: '1px solid hsla(var(--border-glass))'
-                            }}
-                            onError={(e) => { e.target.style.display = 'none'; }}
-                          />
-                        )
-                      )}
-                      <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', flexGrow: 1, gap: '0.5rem' }}>
-                        <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0 }}>{event.title}</h3>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 600, color: `hsl(${catColor})` }}>
-                          <ClubLogo club={eventClub} category={event.category} size={24} borderRadius="50%" />
-                          <span>{clubName}</span>
-                        </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}>
-                          {event.venue && <span>📍 {event.venue}</span>}
-                          {event.eventEndDateTime && <span>🏁 Ends {formatDateTime(event.eventEndDateTime)}</span>}
-                        </div>
-                        {(event.price && event.price !== '0' && event.price !== 'free') && (
-                          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'hsl(var(--accent))' }}>💰 ₹{event.price}</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                {ongoingEvents.map(event => (
+                  <EventCardItem
+                    key={`ongoing-${event.id}`}
+                    event={event}
+                    clubs={clubs}
+                    token={token}
+                    isAdmin={isAdmin}
+                    fetchEvents={fetchEvents}
+                    setSelectedEventDetails={setSelectedEventDetails}
+                    isOngoingSection={true}
+                  />
+                ))}
               </div>
             </div>
           )}
@@ -833,165 +989,18 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
           {/* ── All Events Grid ── */}
           {sortedEvents.length > 0 ? (
             <div className="event-masonry-grid">
-              {sortedEvents.map(event => {
-                const daysLeft = getDaysRemaining(event.registrationDeadline || event.date);
-                const catColor = getCategoryColor(event.category);
-                const eventClub = clubs.find(c => c.id === event.clubId);
-                const clubName = eventClub ? eventClub.name : event.clubName || 'Unknown Club';
-                const status = getEventStatus(event);
-                const badge = getStatusBadge(status);
-                const opacity = getCardOpacity(status);
-
-                return (
-                  <div 
-                    key={event.id} 
-                    className="glass-card event-card event-masonry-card"
-                    onClick={() => setSelectedEventDetails(event)}
-                    onMouseEnter={() => setHoveredEventId(event.id)}
-                    onMouseLeave={() => setHoveredEventId(null)}
-                    style={{ 
-                      cursor: 'pointer',
-                      position: 'relative',
-                      opacity: opacity,
-                      transition: 'opacity 0.3s ease, box-shadow 0.3s ease',
-                      border: event.pinned ? '1px solid hsla(var(--primary) / 0.5)' : '1px solid hsla(var(--border-glass))',
-                      boxShadow: event.pinned ? '0 0 15px hsla(var(--primary) / 0.15)' : 'none'
-                    }}
-                  >
-                    {/* Pinned Badge */}
-                    {event.pinned && (
-                      <div style={{
-                        position: 'absolute', top: '0.75rem', left: '0.75rem',
-                        background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))',
-                        color: 'white', fontSize: '0.65rem', fontWeight: 800,
-                        padding: '0.25rem 0.5rem', borderRadius: '4px', zIndex: 5,
-                        textTransform: 'uppercase', letterSpacing: '0.05em'
-                      }}>
-                        📌 Featured
-                      </div>
-                    )}
-
-                    {/* Status Badge */}
-                    <div style={{
-                      position: 'absolute', top: '0.75rem', right: '0.75rem',
-                      background: `hsla(${badge.bg}, 0.15)`,
-                      border: `1px solid hsla(${badge.color}, 0.4)`,
-                      color: `hsl(${badge.color})`,
-                      fontSize: '0.62rem', fontWeight: 700,
-                      padding: '0.2rem 0.45rem', borderRadius: '4px', zIndex: 5,
-                      textTransform: 'uppercase', letterSpacing: '0.03em'
-                    }}>
-                      {badge.text}
-                    </div>
-
-                     {event.posterUrl && (
-                       (event.posterUrls && event.posterUrls.length > 1 && (status === 'ongoing' || status === 'reg_open' || status === 'upcoming')) ? (
-                         <div style={{ height: '200px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
-                           <BounceCards
-                             className="event-card-bounce"
-                             images={event.posterUrls}
-                             containerWidth="100%"
-                             containerHeight={200}
-                             animationDelay={0.3}
-                             animationStagger={0.05}
-                             easeType="elastic.out(1, 0.7)"
-                             transformStyles={eventTransformStyles}
-                             enableHover={true}
-                             pushOffset={35}
-                             isHovered={hoveredEventId === event.id}
-                           />
-                         </div>
-                       ) : (
-                         <img
-                           src={event.posterUrl}
-                           alt={event.title}
-                           style={{
-                             width: '100%',
-                             height: 'auto',
-                             display: 'block',
-                             borderBottom: '1px solid hsla(var(--border-glass))'
-                           }}
-                           onError={(e) => { e.target.style.display = 'none'; }}
-                         />
-                       )
-                     )}
-                    <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', flexGrow: 1, gap: '0.5rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.2rem' }}>
-                        <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0, flex: 1 }}>
-                          {event.title}
-                        </h3>
-                        {daysLeft !== null && status !== 'ended' && (
-                          <span className="countdown-badge">
-                            ⏰ {daysLeft}d left
-                          </span>
-                        )}
-                      </div>
-
-                      <div style={{
-                        display: 'flex', alignItems: 'center', gap: '0.5rem',
-                        marginBottom: '0.3rem', fontSize: '0.8rem', fontWeight: 600,
-                        color: `hsl(${catColor})`
-                      }}>
-                        <ClubLogo club={eventClub} category={event.category} size={24} borderRadius="50%" />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{clubName}</span>
-                      </div>
-
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginBottom: '0.3rem' }}>
-                        {event.eventStartDateTime && <span>🚀 {formatDateTime(event.eventStartDateTime)}</span>}
-                        {!event.eventStartDateTime && event.date && <span>📅 {formatDate(event.date)}</span>}
-                        {event.venue && <span>📍 {event.venue}</span>}
-                      </div>
-
-                      {/* Registration deadline & Price row */}
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.78rem', alignItems: 'center' }}>
-                        {event.registrationDeadline && (
-                          <span style={{ color: status === 'reg_closed' || status === 'ended' ? 'hsl(0, 60%, 55%)' : 'hsl(140, 60%, 50%)', fontWeight: 600 }}>
-                            📝 Reg. {status === 'reg_closed' || status === 'ended' ? 'closed' : `till ${formatDateTime(event.registrationDeadline)}`}
-                          </span>
-                        )}
-                        {event.price ? (
-                          <span style={{ fontWeight: 700, color: 'hsl(var(--accent))' }}>
-                            💰 {event.price === '0' || event.price.toLowerCase() === 'free' ? 'Free' : `₹${event.price}`}
-                          </span>
-                        ) : (
-                          <span style={{ fontWeight: 600, color: 'hsl(140, 60%, 50%)' }}>🆓 Free</span>
-                        )}
-                      </div>
-
-                      {isAdmin && (
-                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto', paddingTop: '0.5rem', justifyContent: 'flex-end' }}>
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              try {
-                                const res = await fetch(`/api/events/${event.id}/pin`, {
-                                  method: 'PUT',
-                                  headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${token}`
-                                  }
-                                });
-                                if (res.ok) {
-                                  await fetchEvents();
-                                } else {
-                                  const data = await res.json();
-                                  alert(data.error || 'Failed to toggle pin.');
-                                }
-                              } catch {
-                                alert('Network error toggling pin.');
-                              }
-                            }}
-                            className="btn-promote"
-                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}
-                          >
-                            {event.pinned ? '📍 Unpin' : '📌 Pin'}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+              {sortedEvents.map(event => (
+                <EventCardItem
+                  key={event.id}
+                  event={event}
+                  clubs={clubs}
+                  token={token}
+                  isAdmin={isAdmin}
+                  fetchEvents={fetchEvents}
+                  setSelectedEventDetails={setSelectedEventDetails}
+                  isOngoingSection={false}
+                />
+              ))}
             </div>
           ) : (
             <div className="empty-state">
@@ -1597,6 +1606,7 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, on
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function EditClubModal({ club, onClose, onSubmit, loading }) {
   const [description, setDescription] = useState(club.description || '');
+  const [category, setCategory] = useState(club.category || 'tech');
   const [iconMode, setIconMode] = useState('url'); // 'url' | 'file'
   const [iconUrl, setIconUrl] = useState(() => {
     return club.icon || '';
@@ -1613,6 +1623,7 @@ function EditClubModal({ club, onClose, onSubmit, loading }) {
     onSubmit({
       id: club.id,
       description: description.trim(),
+      category: category,
       iconMode,
       iconUrl: iconMode === 'url' ? iconUrl.trim() : '',
       iconFile: iconMode === 'file' ? iconFile : null,
@@ -1647,6 +1658,28 @@ function EditClubModal({ club, onClose, onSubmit, loading }) {
               required
               rows={4}
             />
+          </div>
+
+          <div className="form-group">
+            <label>Club Category *</label>
+            <select
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              required
+              style={{
+                width: '100%', padding: '0.85rem 1rem', background: 'rgba(15, 23, 42, 0.5)',
+                border: '1px solid hsla(var(--border-glass))', borderRadius: '8px', color: '#fff'
+              }}
+            >
+              <option value="tech">Tech</option>
+              <option value="music">Music & Arts</option>
+              <option value="speakers">Speakers</option>
+              <option value="motivation">Social & Motivation</option>
+              <option value="anime">Anime</option>
+              <option value="cultural">Cultural</option>
+              <option value="robotics">Robotics</option>
+              <option value="sports">Sports</option>
+            </select>
           </div>
 
           <div className="form-group">
@@ -2445,7 +2478,8 @@ function CreateClubModal({ onSubmit, onClose, loading, error }) {
                 <option value="music">Music & Arts</option>
                 <option value="speakers">Speakers</option>
                 <option value="motivation">Social & Motivation</option>
-                <option value="anime">Anime & Culture</option>
+                <option value="anime">Anime</option>
+                <option value="cultural">Cultural</option>
                 <option value="robotics">Robotics</option>
                 <option value="sports">Sports</option>
               </select>
