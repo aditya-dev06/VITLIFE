@@ -1948,15 +1948,47 @@ function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
                 >➕ Add Another Poster URL</button>
               </div>
             ) : (
-              <input type="file" accept="image/jpeg,image/png,image/gif,image/webp"
-                multiple
-                onChange={e => setPosterFiles(Array.from(e.target.files || []))}
-                style={{
-                  width: '100%', padding: '0.5rem', borderRadius: '8px',
-                  background: 'hsl(var(--bg-card))', border: '1px solid hsla(var(--border-glass))',
-                  color: 'hsl(var(--text-primary))', fontSize: '0.85rem'
-                }}
-              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {posterFiles.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    {posterFiles.map((file, idx) => (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid hsla(var(--border-glass))' }}>
+                        <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '80%' }}>
+                          🖼️ {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                        </span>
+                        <button type="button" onClick={() => setPosterFiles(posterFiles.filter((_, i) => i !== idx))}
+                          style={{
+                            background: 'transparent', border: 'none', color: 'rgb(248, 113, 113)', cursor: 'pointer', fontSize: '0.9rem'
+                          }}
+                        >✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <input type="file" accept="image/jpeg,image/png,image/gif,image/webp"
+                  multiple
+                  onChange={e => {
+                    const files = Array.from(e.target.files || []);
+                    const validFiles = [];
+                    for (const file of files) {
+                      if (file.size > 5 * 1024 * 1024) {
+                        alert(`File "${file.name}" exceeds the 5MB size limit.`);
+                      } else {
+                        validFiles.push(file);
+                      }
+                    }
+                    if (validFiles.length > 0) {
+                      setPosterFiles([...posterFiles, ...validFiles]);
+                    }
+                    e.target.value = '';
+                  }}
+                  style={{
+                    width: '100%', padding: '0.5rem', borderRadius: '8px',
+                    background: 'hsl(var(--bg-card))', border: '1px solid hsla(var(--border-glass))',
+                    color: 'hsl(var(--text-primary))', fontSize: '0.85rem'
+                  }}
+                />
+              </div>
             )}
           </div>
 
