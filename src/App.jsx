@@ -559,7 +559,6 @@ function App() {
               <RotatingText
                 texts={['HON', 'LIFE']}
                 mainClassName="brand-rotating-text"
-                elementLevelClassName="logo-gradient-text"
                 staggerFrom="last"
                 initial={{ y: "100%", opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -567,7 +566,7 @@ function App() {
                 staggerDuration={0.025}
                 splitLevelClassName="overflow-hidden"
                 transition={{ type: "spring", damping: 30, stiffness: 400 }}
-                rotationInterval={2500}
+                rotationInterval={4500}
               />
             </div>
             <div className="branch-badge">
