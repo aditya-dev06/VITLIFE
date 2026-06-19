@@ -39,6 +39,9 @@ if (fs.existsSync(envPath)) {
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust Vercel's proxy for accurate client IP retrieval (express-rate-limit compliance)
+app.set('trust proxy', 1);
+
 app.use(compression());
 app.use(cors());
 app.use(express.json());
