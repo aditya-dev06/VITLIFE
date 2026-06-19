@@ -10,6 +10,7 @@ import { MongoClient } from 'mongodb';
 import multer from 'multer';
 import nodemailer from 'nodemailer';
 import dns from 'dns';
+import { rateLimit } from 'express-rate-limit';
 
 // Force Node.js to prefer IPv4 over IPv6 to resolve connection unreachable errors on IPv4-only networks like Railway
 dns.setDefaultResultOrder('ipv4first');
@@ -41,6 +42,25 @@ const PORT = process.env.PORT || 5000;
 app.use(compression());
 app.use(cors());
 app.use(express.json());
+
+// Rate Limiting configuration to prevent DDoS and brute-force (CodeQL Compliance)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 150, // Limit each IP to 150 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' }
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 15, // Limit each IP to 15 auth requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts. Please try again after 15 minutes.' }
+});
+
+app.use('/api', apiLimiter);
 
 app.use((req, res, next) => {
   console.log(`[HTTP] ${req.method} ${req.url} - Auth: ${req.headers.authorization || 'None'}`);
@@ -169,7 +189,7 @@ const sendMailHelper = async (to, subject, text) => {
     console.log(`Email sent successfully to ${to}`);
     return true;
   } catch (err) {
-    console.error(`Nodemailer error sending to ${to}:`, err);
+    console.error("Nodemailer error sending to %s:", to, err);
     // Only set unhealthy on connection/auth errors
     const isConnectionOrAuthError = err.code === 'ECONNREFUSED' || err.code === 'EAUTH' || err.responseCode >= 500;
     if (isConnectionOrAuthError) {
@@ -1105,7 +1125,7 @@ app.get('/api/db-status', (req, res) => {
 // ================= AUTH ROUTES =================
 
 // 1. Register User (with email verification support & unverified recycling)
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
     if (!smtpHealthy) {
       return res.status(503).json({ error: '🔧 Registration is temporarily unavailable due to maintenance. Please try again later.' });
@@ -1193,7 +1213,7 @@ app.post('/api/auth/register', async (req, res) => {
       );
       console.log(`Verification email sent successfully to ${lowerEmail}`);
     } catch (err) {
-      console.error(`Background email sending failed to ${lowerEmail}:`, err.message);
+      console.error("Background email sending failed to %s:", lowerEmail, err.message);
       // Fallback logging for developers
       console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
       console.log(`TO: ${lowerEmail}`);
@@ -1209,7 +1229,7 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 // Verification Endpoint
-app.post('/api/auth/verify', authRateLimiter(5, 15 * 60 * 1000), async (req, res) => {
+app.post('/api/auth/verify', authLimiter, authRateLimiter(5, 15 * 60 * 1000), async (req, res) => {
   try {
     const { email, code } = req.body;
     if (!email || !code) {
@@ -1253,7 +1273,7 @@ app.post('/api/auth/verify', authRateLimiter(5, 15 * 60 * 1000), async (req, res
 });
 
 // Resend Verification Code Endpoint
-app.post('/api/auth/resend-code', authRateLimiter(5, 15 * 60 * 1000), async (req, res) => {
+app.post('/api/auth/resend-code', authLimiter, authRateLimiter(5, 15 * 60 * 1000), async (req, res) => {
   try {
     if (!smtpHealthy) {
       return res.status(503).json({ error: '🔧 Email service is temporarily unavailable. Please try again later.' });
@@ -1300,7 +1320,7 @@ app.post('/api/auth/resend-code', authRateLimiter(5, 15 * 60 * 1000), async (req
       );
       console.log(`Resend verification email sent successfully to ${lowerEmail}`);
     } catch (err) {
-      console.error(`Background resend email sending failed to ${lowerEmail}:`, err.message);
+      console.error("Background resend email sending failed to %s:", lowerEmail, err.message);
       // Fallback logging for developers
       console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
       console.log(`TO: ${lowerEmail}`);
@@ -1316,7 +1336,7 @@ app.post('/api/auth/resend-code', authRateLimiter(5, 15 * 60 * 1000), async (req
 });
 
 // 2. Login User (with verified checking)
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -1374,7 +1394,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // Forgot Password Request Endpoint
-app.post('/api/auth/forgot-password', authRateLimiter(5, 15 * 60 * 1000), async (req, res) => {
+app.post('/api/auth/forgot-password', authLimiter, authRateLimiter(5, 15 * 60 * 1000), async (req, res) => {
   try {
     if (!smtpHealthy) {
       return res.status(503).json({ error: '🔧 Password reset is temporarily unavailable due to maintenance. Please try again later.' });
@@ -1419,7 +1439,7 @@ app.post('/api/auth/forgot-password', authRateLimiter(5, 15 * 60 * 1000), async 
       );
       console.log(`Password reset email sent successfully to ${lowerEmail}`);
     } catch (err) {
-      console.error(`Background reset email sending failed to ${lowerEmail}:`, err.message);
+      console.error("Background reset email sending failed to %s:", lowerEmail, err.message);
       // Fallback logging for developers
       console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
       console.log(`TO: ${lowerEmail}`);
@@ -1435,7 +1455,7 @@ app.post('/api/auth/forgot-password', authRateLimiter(5, 15 * 60 * 1000), async 
 });
 
 // Reset Password Execution Endpoint
-app.post('/api/auth/reset-password', authRateLimiter(5, 15 * 60 * 1000), async (req, res) => {
+app.post('/api/auth/reset-password', authLimiter, authRateLimiter(5, 15 * 60 * 1000), async (req, res) => {
   try {
     const { email, code, newPassword } = req.body;
     if (!email || !code || !newPassword) {
