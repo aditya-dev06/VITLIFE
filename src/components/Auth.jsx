@@ -79,6 +79,7 @@ const Auth = ({ onLoginSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [smtpDown, setSmtpDown] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
 
   useEffect(() => {
     if (email) {
@@ -147,6 +148,11 @@ const Auth = ({ onLoginSuccess }) => {
 
     if (!email || !password || (isSignUp && !name)) {
       setError('Please fill in all required fields.');
+      return;
+    }
+
+    if (isSignUp && !consentChecked) {
+      setError('You must agree to the Terms & Conditions and Privacy Policy to register.');
       return;
     }
 
@@ -696,6 +702,21 @@ const Auth = ({ onLoginSuccess }) => {
                   </div>
                 )}
               </>
+            )}
+
+            {isSignUp && (
+              <div className="form-group-checkbox" style={{ marginTop: '1.25rem', alignItems: 'flex-start' }}>
+                <input 
+                  type="checkbox" 
+                  id="consent-check" 
+                  checked={consentChecked} 
+                  onChange={(e) => setConsentChecked(e.target.checked)} 
+                  required
+                />
+                <label htmlFor="consent-check" style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', lineHeight: '1.4' }}>
+                  I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'hsl(var(--secondary))', textDecoration: 'underline' }}>Terms & Conditions</a> and consent to data sharing/processing as per the <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'hsl(var(--secondary))', textDecoration: 'underline' }}>Privacy Policy</a>.
+                </label>
+              </div>
             )}
 
             <button type="submit" className="btn-primary auth-submit-btn" disabled={loading}>
