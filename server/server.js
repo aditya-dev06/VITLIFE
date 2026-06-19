@@ -42,6 +42,16 @@ app.use(compression());
 app.use(cors());
 app.use(express.json());
 
+app.use((req, res, next) => {
+  console.log(`[HTTP] ${req.method} ${req.url} - Auth: ${req.headers.authorization || 'None'}`);
+  const originalJson = res.json;
+  res.json = function(body) {
+    console.log(`[HTTP RESPONSE] ${req.method} ${req.url} -> Status: ${res.statusCode}`);
+    return originalJson.call(this, body);
+  };
+  next();
+});
+
 const DATA_DIR = path.join(__dirname, 'data');
 const OPPORTUNITIES_FILE = path.join(DATA_DIR, 'opportunities.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
@@ -126,7 +136,7 @@ if (smtpHost && smtpUser && smtpPass) {
   });
 }
 
-let smtpHealthy = false;
+let smtpHealthy = transporter ? true : false;
 let smtpError = null;
 if (transporter) {
   transporter.verify()

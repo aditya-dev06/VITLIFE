@@ -6,9 +6,9 @@
   --font-body: 'Plus Jakarta Sans', sans-serif;
 
   /* HSL Tailored Color Palette */
-  --bg-deep: 224 25% 6%;
-  --bg-card: 224 25% 10%;
-  --bg-card-hover: 224 25% 14%;
+  --bg-deep: 224 22% 13%;
+  --bg-card: 224 20% 18%;
+  --bg-card-hover: 224 20% 23%;
   
   --primary: 263 90% 65%; /* Sleek Violet */
   --primary-glow: 263 90% 65% / 0.15;
@@ -41,9 +41,9 @@ body {
   overflow-x: hidden;
   min-height: 100vh;
   background-image: 
-    radial-gradient(at 0% 0%, hsla(263, 80%, 30%, 0.15) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, hsla(199, 80%, 30%, 0.12) 0px, transparent 50%),
-    radial-gradient(at 50% 50%, hsla(326, 80%, 30%, 0.05) 0px, transparent 50%);
+    radial-gradient(at 0% 0%, hsla(263, 80%, 40%, 0.22) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, hsla(199, 80%, 40%, 0.18) 0px, transparent 50%),
+    radial-gradient(at 50% 50%, hsla(326, 80%, 40%, 0.10) 0px, transparent 50%);
   background-attachment: fixed;
 }
 
@@ -75,7 +75,7 @@ button, input, textarea, select {
 
 /* Glassmorphism Utility Classes */
 .glass-panel {
-  background: rgba(15, 23, 42, 0.65);
+  background: hsla(var(--bg-card) / 0.75);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid hsla(var(--border-glass));
@@ -84,7 +84,7 @@ button, input, textarea, select {
 }
 
 .glass-card {
-  background: rgba(30, 41, 59, 0.45);
+  background: hsla(var(--bg-card-hover) / 0.55);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid hsla(var(--border-glass));
@@ -93,7 +93,7 @@ button, input, textarea, select {
 }
 
 .glass-card:hover {
-  background: rgba(30, 41, 59, 0.7);
+  background: hsla(var(--bg-card-hover) / 0.85);
   transform: translateY(-4px);
   border-color: hsla(var(--primary) / 0.3);
   box-shadow: 0 10px 20px -5px hsla(var(--primary) / 0.2);
@@ -112,7 +112,7 @@ button, input, textarea, select {
   display: flex;
   flex-direction: column;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(10, 15, 30, 0.35);
+  background: hsla(var(--bg-card) / 0.55);
   backdrop-filter: blur(30px) saturate(180%);
   -webkit-backdrop-filter: blur(30px) saturate(180%);
   position: fixed;
