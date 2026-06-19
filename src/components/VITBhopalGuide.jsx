@@ -215,7 +215,7 @@ const VITBhopalGuide = ({ isVitBhopal, userSemester = 1, userProgram = '' }) => 
               <strong>Containerization (Docker):</strong> Ensure your environment runs consistently on any server by writing a Dockerfile for your model service.
             </li>
             <li className="guide-tip">
-              <strong>Cloud Hosting:</strong> Deploy simple web applications on free tiers of Render, Hugging Face Spaces, or Koyeb to showcase live interactive demos.
+              <strong>Cloud Hosting:</strong> Deploy simple web applications on free tiers of Hugging Face Spaces or Koyeb to showcase live interactive demos.
             </li>
           </ul>
         </div>

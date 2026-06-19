@@ -12,7 +12,7 @@ import nodemailer from 'nodemailer';
 import dns from 'dns';
 import { rateLimit } from 'express-rate-limit';
 
-// Force Node.js to prefer IPv4 over IPv6 to resolve connection unreachable errors on IPv4-only networks like Railway
+// Force Node.js to prefer IPv4 over IPv6 to resolve connection unreachable errors on IPv4-only networks
 dns.setDefaultResultOrder('ipv4first');
 
 const __filename = fileURLToPath(import.meta.url);
