@@ -2397,6 +2397,18 @@ app.get('/uploads/:filename', async (req, res) => {
   const { filename } = req.params;
   // Sanitize the filename to prevent path traversal
   const safeFilename = path.basename(filename);
+  const filePath = path.resolve(UPLOADS_DIR, safeFilename);
+
+  // Secure path validation
+  if (!filePath.startsWith(path.resolve(UPLOADS_DIR))) {
+    return res.status(403).json({ error: 'Access denied.' });
+  }
+
+  // Local disk cache hit check
+  if (fs.existsSync(filePath)) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+    return res.sendFile(filePath);
+  }
 
   if (dbConnectingPromise) await dbConnectingPromise;
   if (db) {
@@ -2404,6 +2416,14 @@ app.get('/uploads/:filename', async (req, res) => {
       const fileDoc = await db.collection('uploads').findOne({ filename: safeFilename });
       if (fileDoc) {
         const imgBuffer = Buffer.from(fileDoc.data, 'base64');
+
+        // Write to local disk cache to optimize future requests
+        try {
+          fs.writeFileSync(filePath, imgBuffer);
+        } catch (writeErr) {
+          console.error("Failed to write to local uploads cache:", writeErr);
+        }
+
         res.setHeader('Content-Type', fileDoc.contentType || 'image/jpeg');
         res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
         return res.send(imgBuffer);
@@ -2411,16 +2431,6 @@ app.get('/uploads/:filename', async (req, res) => {
     } catch (dbErr) {
       console.error("MongoDB Atlas retrieve upload error:", dbErr);
     }
-  }
-
-  // Local fallback: serve from disk if it exists
-  const filePath = path.resolve(UPLOADS_DIR, safeFilename);
-  if (!filePath.startsWith(path.resolve(UPLOADS_DIR))) {
-    return res.status(403).json({ error: 'Access denied.' });
-  }
-  if (fs.existsSync(filePath)) {
-    res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
-    return res.sendFile(filePath);
   }
 
   res.status(404).json({ error: 'File not found.' });

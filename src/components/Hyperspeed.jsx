@@ -418,6 +418,11 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
         this.onWindowResize = this.onWindowResize.bind(this);
         window.addEventListener('resize', this.onWindowResize);
 
+        this.paused = false;
+        this.isIntersecting = true;
+        this.onVisibilityChange = this.onVisibilityChange.bind(this);
+        document.addEventListener('visibilitychange', this.onVisibilityChange);
+
         if (container.offsetWidth > 0 && container.offsetHeight > 0) {
           this.hasValidSize = true;
         }
@@ -617,6 +622,7 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
           this.composer.dispose();
         }
 
+        document.removeEventListener('visibilitychange', this.onVisibilityChange);
         window.removeEventListener('resize', this.onWindowResize);
         if (this.container) {
           this.container.removeEventListener('mousedown', this.onMouseDown);
@@ -630,6 +636,29 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
         }
       }
 
+      onVisibilityChange() {
+        if (document.hidden) {
+          this.pause();
+        } else {
+          this.resume();
+        }
+      }
+
+      pause() {
+        this.paused = true;
+        if (this.clock) this.clock.stop();
+      }
+
+      resume() {
+        if (this.disposed) return;
+        if (document.hidden || !this.isIntersecting) return;
+        if (this.paused) {
+          this.paused = false;
+          if (this.clock) this.clock.start();
+          this.tick();
+        }
+      }
+
       setSize(width, height, updateStyles) {
         if (width <= 0 || height <= 0) {
           this.hasValidSize = false;
@@ -640,7 +669,7 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
       }
 
       tick() {
-        if (this.disposed) return;
+        if (this.disposed || this.paused || document.hidden) return;
 
         if (!this.hasValidSize) {
           const w = this.container.offsetWidth;
@@ -1171,7 +1200,23 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
     appRef.current = myApp;
     myApp.loadAssets().then(myApp.init);
 
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (appRef.current) {
+          appRef.current.isIntersecting = entry.isIntersecting;
+          if (entry.isIntersecting) {
+            appRef.current.resume();
+          } else {
+            appRef.current.pause();
+          }
+        }
+      },
+      { threshold: 0.05 }
+    );
+    observer.observe(container);
+
     return () => {
+      observer.disconnect();
       if (appRef.current) {
         appRef.current.dispose();
         appRef.current = null;

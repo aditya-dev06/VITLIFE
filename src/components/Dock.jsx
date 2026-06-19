@@ -5,9 +5,50 @@ import { Children, cloneElement, useEffect, useMemo, useRef, useState } from 're
 
 import './Dock.css';
 
-function DockItem({ children, className = '', onClick, mouseX, spring, distance, magnification, baseItemSize, label, isActive }) {
+function DockItem({ children, className = '', onClick, mouseX, spring, distance, magnification, baseItemSize, label, isActive, parentHovered }) {
   const ref = useRef(null);
   const isHovered = useMotionValue(0);
+  const isFirstRender = useRef(true);
+
+  // Auto reset local hover state if the parent coordinates clear out (Infinity)
+  useEffect(() => {
+    return mouseX.on('change', (val) => {
+      if (val === Infinity) {
+        isHovered.set(0);
+      }
+    });
+  }, [mouseX, isHovered]);
+
+  // Visual active highlight: trigger height expansion and magnification when tab changes via swiping
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    if (isActive && ref.current && parentHovered && mouseX) {
+      const currentMouseX = mouseX.get();
+      // Only execute programmatic hover highlight if there's no active physical interaction
+      if (currentMouseX === Infinity) {
+        const timer = setTimeout(() => {
+          if (!ref.current) return;
+          const rect = ref.current.getBoundingClientRect();
+          const centerX = rect.left + rect.width / 2;
+
+          parentHovered.set(1);
+          mouseX.set(centerX);
+
+          setTimeout(() => {
+            if (mouseX.get() === centerX) {
+              parentHovered.set(0);
+              mouseX.set(Infinity);
+            }
+          }, 500);
+        }, 50);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [isActive, mouseX, parentHovered]);
 
   const mouseDistance = useTransform(mouseX, val => {
     const rect = ref.current?.getBoundingClientRect() ?? {
@@ -100,6 +141,25 @@ export default function Dock({
 }) {
   const mouseX = useMotionValue(Infinity);
   const isHovered = useMotionValue(0);
+  const timeoutRef = useRef(null);
+
+  const resetDock = () => {
+    isHovered.set(0);
+    mouseX.set(Infinity);
+  };
+
+  const startResetTimeout = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      resetDock();
+    }, 1000); // 1-second fail-safe reset for mobile scroll/swipe drift
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   const maxHeight = useMemo(
     () => Math.max(dockHeight, magnification + magnification / 2 + 4),
@@ -114,16 +174,18 @@ export default function Dock({
         onMouseMove={({ pageX }) => {
           isHovered.set(1);
           mouseX.set(pageX);
+          startResetTimeout();
         }}
         onMouseLeave={() => {
-          isHovered.set(0);
-          mouseX.set(Infinity);
+          if (timeoutRef.current) clearTimeout(timeoutRef.current);
+          resetDock();
         }}
         onTouchStart={(e) => {
           const touch = e.touches[0];
           if (touch) {
             isHovered.set(1);
             mouseX.set(touch.pageX || touch.clientX);
+            startResetTimeout();
           }
         }}
         onTouchMove={(e) => {
@@ -131,15 +193,16 @@ export default function Dock({
           if (touch) {
             isHovered.set(1);
             mouseX.set(touch.pageX || touch.clientX);
+            startResetTimeout();
           }
         }}
         onTouchEnd={() => {
-          isHovered.set(0);
-          mouseX.set(Infinity);
+          if (timeoutRef.current) clearTimeout(timeoutRef.current);
+          resetDock();
         }}
         onTouchCancel={() => {
-          isHovered.set(0);
-          mouseX.set(Infinity);
+          if (timeoutRef.current) clearTimeout(timeoutRef.current);
+          resetDock();
         }}
         className={`dock-panel ${className}`}
         style={{ height: panelHeight }}
@@ -160,6 +223,7 @@ export default function Dock({
               baseItemSize={baseItemSize}
               label={item.label}
               isActive={isActive}
+              parentHovered={isHovered}
             >
               <DockIcon>{item.icon}</DockIcon>
               <DockLabel>{item.label}</DockLabel>
