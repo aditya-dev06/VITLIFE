@@ -1841,6 +1841,7 @@ app.post('/api/clubs', authenticate, requireAdmin, async (req, res) => {
 
     clubs.push(newClub);
     await saveClubs(clubs);
+    await logActivity(req.user.email, `create_club: ${clubId}`, req);
 
     res.json({ success: true, message: 'Club created successfully.', club: newClub });
   } catch (error) {
@@ -1858,6 +1859,7 @@ app.delete('/api/clubs/:id', authenticate, requireAdmin, async (req, res) => {
     }
 
     await deleteClub(id);
+    await logActivity(req.user.email, `delete_club: ${id}`, req);
     res.json({ success: true, message: 'Club deleted successfully.' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete club: ' + error.message });
@@ -2274,6 +2276,7 @@ app.post('/api/admin/promote', authenticate, requireAdmin, async (req, res) => {
     }
     
     await saveUser(email, targetUser);
+    await logActivity(req.user.email, `promote_user: ${email} to ${role}`, req);
     res.json({ success: true, message: `${targetUser.name} promoted to ${role === 'admin' ? 'Admin' : `Club Manager for ${clubId}`}` });
   } catch (error) {
     res.status(500).json({ error: 'Failed to promote user: ' + error.message });
@@ -2304,6 +2307,7 @@ app.post('/api/admin/demote', authenticate, requireAdmin, async (req, res) => {
     delete targetUser.clubId;
     
     await saveUser(email, targetUser);
+    await logActivity(req.user.email, `demote_user: ${email}`, req);
     res.json({ success: true, message: `${targetUser.name} demoted to Student` });
   } catch (error) {
     res.status(500).json({ error: 'Failed to demote user: ' + error.message });
