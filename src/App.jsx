@@ -229,6 +229,16 @@ function App() {
   const [clubs, setClubs] = useState([]);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [scrolled, setScrolled] = useState(false);
+  const [showAboutUs, setShowAboutUs] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
 
 
@@ -663,7 +673,10 @@ function App() {
                   onClick={() => setShowEditProfile(true)}
                   title="Edit Profile"
                 >
-                  ⚙️
+                  <svg stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="1.15em" width="1.15em" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                  </svg>
                 </button>
               )}
               <button 
@@ -671,7 +684,11 @@ function App() {
                 onClick={handleLogout}
                 title="Log Out"
               >
-                🚪
+                <svg stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="1.1em" width="1.1em" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
               </button>
             </div>
           </div>
@@ -685,6 +702,29 @@ function App() {
 
       {/* Main Panel View */}
       <main className="main-content">
+        {/* Floating Top Navigation Bar */}
+        <header className={`top-bar ${scrolled ? 'scrolled' : ''}`}>
+          <nav className="top-bar-nav">
+            <button className="top-bar-link" onClick={() => handleTabClick('dashboard')}>
+              🏠 Home
+            </button>
+            <button className="top-bar-link" onClick={() => setShowAboutUs(true)}>
+              ℹ️ About Us
+            </button>
+            <a 
+              href="https://github.com/aditya-dev06/opportunity_hub" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="top-bar-link"
+            >
+              <svg height="1.15em" width="1.15em" viewBox="0 0 16 16" fill="currentColor" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }}>
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
+              </svg>
+              GitHub
+            </a>
+          </nav>
+        </header>
+
         {/* Mobile Header */}
         <div className="mobile-header">
           <button className="mobile-menu-toggle" onClick={() => setMobileMenuOpen(true)}>
@@ -705,6 +745,46 @@ function App() {
           onClose={() => setShowEditProfile(false)}
           onSave={handleUpdateProfile}
         />
+      )}
+      {showAboutUs && (
+        <div className="modal-overlay" onClick={() => setShowAboutUs(false)} style={{ zIndex: 1000 }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                ℹ️ About Opportunity Hub
+              </h2>
+              <button onClick={() => setShowAboutUs(false)} style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'hsl(var(--text-secondary))',
+                cursor: 'pointer',
+                fontSize: '1.25rem'
+              }}>
+                ✕
+              </button>
+            </div>
+            <div style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.95rem', lineHeight: '1.6', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <p>
+                Welcome to <strong>Opportunity Hub</strong>, a premium, centralized ecosystem designed for student developers and tech enthusiasts. Our goal is to connect you with the latest events, hackathons, club recruitment, and skill roadmaps.
+              </p>
+              <p>
+                Built by a dedicated team at the <strong>VIT Life Developer Network</strong>. We focus on modern interactions, premium aesthetics, and responsive performance.
+              </p>
+              <div style={{ borderTop: '1px solid hsla(var(--border-glass))', paddingTop: '1rem', marginTop: '0.5rem' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'hsl(var(--text-primary))', marginBottom: '0.5rem' }}>Core Mission</h3>
+                <ul style={{ margin: 0, paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <li>Promote collaborative peer learning and mentorship</li>
+                  <li>Provide real-time visibility into club activities</li>
+                  <li>Enable interactive project showreels and skill maps</li>
+                </ul>
+              </div>
+              <div style={{ borderTop: '1px solid hsla(var(--border-glass))', paddingTop: '1rem', fontSize: '0.85rem', color: 'hsl(var(--text-muted))', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Version 2.1.0</span>
+                <span>© {new Date().getFullYear()} VIT Life Devs</span>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

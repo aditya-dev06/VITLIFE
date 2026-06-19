@@ -440,6 +440,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
   const [editingClub, setEditingClub] = useState(null);
   const [selectedClubDetails, setSelectedClubDetails] = useState(null);
   const [selectedEventDetails, setSelectedEventDetails] = useState(null);
+  const [selectedManagerClubId, setSelectedManagerClubId] = useState('');
 
   // ─── Data Fetching ───────────────────────────────────────────────
   const fetchRecruitments = async () => {
@@ -945,6 +946,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
     { key: 'events', label: '📅 Upcoming Events' },
     { key: 'active_events', label: '🔴 Active Events' },
     { key: 'recruitments', label: '📢 Recruitment' },
+    ...(isManager ? [{ key: 'manager', label: '💼 Manager Portal' }] : []),
     ...(isAdmin ? [{ key: 'admin', label: '⚙️ Admin' }] : [])
   ];
 
@@ -1086,14 +1088,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
             </div>
           )}
 
-          {editingClub && (
-            <EditClubModal
-              club={editingClub}
-              onClose={() => setEditingClub(null)}
-              onSubmit={handleSaveClub}
-              loading={formLoading}
-            />
-          )}
+          {/* EditClubModal moved globally to bottom of file */}
         </>
       )}
 
@@ -1330,6 +1325,24 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
         </>
       )}
 
+      {/* ═══════════════ TAB 5: MANAGER ═══════════════ */}
+      {activeSubTab === 'manager' && isManager && (
+        <ManagerPortal
+          user={user}
+          clubs={clubs}
+          events={events}
+          recruitments={recruitments}
+          onCreateEventClick={() => setShowCreateEvent(true)}
+          onCreateRecruitmentClick={() => setShowCreateRecruitment(true)}
+          onEditClubClick={(club) => setEditingClub(club)}
+          onDeleteEvent={handleDeleteEvent}
+          onDeleteRecruitment={handleDeleteRecruitment}
+          onEventClick={(evt) => setSelectedEventDetails(evt)}
+          selectedManagerClubId={selectedManagerClubId}
+          setSelectedManagerClubId={setSelectedManagerClubId}
+        />
+      )}
+
       {/* ═══════════════ TAB 4: ADMIN ═══════════════ */}
       {activeSubTab === 'admin' && isAdmin && (
         <AdminPanel
@@ -1364,6 +1377,15 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
           onDeleteEvent={handleDeleteEvent}
           onUpdateEvent={(updated) => setSelectedEventDetails(updated)}
           onUpdateEventSubmit={handleUpdateEvent}
+        />
+      )}
+
+      {editingClub && (
+        <EditClubModal
+          club={editingClub}
+          onClose={() => setEditingClub(null)}
+          onSubmit={handleSaveClub}
+          loading={formLoading}
         />
       )}
     </div>
@@ -3117,6 +3139,253 @@ function CreateClubModal({ onSubmit, onClose, loading, error }) {
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Club Manager Portal Component
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function ManagerPortal({ 
+  user, 
+  clubs, 
+  events, 
+  recruitments, 
+  onCreateEventClick, 
+  onCreateRecruitmentClick, 
+  onEditClubClick, 
+  onDeleteEvent, 
+  onDeleteRecruitment, 
+  onEventClick, 
+  selectedManagerClubId, 
+  setSelectedManagerClubId 
+}) {
+  const isAdmin = user && user.role === 'admin';
+  
+  // Find which club to manage
+  const activeClubId = isAdmin 
+    ? (selectedManagerClubId || (clubs[0]?.id || ''))
+    : user.clubId;
+
+  const club = clubs.find(c => c.id === activeClubId || c._id === activeClubId);
+
+  // Filter events and recruitments for this club
+  const clubEvents = events.filter(e => e.clubId === activeClubId);
+  const clubRecruitments = recruitments.filter(r => r.clubId === activeClubId);
+
+  return (
+    <div className="manager-portal-container" style={{ display: 'flex', flexDirection: 'column', gap: '2rem', animation: 'fadeIn 0.3s ease-out' }}>
+      {/* Club Selector for Admins */}
+      {isAdmin && (
+        <div className="glass-card" style={{ padding: '1.5rem', display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between', borderRadius: '12px' }}>
+          <div>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'hsl(var(--text-primary))' }}>🛡️ Admin Club Management</h3>
+            <p style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', margin: '0.25rem 0 0 0' }}>Select a club to view and manage its profile, events, and recruitments.</p>
+          </div>
+          <select 
+            value={activeClubId} 
+            onChange={(e) => setSelectedManagerClubId(e.target.value)}
+            className="form-input"
+            style={{ width: 'auto', minWidth: '220px', padding: '0.6rem 1rem', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid hsla(var(--border-glass))', color: '#fff' }}
+          >
+            <option value="" disabled>-- Select Club --</option>
+            {clubs.map(c => (
+              <option key={c.id || c._id} value={c.id || c._id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {club ? (
+        <>
+          {/* Club Overview Capsule */}
+          <div className="glass-card" style={{ padding: '2rem', display: 'flex', flexWrap: 'wrap', gap: '2rem', alignItems: 'center', borderRadius: '16px', border: '1px solid hsla(var(--border-glass))' }}>
+            <div style={{
+              width: '90px',
+              height: '90px',
+              borderRadius: '20px',
+              background: 'hsla(var(--accent-glow) / 0.1)',
+              border: '1px solid hsla(var(--border-glass))',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '2.5rem',
+              overflow: 'hidden',
+              flexShrink: 0
+            }}>
+              {club.icon ? (
+                <img src={club.icon} alt={club.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                '🏛️'
+              )}
+            </div>
+            <div style={{ flex: '1', minWidth: '250px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <h2 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, color: 'hsl(var(--text-primary))' }}>{club.name}</h2>
+                <span className={`category-chip ${club.category}`} style={{ fontSize: '0.75rem', padding: '0.2rem 0.6rem' }}>
+                  {club.category?.toUpperCase() || 'TECH'}
+                </span>
+              </div>
+              <p style={{ fontSize: '0.9rem', color: 'hsl(var(--text-muted))', margin: '0.5rem 0 1rem 0', lineHeight: '1.5' }}>
+                {club.description || 'No description provided.'}
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>
+                <span>👥 <strong>{club.memberCount || 0}</strong> Members</span>
+                {club.socialLinks?.instagram && (
+                  <a href={club.socialLinks.instagram} target="_blank" rel="noopener noreferrer" style={{ color: 'hsl(var(--primary))', textDecoration: 'none' }}>
+                    📸 Instagram
+                  </a>
+                )}
+                {club.socialLinks?.linkedin && (
+                  <a href={club.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" style={{ color: 'hsl(var(--secondary))', textDecoration: 'none' }}>
+                    💼 LinkedIn
+                  </a>
+                )}
+              </div>
+            </div>
+            <div>
+              <button 
+                onClick={() => onEditClubClick(club)} 
+                className="btn btn-secondary"
+                style={{ padding: '0.6rem 1.25rem', borderRadius: '10px', fontSize: '0.85rem' }}
+              >
+                ✏️ Edit Profile
+              </button>
+            </div>
+          </div>
+
+          {/* Events Section */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'hsl(var(--text-primary))' }}>📅 Event Cards Management</h3>
+                <p style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', margin: '0.2rem 0 0 0' }}>Manage the event cards visible on the upcoming events feed.</p>
+              </div>
+              <button 
+                onClick={onCreateEventClick} 
+                className="btn btn-primary"
+                style={{ padding: '0.6rem 1.25rem', borderRadius: '10px', fontSize: '0.85rem' }}
+              >
+                ➕ Create Event
+              </button>
+            </div>
+
+            {clubEvents.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.25rem' }}>
+                {clubEvents.map(evt => {
+                  const hasEnded = new Date(evt.eventEndDateTime || evt.date) < new Date();
+                  return (
+                    <div key={evt.id || evt._id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', borderRadius: '14px', overflow: 'hidden', border: '1px solid hsla(var(--border-glass))' }}>
+                      {evt.posterUrl && (
+                        <div style={{ height: '140px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))' }}>
+                          <img src={evt.posterUrl} alt={evt.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      )}
+                      <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flex: '1', gap: '0.75rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                          <h4 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'hsl(var(--text-primary))', cursor: 'pointer' }} onClick={() => onEventClick(evt)}>
+                            {evt.title}
+                          </h4>
+                          <span className={`status-badge ${hasEnded ? 'ended' : 'upcoming'}`} style={{ flexShrink: '0' }}>
+                            {hasEnded ? 'Ended' : 'Upcoming'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                          <span>📅 {evt.date} • {evt.time}</span>
+                          <span>📍 {evt.venue}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid hsla(var(--border-glass))' }}>
+                          <button 
+                            onClick={() => onEventClick(evt)} 
+                            className="btn btn-secondary" 
+                            style={{ flex: 1, padding: '0.45rem 0.8rem', borderRadius: '8px', fontSize: '0.75rem' }}
+                          >
+                            ✏️ Edit / View
+                          </button>
+                          <button 
+                            onClick={() => onDeleteEvent(evt.id || evt._id)} 
+                            className="btn" 
+                            style={{ padding: '0.45rem 0.8rem', borderRadius: '8px', fontSize: '0.75rem', color: 'hsl(0, 80%, 65%)', background: 'rgba(255, 0, 0, 0.05)', border: '1px solid rgba(255, 0, 0, 0.15)' }}
+                          >
+                            🗑️ Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="empty-state" style={{ padding: '2rem', borderRadius: '12px' }}>
+                <span style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📅</span>
+                <p style={{ margin: 0 }}>No events hosted by this club yet.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Recruitments Section */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'hsl(var(--text-primary))' }}>📢 Recruitment Postings</h3>
+                <p style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', margin: '0.2rem 0 0 0' }}>Manage the active hiring and recruitment roles for your club.</p>
+              </div>
+              <button 
+                onClick={onCreateRecruitmentClick} 
+                className="btn btn-primary"
+                style={{ padding: '0.6rem 1.25rem', borderRadius: '10px', fontSize: '0.85rem' }}
+              >
+                📢 Post Recruitment
+              </button>
+            </div>
+
+            {clubRecruitments.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.25rem' }}>
+                {clubRecruitments.map(rec => (
+                  <div key={rec.id || rec._id} className="glass-card" style={{ padding: '1.25rem', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '0.75rem', border: '1px solid hsla(var(--border-glass))' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <h4 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'hsl(var(--text-primary))' }}>
+                        {rec.title}
+                      </h4>
+                      <span className="status-badge ongoing">Active</span>
+                    </div>
+                    <p style={{ fontSize: '0.85rem', color: 'hsl(var(--text-muted))', margin: 0, lineHeight: '1.4', flex: 1 }}>
+                      {rec.description}
+                    </p>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid hsla(var(--border-glass))' }}>
+                      <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>
+                        📅 Post Date: {new Date(rec.createdAt).toLocaleDateString()}
+                      </div>
+                      <button 
+                        onClick={() => onDeleteRecruitment(rec.id || rec._id)} 
+                        className="btn" 
+                        style={{ padding: '0.45rem 0.8rem', borderRadius: '8px', fontSize: '0.75rem', color: 'hsl(0, 80%, 65%)', background: 'rgba(255, 0, 0, 0.05)', border: '1px solid rgba(255, 0, 0, 0.15)' }}
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state" style={{ padding: '2rem', borderRadius: '12px' }}>
+                <span style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📢</span>
+                <p style={{ margin: 0 }}>No active recruitments posted yet.</p>
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="empty-state" style={{ padding: '3rem', borderRadius: '16px' }}>
+          <span style={{ fontSize: '3rem', marginBottom: '1rem' }}>🏛️</span>
+          <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>No club assigned</p>
+          <p style={{ color: 'hsl(var(--text-muted))', maxWidth: '380px', margin: '0.5rem auto 0 auto' }}>
+            You are registered as a club manager, but no club has been assigned to your account. Please contact an administrator.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
