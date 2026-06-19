@@ -1,3 +1,54 @@
 {
-  "events": []
+  "events": [
+    {
+      "id": "evt-1781884950607-ahbkwsyml",
+      "title": "23456",
+      "description": "234567",
+      "clubId": "club-owasp",
+      "clubName": "OWASP VITB",
+      "category": "motivation",
+      "date": "2026-06-19",
+      "time": "",
+      "venue": "ghjkl",
+      "posterUrl": "/uploads/1781884950513-280297255.jpg",
+      "posterUrls": [
+        "/uploads/1781884950513-280297255.jpg",
+        "/uploads/1781884950542-351870838.jpg",
+        "/uploads/1781884950532-602687180.jpg"
+      ],
+      "schedulePosterUrl": "/uploads/1781884950585-782394532.jpg",
+      "registrationLink": "",
+      "tags": [],
+      "registrationDeadline": "2026-06-19T21:31",
+      "eventStartDateTime": "2026-06-19T21:31",
+      "eventEndDateTime": "2026-06-24T21:31",
+      "price": "",
+      "createdBy": "aditya.25mip10104@vitbhopal.ac.in",
+      "createdAt": "2026-06-19T16:02:30.608Z"
+    },
+    {
+      "id": "evt-1781885378233-567mcawvb",
+      "title": "ghj",
+      "description": "frgyu",
+      "clubId": "club-ela",
+      "clubName": "English Literary Association",
+      "category": "music",
+      "date": "2026-06-19",
+      "time": "",
+      "venue": "rtyui",
+      "posterUrl": "/uploads/1781885378207-684911749.jpg",
+      "posterUrls": [
+        "/uploads/1781885378207-684911749.jpg"
+      ],
+      "schedulePosterUrl": "",
+      "registrationLink": "",
+      "tags": [],
+      "registrationDeadline": "2026-06-17T21:38",
+      "eventStartDateTime": "2026-06-19T23:38",
+      "eventEndDateTime": "2026-06-20T02:38",
+      "price": "",
+      "createdBy": "aditya.25mip10104@vitbhopal.ac.in",
+      "createdAt": "2026-06-19T16:09:38.233Z"
+    }
+  ]
 }

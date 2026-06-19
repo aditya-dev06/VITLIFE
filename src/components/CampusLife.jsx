@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import BounceCards from './BounceCards';
+import Masonry from './Masonry';
+import ElectricBorder from './ElectricBorder';
 
 const eventTransformStyles = [
   'rotate(5deg) translate(-45px)',
@@ -167,9 +169,12 @@ function EventCardItem({
   isAdmin,
   fetchEvents,
   setSelectedEventDetails,
-  isOngoingSection = false
+  isOngoingSection = false,
+  isMasonry = false,
+  imgHeight
 }) {
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const [cardWidth, setCardWidth] = useState('280px'); // default width before image loads
   const [isHovered, setIsHovered] = useState(false);
 
@@ -210,13 +215,14 @@ function EventCardItem({
         opacity: opacity,
         transition: 'opacity 0.3s ease, box-shadow 0.3s ease, transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), width 0.3s ease',
         border: isOngoingSection 
-          ? '1px solid hsla(0, 80%, 55%, 0.5)' 
+          ? 'none' 
           : (event.pinned ? '1px solid hsla(var(--primary) / 0.5)' : '1px solid hsla(var(--border-glass))'),
         boxShadow: isOngoingSection
-          ? '0 0 20px hsla(0, 80%, 55%, 0.15), inset 0 0 20px hsla(0, 80%, 55%, 0.03)'
+          ? 'none'
           : (event.pinned ? '0 0 15px hsla(var(--primary) / 0.15)' : 'none'),
-        animation: isOngoingSection ? 'pulse-border 3s ease-in-out infinite' : 'none',
-        width: showBounce ? '280px' : cardWidth,
+        animation: 'none',
+        width: isMasonry ? '100%' : (showBounce ? '280px' : cardWidth),
+        height: isMasonry ? '100%' : 'auto',
         display: 'flex',
         flexDirection: 'column'
       }}
@@ -260,45 +266,87 @@ function EventCardItem({
       )}
 
       {/* Poster Image or Stack */}
-      {event.posterUrl && (
-        showBounce ? (
-          <div style={{ height: '200px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
-            <BounceCards
-              className="event-card-bounce"
-              images={event.posterUrls}
-              containerWidth="100%"
-              containerHeight={200}
-              animationDelay={0.3}
-              animationStagger={0.05}
-              easeType="elastic.out(1, 0.7)"
-              transformStyles={eventTransformStyles}
-              enableHover={true}
-              pushOffset={35}
-              isHovered={isHovered}
-            />
-          </div>
-        ) : (
+      {(!event.posterUrl || imageError) ? (
+        <div className="event-card-placeholder" style={{
+          height: isMasonry ? '220px' : '150px',
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: `linear-gradient(135deg, hsla(${catColor}, 0.15), hsla(${catColor}, 0.05))`,
+          borderBottom: '1px solid hsla(var(--border-glass))',
+          gap: '0.5rem'
+        }}>
+          <span style={{ fontSize: '2.5rem' }}>{getCategoryIcon(event.category)}</span>
+          <span style={{ fontSize: '0.75rem', opacity: 0.6, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            {event.category} Event
+          </span>
+        </div>
+      ) : isMasonry ? (
+        <div style={{ 
+          height: imgHeight ? `${imgHeight}px` : '200px', 
+          width: '100%', 
+          position: 'relative', 
+          overflow: 'hidden', 
+          borderBottom: '1px solid hsla(var(--border-glass))' 
+        }}>
           <img
             src={event.posterUrl}
             alt={event.title}
-            onLoad={handleImageLoad}
             loading="lazy"
             style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
               width: '100%',
-              height: 'auto',
+              height: '100%',
+              objectFit: 'cover',
               display: 'block',
-              borderBottom: '1px solid hsla(var(--border-glass))',
-              opacity: imageLoaded ? 1 : 0.3,
+              opacity: 1,
               transition: 'opacity 0.3s ease',
               margin: '0 auto'
             }}
-            onError={(e) => { e.target.style.display = 'none'; }}
+            onError={() => setImageError(true)}
           />
-        )
+        </div>
+      ) : showBounce ? (
+        <div style={{ height: '200px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
+          <BounceCards
+            className="event-card-bounce"
+            images={event.posterUrls}
+            containerWidth="100%"
+            containerHeight={200}
+            animationDelay={0.3}
+            animationStagger={0.05}
+            easeType="elastic.out(1, 0.7)"
+            transformStyles={eventTransformStyles}
+            enableHover={true}
+            pushOffset={35}
+            isHovered={isHovered}
+          />
+        </div>
+      ) : (
+        <img
+          src={event.posterUrl}
+          alt={event.title}
+          onLoad={handleImageLoad}
+          loading="lazy"
+          style={{
+            width: '100%',
+            height: 'auto',
+            display: 'block',
+            borderBottom: '1px solid hsla(var(--border-glass))',
+            opacity: imageLoaded ? 1 : 0.3,
+            transition: 'opacity 0.3s ease',
+            margin: '0 auto'
+          }}
+          onError={() => setImageError(true)}
+        />
       )}
 
       {/* Card Details */}
-      <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', flexGrow: 1, gap: '0.5rem' }}>
+      <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', flexGrow: isMasonry ? 0 : 1, gap: '0.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.2rem' }}>
           <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0, flex: 1 }}>
             {event.title}
@@ -784,7 +832,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
         description: formData.description,
         eligibility: formData.eligibility,
         deadline: formData.deadline,
-        applicationLink: formData.applicationLink
+        applicationLink: formData.applicationLink ? ensureAbsoluteUrl(formData.applicationLink) : ''
       };
 
       const res = await fetch('/api/recruitments', {
@@ -858,35 +906,51 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
     }
   };
 
-  // ─── Filtering ───────────────────────────────────────────────────
-  const filteredClubs = selectedCategory === 'all'
-    ? clubs
-    : clubs.filter(c => c.category === selectedCategory);
+  // ─── Filtering & Sorting (Memoized to prevent calculations on irrelevant state updates) ───
+  const filteredClubs = useMemo(() => {
+    return selectedCategory === 'all'
+      ? clubs
+      : clubs.filter(c => c.category === selectedCategory);
+  }, [clubs, selectedCategory]);
 
-  const filteredEvents = selectedCategory === 'all'
-    ? events
-    : events.filter(e => e.category === selectedCategory);
+  const filteredEvents = useMemo(() => {
+    return selectedCategory === 'all'
+      ? events
+      : events.filter(e => e.category === selectedCategory);
+  }, [events, selectedCategory]);
 
-  // Sort events so pinned ones are always at the top, and then sort by date ascending
-  // Sort events: pinned first, then by status (open > ongoing > upcoming > closed > ended), then by date
-  const sortedEvents = [...filteredEvents].sort((a, b) => {
-    if (a.pinned && !b.pinned) return -1;
-    if (!a.pinned && b.pinned) return 1;
-    const statusA = STATUS_SORT_ORDER[getEventStatus(a)] ?? 2;
-    const statusB = STATUS_SORT_ORDER[getEventStatus(b)] ?? 2;
-    if (statusA !== statusB) return statusA - statusB;
-    const dateA = new Date(a.eventStartDateTime || a.date || 0);
-    const dateB = new Date(b.eventStartDateTime || b.date || 0);
-    return dateA - dateB;
-  });
+  const sortedEvents = useMemo(() => {
+    return [...filteredEvents].sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      const statusA = STATUS_SORT_ORDER[getEventStatus(a)] ?? 2;
+      const statusB = STATUS_SORT_ORDER[getEventStatus(b)] ?? 2;
+      if (statusA !== statusB) return statusA - statusB;
+      const dateA = new Date(a.eventStartDateTime || a.date || 0);
+      const dateB = new Date(b.eventStartDateTime || b.date || 0);
+      return dateA - dateB;
+    });
+  }, [filteredEvents]);
 
-  // Ongoing / Today's Events
-  const ongoingEvents = events.filter(e => getEventStatus(e) === 'ongoing');
+  const ongoingEvents = useMemo(() => {
+    return filteredEvents.filter(e => getEventStatus(e) === 'ongoing');
+  }, [filteredEvents]);
+
+  // Masonry layout items representation
+  const masonryItems = useMemo(() => {
+    return sortedEvents.map((event, idx) => ({
+      id: event.id || event._id,
+      img: event.posterUrl || '',
+      height: 650 + (idx % 3) * 150,
+      event
+    }));
+  }, [sortedEvents]);
 
   // ─── Sub-tabs ────────────────────────────────────────────────────
   const SUB_TABS = [
     { key: 'clubs', label: '🏛️ Clubs' },
     { key: 'events', label: '📅 Events' },
+    { key: 'active_events', label: '🔴 Active Events' },
     { key: 'recruitments', label: '📢 Recruitment' },
     ...(isAdmin ? [{ key: 'admin', label: '⚙️ Admin' }] : [])
   ];
@@ -930,8 +994,8 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
         ))}
       </div>
 
-      {/* Category chips — visible for clubs and events */}
-      {(activeSubTab === 'clubs' || activeSubTab === 'events') && (
+      {/* Category chips — visible for clubs, events, and active events */}
+      {(activeSubTab === 'clubs' || activeSubTab === 'events' || activeSubTab === 'active_events') && (
         <div className="category-chips">
           {CATEGORIES.map(cat => (
             <button
@@ -1043,24 +1107,55 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
       {/* ═══════════════ TAB 2: EVENTS ═══════════════ */}
       {activeSubTab === 'events' && (
         <>
-          {/* ── Ongoing / Today's Events Section ── */}
-          {ongoingEvents.length > 0 && (
-            <div style={{ marginBottom: '2rem' }}>
-              <h3 style={{
-                fontSize: '1.1rem', fontWeight: 700, color: 'hsl(var(--text-primary))',
-                marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'
-              }}>
-                <span style={{
-                  display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%',
-                  background: 'hsl(0, 80%, 55%)', boxShadow: '0 0 8px hsl(0, 80%, 55%)',
-                  animation: 'pulse 2s ease-in-out infinite'
-                }} />
-                🔴 Ongoing / Today's Events
-              </h3>
-              <div className="event-masonry-grid">
-                {ongoingEvents.map(event => (
+          {sortedEvents.length > 0 ? (
+            <Masonry
+              items={masonryItems}
+              ease="power3.out"
+              duration={0.6}
+              stagger={0.05}
+              animateFrom="bottom"
+              scaleOnHover={true}
+              hoverScale={0.95}
+              blurToFocus={true}
+              colorShiftOnHover={false}
+              renderItem={(item) => (
+                <EventCardItem
+                  event={item.event}
+                  clubs={clubs}
+                  token={token}
+                  isAdmin={isAdmin}
+                  fetchEvents={fetchEvents}
+                  setSelectedEventDetails={setSelectedEventDetails}
+                  isOngoingSection={false}
+                  isMasonry={true}
+                  imgHeight={item.imgHeight}
+                />
+              )}
+            />
+          ) : (
+            <div className="empty-state">
+              <span style={{ fontSize: '3rem' }}>📅</span>
+              <p>No events yet. {isManager ? 'Be the first to create one!' : 'Check back soon!'}</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ═══════════════ TAB 2.5: ACTIVE EVENTS ═══════════════ */}
+      {activeSubTab === 'active_events' && (
+        <>
+          {ongoingEvents.length > 0 ? (
+            <div className="event-masonry-grid" style={{ marginTop: '1rem', alignItems: 'stretch' }}>
+              {ongoingEvents.map(event => (
+                <ElectricBorder
+                  key={`active-border-${event.id}`}
+                  color="#03b3c3"
+                  speed={1.2}
+                  chaos={0.15}
+                  borderRadius={16}
+                  style={{ display: 'flex' }}
+                >
                   <EventCardItem
-                    key={`ongoing-${event.id}`}
                     event={event}
                     clubs={clubs}
                     token={token}
@@ -1068,36 +1163,23 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
                     fetchEvents={fetchEvents}
                     setSelectedEventDetails={setSelectedEventDetails}
                     isOngoingSection={true}
+                    isMasonry={false}
                   />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── All Events Grid ── */}
-          {sortedEvents.length > 0 ? (
-            <div className="event-masonry-grid">
-              {sortedEvents.map(event => (
-                <EventCardItem
-                  key={event.id}
-                  event={event}
-                  clubs={clubs}
-                  token={token}
-                  isAdmin={isAdmin}
-                  fetchEvents={fetchEvents}
-                  setSelectedEventDetails={setSelectedEventDetails}
-                  isOngoingSection={false}
-                />
+                </ElectricBorder>
               ))}
             </div>
           ) : (
             <div className="empty-state">
-              <span style={{ fontSize: '3rem' }}>📅</span>
-              <p>No events yet. {isManager ? 'Be the first to create one!' : 'Check back soon!'}</p>
+              <span style={{ fontSize: '3rem' }}>🔥</span>
+              <p>No events are currently happening. Check out the "Events" tab for upcoming programs!</p>
             </div>
           )}
+        </>
+      )}
 
-          {/* FAB: Create Event */}
+      {/* FAB: Create Event & Create Event Modal (shared across Events and Active Events tabs) */}
+      {(activeSubTab === 'events' || activeSubTab === 'active_events') && (
+        <>
           {isManager && (
             <button
               className="fab-create"
@@ -1108,7 +1190,6 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
             </button>
           )}
 
-          {/* Create Event Modal */}
           {showCreateEvent && (
             <CreateEventModal
               clubs={clubs}
@@ -1129,7 +1210,9 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
             <div className="opp-grid">
               {recruitments.map(rec => {
                 const daysLeft = getDaysRemaining(rec.deadline);
-                const canDelete = isAdmin || (user && rec.createdBy === user.email);
+                const canDelete = isAdmin || 
+                                  (user && rec.createdBy === user.email) || 
+                                  (user && user.role === 'club_manager' && user.clubId === rec.clubId);
                 return (
                   <div key={rec.id} className="glass-card recruitment-card">
                     <div style={{ padding: '1.25rem' }}>
@@ -1197,7 +1280,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
                         {rec.applicationLink && (
                           <button
                             className="btn-apply"
-                            onClick={() => window.open(rec.applicationLink, '_blank')}
+                            onClick={() => window.open(rec.applicationLink, '_blank', 'noopener,noreferrer')}
                           >
                             📝 Apply Now
                           </button>
@@ -1398,7 +1481,9 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, on
   const [editLoading, setEditLoading] = useState(false);
 
   const isAdmin = user && user.role === 'admin';
-  const canDelete = isAdmin || (user && event.createdBy === user.email);
+  const canDelete = isAdmin || 
+                    (user && event.createdBy === user.email) || 
+                    (user && user.role === 'club_manager' && user.clubId === event.clubId);
   const canEdit = isAdmin || 
                   (user && event.createdBy === user.email) || 
                   (user && user.role === 'club_manager' && user.clubId === event.clubId);
@@ -1947,6 +2032,15 @@ function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
     if (!clubId) { alert('Please select a club.'); return; }
     if (!category) { alert('Please select a category.'); return; }
 
+    if (eventEnd && new Date(eventEnd) < new Date(eventStart)) {
+      alert('Event end date/time must be after the start date/time.');
+      return;
+    }
+    if (registrationDeadline && new Date(registrationDeadline) > new Date(eventStart)) {
+      alert('Registration deadline must be before the event starts.');
+      return;
+    }
+
     // Derive legacy "date" from eventStart for backward compat
     const legacyDate = eventStart ? eventStart.split('T')[0] : '';
 
@@ -2271,6 +2365,15 @@ function EditEventModal({ event, clubs, user, onClose, loading, error, onSubmit 
     if (!eventStart) { alert('Event start date/time is required.'); return; }
     if (!clubId) { alert('Please select a club.'); return; }
     if (!category) { alert('Please select a category.'); return; }
+
+    if (eventEnd && new Date(eventEnd) < new Date(eventStart)) {
+      alert('Event end date/time must be after the start date/time.');
+      return;
+    }
+    if (registrationDeadline && new Date(registrationDeadline) > new Date(eventStart)) {
+      alert('Registration deadline must be before the event starts.');
+      return;
+    }
 
     const legacyDate = eventStart ? eventStart.split('T')[0] : '';
 

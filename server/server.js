@@ -1906,6 +1906,13 @@ app.post('/api/events', authenticate, requireClubManager, async (req, res) => {
     if (!title || !clubId || !category || !date) {
       return res.status(400).json({ error: 'Title, clubId, category, and date are required.' });
     }
+    // Chronological Date Validation
+    if (eventStartDateTime && eventEndDateTime && new Date(eventEndDateTime) < new Date(eventStartDateTime)) {
+      return res.status(400).json({ error: 'Event end date/time must be after the start date/time.' });
+    }
+    if (registrationDeadline && eventStartDateTime && new Date(registrationDeadline) > new Date(eventStartDateTime)) {
+      return res.status(400).json({ error: 'Registration deadline must be before the event starts.' });
+    }
     // Cross-Club Modification Defense
     if (req.user.role !== 'admin' && clubId !== req.user.clubId) {
       return res.status(403).json({ error: 'Forbidden: You are not authorized to create events for this club.' });
@@ -1995,6 +2002,14 @@ app.put('/api/events/:id', authenticate, async (req, res) => {
 
     if (!title || !category || !date) {
       return res.status(400).json({ error: 'Title, category, and date are required.' });
+    }
+
+    // Chronological Date Validation
+    if (eventStartDateTime && eventEndDateTime && new Date(eventEndDateTime) < new Date(eventStartDateTime)) {
+      return res.status(400).json({ error: 'Event end date/time must be after the start date/time.' });
+    }
+    if (registrationDeadline && eventStartDateTime && new Date(registrationDeadline) > new Date(eventStartDateTime)) {
+      return res.status(400).json({ error: 'Registration deadline must be before the event starts.' });
     }
 
     // URL Protocol Sanitization (XSS Defense)
