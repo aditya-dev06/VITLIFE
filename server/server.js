@@ -2265,7 +2265,15 @@ app.use(express.static(frontendBuild, {
   etag: true
 }));
 // Serve uploaded files dynamically from MongoDB Atlas or local disk fallback
-app.get('/uploads/:filename', async (req, res) => {
+const uploadsRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 120, // limit each IP to 120 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many upload requests, please try again later.' }
+});
+
+app.get('/uploads/:filename', uploadsRateLimiter, async (req, res) => {
   const { filename } = req.params;
   // Sanitize the filename to prevent path traversal
   const safeFilename = path.basename(filename);
