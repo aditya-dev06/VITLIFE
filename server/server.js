@@ -505,6 +505,7 @@ const saveUsers = (users) => {
 
 // Database interface methods
 const findUserByEmail = async (email) => {
+  if (typeof email !== 'string') return null;
   const lowerEmail = email.toLowerCase().trim();
   if (dbConnectingPromise) {
     await dbConnectingPromise;
@@ -521,6 +522,7 @@ const findUserByEmail = async (email) => {
 };
 
 const saveUser = async (email, userData) => {
+  if (typeof email !== 'string') return;
   const lowerEmail = email.toLowerCase().trim();
   if (dbConnectingPromise) {
     await dbConnectingPromise;
@@ -644,6 +646,7 @@ const saveClubs = async (clubs) => {
 };
 
 const deleteClub = async (clubId) => {
+  if (typeof clubId !== 'string') return;
   // Delete from MongoDB
   if (dbConnectingPromise) await dbConnectingPromise;
   if (db) {
@@ -689,7 +692,8 @@ const getEvents = async (categoryFilter) => {
   let events = [];
   if (db) {
     try {
-      const query = categoryFilter ? { category: categoryFilter } : {};
+      const category = (typeof categoryFilter === 'string') ? categoryFilter : null;
+      const query = category ? { category } : {};
       events = await db.collection('events').find(query).sort({ date: 1 }).toArray();
       if (events.length > 0) return events;
     } catch (err) {
@@ -731,6 +735,7 @@ const saveEvent = async (eventData) => {
 };
 
 const deleteEvent = async (eventId) => {
+  if (typeof eventId !== 'string') return;
   // Delete from MongoDB
   if (dbConnectingPromise) await dbConnectingPromise;
   if (db) {
@@ -753,6 +758,7 @@ const deleteEvent = async (eventId) => {
 };
 
 const updateEvent = async (eventId, updatedData) => {
+  if (typeof eventId !== 'string') return;
   // Update in MongoDB
   if (dbConnectingPromise) await dbConnectingPromise;
   if (db) {
@@ -886,6 +892,7 @@ const saveRecruitment = async (recData) => {
 };
 
 const deleteRecruitment = async (recId) => {
+  if (typeof recId !== 'string') return;
   if (dbConnectingPromise) await dbConnectingPromise;
   if (db) {
     try {
@@ -974,6 +981,7 @@ const generateToken = (email, passwordHash) => {
 };
 
 const verifyToken = async (token) => {
+  if (typeof token !== 'string') return null;
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
@@ -2258,7 +2266,10 @@ app.get('/uploads/:filename', async (req, res) => {
   }
 
   // Local fallback: serve from disk if it exists
-  const filePath = path.join(UPLOADS_DIR, safeFilename);
+  const filePath = path.resolve(UPLOADS_DIR, safeFilename);
+  if (!filePath.startsWith(path.resolve(UPLOADS_DIR))) {
+    return res.status(403).json({ error: 'Access denied.' });
+  }
   if (fs.existsSync(filePath)) {
     res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
     return res.sendFile(filePath);
@@ -2281,7 +2292,7 @@ app.use((req, res, next) => {
   }
 });
 
-// 3. Scheduler: Run crawler automatically every 24 hours
+// 3. Scheduler: Run crawler automatically every day at 10 AM local time
 const runCrawlerSilently = () => {
   const pythonPath = process.platform === 'win32'
     ? path.join(path.dirname(__dirname), 'venv', 'Scripts', 'python.exe')
@@ -2312,9 +2323,60 @@ const runCrawlerSilently = () => {
   });
 };
 
+const scheduleDailyScraper = () => {
+  const now = new Date();
+  
+  // Create Date object for today at 10:00:00 AM local time
+  const nextTenAm = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 0, 0, 0);
+
+  // If it's already past 10 AM today, schedule for 10 AM tomorrow
+  if (now >= nextTenAm) {
+    nextTenAm.setDate(nextTenAm.getDate() + 1);
+  }
+
+  const msUntilTenAm = nextTenAm - now;
+  const minsUntilTenAm = Math.round(msUntilTenAm / 1000 / 60);
+  console.log(`[Scheduler] Daily scraper scheduled to run at ${nextTenAm.toString()} (in ${minsUntilTenAm} minutes).`);
+
+  setTimeout(() => {
+    runCrawlerSilently();
+    // After running once, continue running every 24 hours
+    setInterval(runCrawlerSilently, 24 * 60 * 60 * 1000);
+  }, msUntilTenAm);
+
+  // Check if we missed today's 10 AM run (or if the last run is older than 24 hours)
+  getOpportunities().then((data) => {
+    const lastUpdateStr = data.lastUpdated;
+    let runImmediately = false;
+
+    if (!lastUpdateStr) {
+      runImmediately = true;
+    } else {
+      const normalizedStr = lastUpdateStr.replace(/-/g, '/');
+      const lastUpdateDate = new Date(normalizedStr);
+      if (!isNaN(lastUpdateDate.getTime())) {
+        const todayTenAm = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 0, 0, 0);
+        if (now >= todayTenAm && lastUpdateDate < todayTenAm) {
+          runImmediately = true;
+        } else if (now - lastUpdateDate > 24 * 60 * 60 * 1000) {
+          runImmediately = true;
+        }
+      } else {
+        runImmediately = true;
+      }
+    }
+
+    if (runImmediately) {
+      console.log(`[Scheduler] Missed run detected (last run: ${lastUpdateStr || 'Never'}). Executing scraper immediately...`);
+      runCrawlerSilently();
+    }
+  }).catch((err) => {
+    console.error(`[Scheduler] Error checking last update timestamp: ${err.message}`);
+  });
+};
+
 if (!process.env.VERCEL) {
-  const DAILY_INTERVAL = 24 * 60 * 60 * 1000;
-  setInterval(runCrawlerSilently, DAILY_INTERVAL);
+  scheduleDailyScraper();
 
   app.listen(PORT, () => {
     console.log(`=========================================`);

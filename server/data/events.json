@@ -1,24 +1,6 @@
 {
   "events": [
     {
-      "id": "evt-1781713888224-q5s9xl158",
-      "title": "gig",
-      "description": "gigiyg",
-      "clubId": "club-otaku",
-      "clubName": "Otaku Club",
-      "category": "tech",
-      "date": "2026-06-18",
-      "time": "23:00",
-      "venue": "mnbghjkg",
-      "posterUrl": "/uploads/1781713888183-967976100.jpg",
-      "registrationLink": "",
-      "tags": [
-        "anime"
-      ],
-      "createdBy": "adityaorinals@gmail.com",
-      "createdAt": "2026-06-17T16:31:28.224Z"
-    },
-    {
       "id": "evt-1781770509432-7pt5710ex",
       "title": "wdfgh",
       "description": "dfghj",
@@ -45,30 +27,6 @@
       "price": "",
       "createdBy": "aditya.25mip10104@vitbhopal.ac.in",
       "createdAt": "2026-06-18T08:15:09.433Z"
-    },
-    {
-      "id": "evt-1781771269454-d4zc92ma2",
-      "title": "dfg",
-      "description": "fgh",
-      "clubId": "club-drone",
-      "clubName": "Drone Club",
-      "category": "tech",
-      "date": "2026-06-18",
-      "time": "",
-      "venue": "ghjk",
-      "posterUrl": "/uploads/1781771269429-13755807.jpg",
-      "posterUrls": [
-        "/uploads/1781771269429-13755807.jpg"
-      ],
-      "schedulePosterUrl": "",
-      "registrationLink": "",
-      "tags": [],
-      "registrationDeadline": "2026-06-18T13:57",
-      "eventStartDateTime": "2026-06-18T13:57",
-      "eventEndDateTime": "2026-06-18T13:57",
-      "price": "",
-      "createdBy": "aditya.25mip10104@vitbhopal.ac.in",
-      "createdAt": "2026-06-18T08:27:49.454Z"
     }
   ]
 }

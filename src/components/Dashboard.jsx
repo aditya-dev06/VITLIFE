@@ -1017,7 +1017,7 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
               ))
             ) : (
               <div className="glass-card quick-item" style={{ color: 'hsl(var(--text-muted))', justifyContent: 'center' }}>
-                📭 No active openings available. Click opportunities tab to crawl.
+                📭 No active openings available.
               </div>
             )}
             <button className="btn-secondary" style={{ width: '100%', padding: '0.6rem' }} onClick={() => onNavigate('opportunities')}>
