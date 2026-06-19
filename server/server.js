@@ -1176,14 +1176,23 @@ app.post('/api/auth/register', async (req, res) => {
 
 
     // Send email or fallback to console log
-    // Send email in background to prevent blocking the HTTP response
-    sendMailHelper(
-      lowerEmail,
-      'VIT Bhopal Opportunity Hub - Email Verification Code',
-      `Hello ${name.trim()},\n\nThank you for registering. Your verification code is: ${rawCode}\n\nThis code is valid for 15 minutes.`
-    ).catch(err => {
+    // Await email sending to ensure it completes in serverless environments
+    try {
+      await sendMailHelper(
+        lowerEmail,
+        'VIT Bhopal Opportunity Hub - Email Verification Code',
+        `Hello ${name.trim()},\n\nThank you for registering. Your verification code is: ${rawCode}\n\nThis code is valid for 15 minutes.`
+      );
+      console.log(`Verification email sent successfully to ${lowerEmail}`);
+    } catch (err) {
       console.error(`Background email sending failed to ${lowerEmail}:`, err.message);
-    });
+      // Fallback logging for developers
+      console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
+      console.log(`TO: ${lowerEmail}`);
+      console.log(`SUBJECT: VIT Bhopal Opportunity Hub - Email Verification Code`);
+      console.log(`Your verification code is: ${rawCode}`);
+      console.log(`================================================================`);
+    }
 
     res.json({ success: true, message: 'Verification code sent.', email: lowerEmail });
   } catch (error) {
@@ -1274,14 +1283,23 @@ app.post('/api/auth/resend-code', authRateLimiter(5, 15 * 60 * 1000), async (req
 
     await saveUser(lowerEmail, user);
 
-    // Send email in background to prevent blocking the HTTP response
-    sendMailHelper(
-      lowerEmail,
-      'VIT Bhopal Opportunity Hub - Resend Verification Code',
-      `Hello ${user.name},\n\nYour new verification code is: ${rawCode}\n\nThis code is valid for 15 minutes.`
-    ).catch(err => {
+    // Await email sending to ensure it completes in serverless environments
+    try {
+      await sendMailHelper(
+        lowerEmail,
+        'VIT Bhopal Opportunity Hub - Resend Verification Code',
+        `Hello ${user.name},\n\nYour new verification code is: ${rawCode}\n\nThis code is valid for 15 minutes.`
+      );
+      console.log(`Resend verification email sent successfully to ${lowerEmail}`);
+    } catch (err) {
       console.error(`Background resend email sending failed to ${lowerEmail}:`, err.message);
-    });
+      // Fallback logging for developers
+      console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
+      console.log(`TO: ${lowerEmail}`);
+      console.log(`SUBJECT: VIT Bhopal Opportunity Hub - Resend Verification Code`);
+      console.log(`Your verification code is: ${rawCode}`);
+      console.log(`================================================================`);
+    }
 
     res.json({ success: true, message: 'New verification code sent.' });
   } catch (error) {
@@ -1384,14 +1402,23 @@ app.post('/api/auth/forgot-password', authRateLimiter(5, 15 * 60 * 1000), async 
 
     await saveUser(lowerEmail, user);
 
-    // Send email in background to prevent blocking the HTTP response
-    sendMailHelper(
-      lowerEmail,
-      'VIT Bhopal Opportunity Hub - Password Reset Code',
-      `Hello ${user.name},\n\nWe received a request to reset your password. Your password reset code is: ${rawCode}\n\nThis code is valid for 15 minutes. If you did not request this, please ignore this email.`
-    ).catch(err => {
+    // Await email sending to ensure it completes in serverless environments
+    try {
+      await sendMailHelper(
+        lowerEmail,
+        'VIT Bhopal Opportunity Hub - Password Reset Code',
+        `Hello ${user.name},\n\nWe received a request to reset your password. Your password reset code is: ${rawCode}\n\nThis code is valid for 15 minutes. If you did not request this, please ignore this email.`
+      );
+      console.log(`Password reset email sent successfully to ${lowerEmail}`);
+    } catch (err) {
       console.error(`Background reset email sending failed to ${lowerEmail}:`, err.message);
-    });
+      // Fallback logging for developers
+      console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
+      console.log(`TO: ${lowerEmail}`);
+      console.log(`SUBJECT: VIT Bhopal Opportunity Hub - Password Reset Code`);
+      console.log(`Your verification code is: ${rawCode}`);
+      console.log(`================================================================`);
+    }
 
     res.json(genericSuccessResponse);
   } catch (error) {
