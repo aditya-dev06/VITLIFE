@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import Dashboard from './components/Dashboard';
 import Roadmap from './components/Roadmap';
 import Opportunities from './components/Opportunities';
@@ -753,6 +754,7 @@ function EditProfileModal({ user, onClose, onSave }) {
           </div>
         </form>
       </div>
+      <Analytics />
     </div>
   );
 }
