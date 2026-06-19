@@ -920,16 +920,18 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
   }, [events, selectedCategory]);
 
   const sortedEvents = useMemo(() => {
-    return [...filteredEvents].sort((a, b) => {
-      if (a.pinned && !b.pinned) return -1;
-      if (!a.pinned && b.pinned) return 1;
-      const statusA = STATUS_SORT_ORDER[getEventStatus(a)] ?? 2;
-      const statusB = STATUS_SORT_ORDER[getEventStatus(b)] ?? 2;
-      if (statusA !== statusB) return statusA - statusB;
-      const dateA = new Date(a.eventStartDateTime || a.date || 0);
-      const dateB = new Date(b.eventStartDateTime || b.date || 0);
-      return dateA - dateB;
-    });
+    return [...filteredEvents]
+      .filter(e => getEventStatus(e) !== 'ongoing')
+      .sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        const statusA = STATUS_SORT_ORDER[getEventStatus(a)] ?? 2;
+        const statusB = STATUS_SORT_ORDER[getEventStatus(b)] ?? 2;
+        if (statusA !== statusB) return statusA - statusB;
+        const dateA = new Date(a.eventStartDateTime || a.date || 0);
+        const dateB = new Date(b.eventStartDateTime || b.date || 0);
+        return dateA - dateB;
+      });
   }, [filteredEvents]);
 
   const ongoingEvents = useMemo(() => {
@@ -949,7 +951,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
   // ─── Sub-tabs ────────────────────────────────────────────────────
   const SUB_TABS = [
     { key: 'clubs', label: '🏛️ Clubs' },
-    { key: 'events', label: '📅 Events' },
+    { key: 'events', label: '📅 Upcoming Events' },
     { key: 'active_events', label: '🔴 Active Events' },
     { key: 'recruitments', label: '📢 Recruitment' },
     ...(isAdmin ? [{ key: 'admin', label: '⚙️ Admin' }] : [])
@@ -1171,7 +1173,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
           ) : (
             <div className="empty-state">
               <span style={{ fontSize: '3rem' }}>🔥</span>
-              <p>No events are currently happening. Check out the "Events" tab for upcoming programs!</p>
+              <p>No events are currently happening. Check out the "Upcoming Events" tab for upcoming programs!</p>
             </div>
           )}
         </>

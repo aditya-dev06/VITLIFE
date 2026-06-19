@@ -43,5 +43,11 @@
 - [x] Add dynamic transporter re-verification on the health check endpoint
 - [x] Restart and verify local dev environment functionality
 
+## Phase 8: Upcoming Events Filtering & Sub-Tab Renaming
+- [x] Exclude ongoing events from the main events tab in `CampusLife.jsx`
+- [x] Rename the "Events" tab navigation label to "Upcoming Events"
+- [x] Update empty state helper text referencing the events tab
+- [x] Run production build and ESLint validation to verify changes
+
 
 
