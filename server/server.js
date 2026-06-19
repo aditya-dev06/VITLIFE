@@ -46,27 +46,8 @@ app.use(compression());
 app.use(cors());
 app.use(express.json());
 
-// Rate Limiting configuration to prevent DDoS and brute-force (CodeQL Compliance)
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 150, // Limit each IP to 150 requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many requests, please try again later.' }
-});
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15, // Limit each IP to 15 auth requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many authentication attempts. Please try again after 15 minutes.' }
-});
-
-app.use('/api', apiLimiter);
-
 app.use((req, res, next) => {
-  console.log(`[HTTP] ${req.method} ${req.url} - Auth: ${req.headers.authorization || 'None'}`);
+  console.log(`[HTTP] ${req.method} ${req.url} - IP: ${req.ip} - Auth: ${req.headers.authorization || 'None'}`);
   const originalJson = res.json;
   res.json = function(body) {
     console.log(`[HTTP RESPONSE] ${req.method} ${req.url} -> Status: ${res.statusCode}`);
@@ -74,6 +55,27 @@ app.use((req, res, next) => {
   };
   next();
 });
+
+// Rate Limiting configuration to prevent DDoS and brute-force (CodeQL Compliance)
+const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: isProd ? 150 : 10000, // Limit each IP to 150 requests in prod, 10000 in dev
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' }
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: isProd ? 15 : 1000, // Limit each IP to 15 auth requests in prod, 1000 in dev
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts. Please try again after 15 minutes.' }
+});
+
+app.use('/api', apiLimiter);
 
 const DATA_DIR = path.join(__dirname, 'data');
 const OPPORTUNITIES_FILE = path.join(DATA_DIR, 'opportunities.json');
@@ -1417,6 +1419,74 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     res.json({ token, user: userProfile });
   } catch (error) {
     res.status(500).json({ error: 'Server authentication error: ' + error.message });
+  }
+});
+
+// 2b. Demo Login Route for local testing
+app.post('/api/auth/demo-login', async (req, res) => {
+  try {
+    const { type } = req.body;
+    let email = '';
+    let name = '';
+    let isVitBhopal = false;
+    let program = '';
+    let courses = [];
+    let semester = '1';
+    let role = 'student';
+
+    if (type === 'student') {
+      email = 'demo.student@vitbhopal.ac.in';
+      name = 'Demo VIT Student';
+      isVitBhopal = true;
+      program = 'Integrated M.Tech CSE (Computational & Data Science)';
+      courses = ['DSA', 'DBMS', 'Linear Algebra'];
+      semester = '3';
+      role = 'student';
+    } else if (type === 'global') {
+      email = 'demo.global@gmail.com';
+      name = 'Demo Global User';
+      isVitBhopal = false;
+      semester = '0';
+      role = 'user';
+    } else {
+      return res.status(400).json({ error: 'Invalid demo user type.' });
+    }
+
+    // Check if user already exists
+    let user = await findUserByEmail(email);
+    if (!user) {
+      // Create user
+      user = {
+        name,
+        isVitBhopal,
+        semester,
+        courses,
+        program,
+        verified: true,
+        role,
+        skillsProgress: {},
+        passwordHash: 'dummyhash',
+        salt: 'dummysalt',
+        createdAt: new Date().toISOString()
+      };
+      await saveUser(email, user);
+    } else {
+      // Ensure the existing user is verified for testing
+      user.verified = true;
+      await saveUser(email, user);
+    }
+
+    await logActivity(email, 'demo-login', req);
+
+    const token = generateToken(email, user.passwordHash);
+
+    const userProfile = { ...user };
+    delete userProfile.passwordHash;
+    delete userProfile.salt;
+
+    res.json({ token, user: userProfile });
+  } catch (error) {
+    res.status(500).json({ error: 'Demo authentication error: ' + error.message });
   }
 });
 

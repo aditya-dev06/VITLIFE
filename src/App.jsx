@@ -9,6 +9,8 @@ import Auth from './components/Auth';
 import RotatingText from './components/RotatingText';
 import TermsAndConditions from './components/TermsAndConditions';
 import PrivacyPolicy from './components/PrivacyPolicy';
+import Dock from './components/Dock';
+import { motion, AnimatePresence } from 'motion/react';
 
 // Default Initial Skills Database
 const INITIAL_SKILLS = [
@@ -233,7 +235,22 @@ function App() {
   const [navHidden, setNavHidden] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const [showAboutUs, setShowAboutUs] = useState(false);
+  const [showMobileProfileSheet, setShowMobileProfileSheet] = useState(false);
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
   const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const body = document.body;
+    if (theme === 'light') {
+      root.classList.add('light-theme');
+      body.classList.add('light-theme');
+    } else {
+      root.classList.remove('light-theme');
+      body.classList.remove('light-theme');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -241,7 +258,9 @@ function App() {
       setScrolled(currentY > 20);
 
       // Direction: hide when scrolling down past 60px, reveal when scrolling up
-      if (currentY > lastScrollY.current + 6 && currentY > 60) {
+      if (currentY <= 20) {
+        setNavHidden(false);
+      } else if (currentY > lastScrollY.current + 6 && currentY > 60) {
         setNavHidden(true);
       } else if (currentY < lastScrollY.current - 6) {
         setNavHidden(false);
@@ -260,11 +279,58 @@ function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+
+  const handleTouchStart = (e) => {
+    const tagName = e.target.tagName.toLowerCase();
+    if (
+      tagName === 'input' || 
+      tagName === 'textarea' || 
+      tagName === 'select' || 
+      tagName === 'button' || 
+      e.target.closest('.course-grid') || 
+      e.target.closest('.segmented-control') ||
+      e.target.closest('.filter-sheet-categories') ||
+      e.target.closest('.quick-list')
+    ) {
+      return;
+    }
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e) => {
+    if (touchStartX.current === 0 || touchStartY.current === 0) return;
+
+    const diffX = touchStartX.current - e.changedTouches[0].clientX;
+    const diffY = touchStartY.current - e.changedTouches[0].clientY;
+
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 75) {
+      const tabs = user && user.isVitBhopal 
+        ? ['dashboard', 'opportunities', 'guide', 'campus'] 
+        : ['dashboard', 'opportunities', 'guide'];
+
+      const currentIndex = tabs.indexOf(activeTab);
+      if (currentIndex !== -1) {
+        if (diffX > 0 && currentIndex < tabs.length - 1) {
+          handleTabClick(tabs[currentIndex + 1]);
+        } else if (diffX < 0 && currentIndex > 0) {
+          handleTabClick(tabs[currentIndex - 1]);
+        }
+      }
+    }
+
+    touchStartX.current = 0;
+    touchStartY.current = 0;
+  };
+
 
 
   const handleTabClick = (tab) => {
     setActiveTab(tab);
     setMobileMenuOpen(false);
+    setShowMobileProfileSheet(false);
   };
 
   const handleLogout = useCallback(() => {
@@ -292,7 +358,7 @@ function App() {
         // Map skills with their progress stored on server
         const mappedSkills = INITIAL_SKILLS.map(skill => ({
           ...skill,
-          status: profile.skillsProgress[skill.id] || 'To Do'
+          status: profile.skillsProgress?.[skill.id] || 'To Do'
         }));
         setSkills(mappedSkills);
       } else {
@@ -510,8 +576,6 @@ function App() {
   const inProgressSkills = skills.filter(s => s.status === 'In Progress').length;
   const inProgressSkillsList = skills.filter(s => s.status === 'In Progress');
 
-  const roadmapProgress = totalSkills > 0 ? Math.round((completedSkills / totalSkills) * 100) : 0;
-
   const stats = {
     totalSkills,
     completedSkills,
@@ -568,13 +632,13 @@ function App() {
             stats={stats} 
             user={user}
             opportunities={opportunities} 
-            roadmapProgress={roadmapProgress}
             onNavigate={setActiveTab}
             onUpdateSemester={handleUpdateSemester}
             clubs={clubs}
             events={events}
             fetchEvents={fetchEvents}
             token={token}
+            theme={theme}
           />
         );
     }
@@ -661,6 +725,25 @@ function App() {
                 </button>
               </li>
             )}
+            {/* Mobile-only navigation links */}
+            <li className="nav-item mobile-only-nav-item">
+              <button onClick={() => { setShowAboutUs(true); setMobileMenuOpen(false); }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                About Us
+              </button>
+            </li>
+            <li className="nav-item mobile-only-nav-item">
+              <button onClick={() => { window.open('https://github.com/aditya-dev06', '_blank', 'noopener,noreferrer'); setMobileMenuOpen(false); }}>
+                <svg height="14" width="14" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
+                </svg>
+                GitHub Profile
+              </button>
+            </li>
           </ul>
         </nav>
 
@@ -721,13 +804,76 @@ function App() {
       )}
 
       {/* Main Panel View */}
-      <main className="main-content">
+      <main 
+        className="main-content"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         {/* Floating Top Navigation Bar */}
         <header className={`top-bar ${scrolled ? 'scrolled' : ''} ${navHidden ? 'nav-hidden' : ''}`} style={{ '--scroll-progress': scrollProgress }}>
           {/* Scroll progress bar */}
           <div className="top-bar-progress" />
           {/* Animated shimmer line */}
           <div className="top-bar-shimmer" />
+
+          {/* Mobile website branding & profile row: visible initially, collapses/disappears on scroll down */}
+          <div className="top-bar-mobile-header-row">
+            <div className="top-bar-mobile-brand">
+              <span className="logo-gradient-text" style={{ fontWeight: 800 }}>VIT</span>
+              <RotatingText
+                texts={user && user.isVitBhopal ? ['HON', 'LIFE'] : ['HON']}
+                mainClassName="brand-rotating-text"
+                staggerFrom="last"
+                initial={{ y: "100%", opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: "-120%", opacity: 0 }}
+                staggerDuration={0.025}
+                splitLevelClassName="overflow-hidden"
+                transition={{ type: "spring", damping: 30, stiffness: 400 }}
+                rotationInterval={4500}
+              />
+            </div>
+
+            {/* Mobile Header Actions (Profile & Theme togglers) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <button 
+                className="top-bar-mobile-theme-btn"
+                onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+                title="Toggle Light/Dark Theme"
+                style={{ display: 'flex' }}
+              >
+                {theme === 'dark' ? (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="18" height="18" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="5" />
+                    <line x1="12" y1="1" x2="12" y2="3" />
+                    <line x1="12" y1="21" x2="12" y2="23" />
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                    <line x1="1" y1="12" x2="3" y2="12" />
+                    <line x1="21" y1="12" x2="23" y2="12" />
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="18" height="18" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                  </svg>
+                )}
+              </button>
+
+              <button 
+                className="top-bar-mobile-profile-btn"
+                onClick={() => setShowMobileProfileSheet(true)}
+                title="Profile & Settings"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="18" height="18">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <circle cx="12" cy="7" r="4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
           <nav className="top-bar-nav">
             <button className="top-bar-link" onClick={() => handleTabClick('dashboard')}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -758,19 +904,18 @@ function App() {
           </nav>
         </header>
 
-        {/* Mobile Header */}
-        <div className="mobile-header">
-          <button className="mobile-menu-toggle" onClick={() => setMobileMenuOpen(true)}>
-            ☰
-          </button>
-          <div className="mobile-brand-title">
-            <span className="logo-gradient-text">VIT</span>
-            <span style={{ color: 'hsl(var(--accent))', fontWeight: 800 }}>HON</span>
-          </div>
-          <div style={{ width: '40px' }}></div>
-        </div>
-
-        {renderActiveComponent()}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}
+          >
+            {renderActiveComponent()}
+          </motion.div>
+        </AnimatePresence>
       </main>
       {showEditProfile && (
         <EditProfileModal
@@ -816,6 +961,226 @@ function App() {
                 <span>© {new Date().getFullYear()} VIT Life Devs</span>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Mobile Bottom Navigation (Dock) */}
+      {(() => {
+        const dockItems = [
+          {
+            icon: (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <polyline points="9 22 9 12 15 12 15 22" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ),
+            label: 'Home',
+            onClick: () => handleTabClick('dashboard'),
+            className: activeTab === 'dashboard' ? 'active' : ''
+          },
+          {
+            icon: (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
+                <circle cx="12" cy="12" r="10" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="12" cy="12" r="6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="12" cy="12" r="2" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ),
+            label: 'Opps',
+            onClick: () => handleTabClick('opportunities'),
+            className: activeTab === 'opportunities' ? 'active' : ''
+          },
+          {
+            icon: (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ),
+            label: 'Guide',
+            onClick: () => handleTabClick('guide'),
+            className: activeTab === 'guide' ? 'active' : ''
+          },
+          ...(user && user.isVitBhopal ? [{
+            icon: (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <line x1="16" y1="2" x2="16" y2="6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <line x1="8" y1="2" x2="8" y2="6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <line x1="3" y1="10" x2="21" y2="10" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ),
+            label: 'Campus',
+            onClick: () => handleTabClick('campus'),
+            className: activeTab === 'campus' ? 'active' : ''
+          }] : [])
+        ];
+
+        return (
+          <Dock
+            items={dockItems}
+            panelHeight={52}
+            baseItemSize={40}
+            magnification={58}
+            outerClassName={navHidden ? 'nav-hidden' : ''}
+          />
+        );
+      })()}
+
+      {/* Mobile Profile Settings Bottom Sheet */}
+      {showMobileProfileSheet && (
+        <div className="modal-overlay" onClick={() => setShowMobileProfileSheet(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'hsl(var(--text-primary))' }}>
+                👤 Account & Settings
+              </h2>
+              <button 
+                onClick={() => setShowMobileProfileSheet(false)} 
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'hsl(var(--text-secondary))',
+                  cursor: 'pointer',
+                  fontSize: '1.25rem',
+                  padding: '4px'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            
+            {/* User Info Block */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1rem',
+              padding: '1rem',
+              background: 'rgba(255, 255, 255, 0.02)',
+              border: '1px solid rgba(255, 255, 255, 0.05)',
+              borderRadius: '12px',
+              marginBottom: '1.25rem'
+            }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 700,
+                fontSize: '1.1rem'
+              }}>
+                {user && user.name ? user.name.substring(0, 2).toUpperCase() : 'DS'}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: '1rem', color: 'hsl(var(--text-primary))', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {user ? user.name : 'CDS Student'}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '2px' }}>
+                  {user && user.isVitBhopal 
+                    ? `${getRegNumber()} • Sem ${user.semester || 1}` 
+                    : (user && user.semester && user.semester !== 0 ? `Sem ${user.semester}` : 'Global User')}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
+                <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>ONLINE</span>
+              </div>
+            </div>
+
+            {/* Settings Actions List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
+              <button 
+                onClick={() => { setShowEditProfile(true); setShowMobileProfileSheet(false); }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  width: '100%',
+                  padding: '0.85rem 1rem',
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.04)',
+                  borderRadius: '10px',
+                  color: 'hsl(var(--text-primary))',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.2s ease'
+                }}
+              >
+                ✏️ Edit Profile Name/Sem
+              </button>
+              <button 
+                onClick={() => { setShowAboutUs(true); setShowMobileProfileSheet(false); }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  width: '100%',
+                  padding: '0.85rem 1rem',
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.04)',
+                  borderRadius: '10px',
+                  color: 'hsl(var(--text-primary))',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.2s ease'
+                }}
+              >
+                ℹ️ About Platform
+              </button>
+              <a 
+                href="https://github.com/aditya-dev06" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  width: '100%',
+                  padding: '0.85rem 1rem',
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.04)',
+                  borderRadius: '10px',
+                  color: 'hsl(var(--text-primary))',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  textDecoration: 'none',
+                  boxSizing: 'border-box'
+                }}
+              >
+                🐙 Visit GitHub
+              </a>
+            </div>
+
+            {/* Logout Action */}
+            <button 
+              onClick={() => { handleLogout(); setShowMobileProfileSheet(false); }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+                width: '100%',
+                padding: '0.9rem',
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.15)',
+                borderRadius: '10px',
+                color: '#ef4444',
+                fontWeight: 700,
+                fontSize: '0.92rem',
+                cursor: 'pointer',
+                transition: 'background 0.2s ease'
+              }}
+            >
+              🚪 Sign Out
+            </button>
           </div>
         </div>
       )}

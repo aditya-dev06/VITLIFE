@@ -2,7 +2,7 @@ import { useState } from 'react';
 import BounceCards from './BounceCards';
 import Hyperspeed from './Hyperspeed';
 
-const HYPERSPEED_OPTIONS = {
+const DARK_HYPERSPEED_OPTIONS = {
   distortion: 'turbulentDistortion',
   length: 400,
   roadWidth: 10,
@@ -38,6 +38,42 @@ const HYPERSPEED_OPTIONS = {
   }
 };
 
+const LIGHT_HYPERSPEED_OPTIONS = {
+  distortion: 'turbulentDistortion',
+  length: 400,
+  roadWidth: 10,
+  islandWidth: 2,
+  lanesPerRoad: 4,
+  fov: 90,
+  fovSpeedUp: 150,
+  speedUp: 2,
+  carLightsFade: 0.4,
+  totalSideLightSticks: 20,
+  lightPairsPerRoadWay: 40,
+  shoulderLinesWidthPercentage: 0.05,
+  brokenLinesWidthPercentage: 0.1,
+  brokenLinesLengthPercentage: 0.5,
+  lightStickWidth: [0.12, 0.5],
+  lightStickHeight: [1.3, 1.7],
+  movingAwaySpeed: [60, 80],
+  movingCloserSpeed: [-120, -160],
+  carLightsLength: [400 * 0.03, 400 * 0.2],
+  carLightsRadius: [0.05, 0.14],
+  carWidthPercentage: [0.3, 0.5],
+  carShiftX: [-0.8, 0.8],
+  carFloorSeparation: [0, 5],
+  colors: {
+    roadColor: 0xebedf2,             // Very light titanium slate-blue road line
+    islandColor: 0xdae2ed,           // Slightly darker island background spacer
+    background: 0xd3dbe8,            // Matches the canvas backdrop color
+    shoulderLines: 0xffffff,         // Solid white road shoulder boundaries
+    brokenLines: 0xffffff,           // Dashed white road lanes separators
+    leftCars: [0x635bff, 0x9d4edd, 0xf754a8],  // Vibrant neon Indigo, Violet, Pink light streaks
+    rightCars: [0x00f5d4, 0x2be0f5, 0x0ea5e9], // Vibrant neon Mint, Cyan, Sky-Blue light streaks
+    sticks: 0x2be0f5                 // Vibrant neon Cyan side stick indicators
+  }
+};
+
 const eventTransformStyles = [
   'rotate(5deg) translate(-45px)',
   'rotate(2deg) translate(-22px)',
@@ -58,9 +94,23 @@ const CATEGORIES = [
   { key: 'sports', label: 'Sports', icon: '🏅', color: '50, 85%, 55%' },
 ];
 
-function getCategoryColor(categoryKey) {
+function getCategoryColorThemeAware(categoryKey, theme) {
   const cat = CATEGORIES.find(c => c.key === categoryKey);
-  return cat && cat.color ? cat.color : '263, 90%, 65%';
+  if (!cat) return theme === 'light' ? '250, 72%, 48%' : '263, 90%, 65%';
+  if (theme === 'light') {
+    switch (categoryKey) {
+      case 'tech': return '180, 85%, 30%';       // dark cyan/teal
+      case 'music': return '280, 65%, 42%';      // deep purple
+      case 'speakers': return '30, 90%, 38%';     // dark orange/bronze
+      case 'motivation': return '140, 60%, 32%';   // deep forest green
+      case 'anime': return '330, 75%, 40%';      // deep velvet rose
+      case 'cultural': return '345, 75%, 40%';   // deep red/crimson
+      case 'robotics': return '220, 75%, 40%';   // deep royal blue
+      case 'sports': return '40, 85%, 35%';      // dark golden olive
+      default: return '250, 72%, 48%';
+    }
+  }
+  return cat.color || '263, 90%, 65%';
 }
 
 function getCategoryIcon(categoryKey) {
@@ -71,6 +121,7 @@ function getCategoryIcon(categoryKey) {
 function getDaysRemaining(dateStr) {
   if (!dateStr) return null;
   const eventDate = new Date(dateStr);
+  if (isNaN(eventDate.getTime())) return null;
   const now = new Date();
   const diff = eventDate - now;
   if (diff <= 0) return null;
@@ -179,11 +230,11 @@ function ClubLogo({ club, category, size = 24, borderRadius = '50%' }) {
   );
 }
 
-function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents }) {
+function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, theme }) {
   const [activePoster, setActivePoster] = useState(event.posterUrl);
   const isAdmin = user && user.role === 'admin';
   const canDelete = isAdmin || (user && event.createdBy === user.email);
-  const catColor = getCategoryColor(event.category);
+  const catColor = getCategoryColorThemeAware(event.category, theme);
   const regUrl = event.registrationLink || `mailto:${event.createdBy}`;
 
   const handleTogglePin = async () => {
@@ -337,13 +388,8 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents }) 
             const status = getEventStatus(event);
             const badge = getStatusBadge(status);
             return (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: '0.5rem',
-                padding: '0.6rem 0.85rem', borderRadius: '8px',
-                background: `hsla(${badge.bg}, 0.1)`,
-                border: `1px solid hsla(${badge.color}, 0.3)`
-              }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: `hsl(${badge.color})` }}>{badge.text}</span>
+              <div className={`status-banner ${status.replace('_', '-')}`}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>{badge.text}</span>
                 {event.registrationDeadline && status === 'reg_open' && (
                   <span style={{ fontSize: '0.78rem', color: 'hsl(var(--text-muted))', marginLeft: 'auto' }}>
                     ⏳ Reg. closes {formatDateTime(event.registrationDeadline)}
@@ -479,14 +525,15 @@ function DashboardEventCardItem({
   clubs,
   user,
   setSelectedEvent,
-  handleTogglePin
+  handleTogglePin,
+  theme
 }) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [cardWidth, setCardWidth] = useState('280px'); // default width before image loads
   const [isHovered, setIsHovered] = useState(false);
 
   const daysLeft = getDaysRemaining(event.registrationDeadline || event.date);
-  const catColor = getCategoryColor(event.category);
+  const catColor = getCategoryColorThemeAware(event.category, theme);
   const eventClub = clubs.find(c => c.id === event.clubId);
   const clubName = eventClub ? eventClub.name : event.clubName || 'Unknown Club';
   const isAdmin = user && user.role === 'admin';
@@ -646,7 +693,7 @@ function DashboardEventCardItem({
   );
 }
 
-const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, onUpdateSemester, clubs = [], events = [], fetchEvents, token }) => {
+const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, clubs = [], events = [], fetchEvents, token, theme }) => {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const inProgressSkills = stats.inProgressSkillsList || [];
   const activeOpportunities = opportunities ? opportunities.slice(0, 3) : [];
@@ -764,10 +811,10 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
         width: '100vw',
         height: '100vh',
         zIndex: 0,
-        opacity: 0.5,
+        opacity: theme === 'light' ? 0.6 : 0.5,
         pointerEvents: 'none'
       }}>
-        <Hyperspeed effectOptions={HYPERSPEED_OPTIONS} />
+        <Hyperspeed effectOptions={theme === 'light' ? LIGHT_HYPERSPEED_OPTIONS : DARK_HYPERSPEED_OPTIONS} />
       </div>
       <div style={{ position: 'relative', zIndex: 1 }}>
         <div className="section-header">
@@ -776,6 +823,48 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
           Here is your computational intelligence hub for today. Keep building, coding, and researching.
         </p>
       </div>
+
+      {/* Upcoming Events Section */}
+      {user && user.isVitBhopal && (
+        <div className="glass-panel dashboard-panel">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.3rem' }}>Upcoming & Recommended Events</h3>
+              <p style={{ color: 'hsl(var(--text-muted))', fontSize: '0.85rem', margin: '0.25rem 0 0 0' }}>
+                Events recommended based on your program & courses. Sponsored events are featured at the top.
+              </p>
+            </div>
+          </div>
+
+          {recommendedEvents.length > 0 ? (
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '1.5rem',
+              width: '100%',
+              alignItems: 'flex-start'
+            }}>
+              {recommendedEvents.map(event => (
+                <DashboardEventCardItem
+                  key={event.id}
+                  event={event}
+                  clubs={clubs}
+                  user={user}
+                  token={token}
+                  setSelectedEvent={setSelectedEvent}
+                  handleTogglePin={handleTogglePin}
+                  theme={theme}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <span style={{ fontSize: '2.5rem' }}>📅</span>
+              <p>No upcoming events recommended at this time.</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Info Banner */}
       <div className="glass-panel info-banner">
@@ -828,16 +917,16 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
             </button>
 
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.85rem', color: 'rgba(255, 255, 255, 0.7)', fontWeight: 600 }}>Active Semester:</span>
+              <span style={{ fontSize: '0.85rem', color: theme === 'light' ? 'hsl(var(--text-secondary))' : 'rgba(255, 255, 255, 0.7)', fontWeight: 600 }}>Active Semester:</span>
               <select
                 value={user ? user.semester : '1'}
                 onChange={(e) => onUpdateSemester(e.target.value)}
                 style={{
                   padding: '0.35rem 0.75rem',
                   borderRadius: '6px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  color: 'white',
+                  backgroundColor: theme === 'light' ? 'rgba(0, 0, 0, 0.04)' : 'rgba(255, 255, 255, 0.08)',
+                  border: theme === 'light' ? '1px solid rgba(0, 0, 0, 0.12)' : '1px solid rgba(255, 255, 255, 0.15)',
+                  color: theme === 'light' ? 'hsl(var(--text-primary))' : 'white',
                   outline: 'none',
                   fontWeight: 'bold',
                   cursor: 'pointer'
@@ -850,15 +939,43 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
                     const maxSem = isIntegrated ? 10 : 8;
                     const options = [];
                     for (let i = 1; i <= maxSem; i++) {
-                      options.push(<option key={i} value={i.toString()} style={{ backgroundColor: '#18181b' }}>Sem {i}</option>);
+                      options.push(
+                        <option 
+                          key={i} 
+                          value={i.toString()} 
+                          style={{ 
+                            backgroundColor: theme === 'light' ? '#ffffff' : '#18181b',
+                            color: theme === 'light' ? 'hsl(var(--text-primary))' : '#ffffff'
+                          }}
+                        >
+                          Sem {i}
+                        </option>
+                      );
                     }
                     return options;
                   })()
                 ) : (
                   <>
-                    <option value="0" style={{ backgroundColor: '#18181b' }}>Not a Student</option>
+                    <option 
+                      value="0" 
+                      style={{ 
+                        backgroundColor: theme === 'light' ? '#ffffff' : '#18181b',
+                        color: theme === 'light' ? 'hsl(var(--text-primary))' : '#ffffff'
+                      }}
+                    >
+                      Not a Student
+                    </option>
                     {[1,2,3,4,5,6,7,8].map(i => (
-                      <option key={i} value={i.toString()} style={{ backgroundColor: '#18181b' }}>Sem {i}</option>
+                      <option 
+                        key={i} 
+                        value={i.toString()} 
+                        style={{ 
+                          backgroundColor: theme === 'light' ? '#ffffff' : '#18181b',
+                          color: theme === 'light' ? 'hsl(var(--text-primary))' : '#ffffff'
+                        }}
+                      >
+                        Sem {i}
+                      </option>
                     ))}
                   </>
                 )}
@@ -872,26 +989,6 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
       <div className="stats-grid">
         <div className="glass-panel stat-card">
           <div className="stat-info">
-            <div className="label">Total Progress</div>
-            <div className="value">{roadmapProgress}%</div>
-          </div>
-          <div className="stat-icon" style={{ background: 'hsla(var(--primary) / 0.15)', color: 'hsl(var(--primary))' }}>
-            📊
-          </div>
-        </div>
-
-        <div className="glass-panel stat-card">
-          <div className="stat-info">
-            <div className="label">Skills Mastered</div>
-            <div className="value">{stats.completedSkills} / {stats.totalSkills}</div>
-          </div>
-          <div className="stat-icon" style={{ background: 'hsla(200, 100%, 50%, 0.15)', color: '#00e5ff' }}>
-            ⚡
-          </div>
-        </div>
-
-        <div className="glass-panel stat-card">
-          <div className="stat-info">
             <div className="label">Active Opportunities</div>
             <div className="value">{opportunities.length}</div>
           </div>
@@ -899,63 +996,14 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
             🎯
           </div>
         </div>
-
-        <div className="glass-panel stat-card">
-          <div className="stat-info">
-            <div className="label">Practice Arena XP</div>
-            <div className="value">{stats.xpPoints} XP</div>
-          </div>
-          <div className="stat-icon" style={{ background: 'rgba(34, 197, 94, 0.15)', color: 'rgb(74, 222, 128)' }}>
-            🏆
-          </div>
-        </div>
       </div>
 
-      {/* Upcoming Events Section */}
-      {user && user.isVitBhopal && (
-        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '1.3rem' }}>Upcoming & Recommended Events</h3>
-              <p style={{ color: 'hsl(var(--text-muted))', fontSize: '0.85rem', margin: '0.25rem 0 0 0' }}>
-                Events recommended based on your program & courses. Sponsored events are featured at the top.
-              </p>
-            </div>
-          </div>
 
-          {recommendedEvents.length > 0 ? (
-            <div style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '1.5rem',
-              width: '100%',
-              alignItems: 'flex-start'
-            }}>
-              {recommendedEvents.map(event => (
-                <DashboardEventCardItem
-                  key={event.id}
-                  event={event}
-                  clubs={clubs}
-                  user={user}
-                  token={token}
-                  setSelectedEvent={setSelectedEvent}
-                  handleTogglePin={handleTogglePin}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state">
-              <span style={{ fontSize: '2.5rem' }}>📅</span>
-              <p>No upcoming events recommended at this time.</p>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Dashboard Main Split Layout */}
       <div className="dash-layout">
         {/* Left: Focus / Roadmap Tasks */}
-        <div className="glass-panel" style={{ padding: '2rem' }}>
+        <div className="glass-panel dashboard-panel">
           <h3 style={{ marginBottom: '1.5rem', fontSize: '1.3rem' }}>Focus Items for Today</h3>
           <div className="quick-list">
             {inProgressSkills.length > 0 ? (
@@ -991,7 +1039,7 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
         </div>
 
         {/* Right: Latest Opportunities Preview */}
-        <div className="glass-panel" style={{ padding: '2rem' }}>
+        <div className="glass-panel dashboard-panel">
           <h3 style={{ marginBottom: '1.5rem', fontSize: '1.3rem' }}>Latest Openings</h3>
           <div className="quick-list">
             {activeOpportunities.length > 0 ? (
@@ -1030,6 +1078,7 @@ const Dashboard = ({ stats, user, opportunities, roadmapProgress, onNavigate, on
           token={token}
           clubs={clubs}
           fetchEvents={fetchEvents}
+          theme={theme}
         />
       )}
       </div>

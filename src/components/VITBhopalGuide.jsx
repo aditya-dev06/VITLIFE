@@ -89,7 +89,7 @@ const VITBhopalGuide = ({ isVitBhopal, userSemester = 1, userProgram = '' }) => 
         </div>
 
         {/* Grid of semesters */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
+        <div className="guide-grid">
           <div className="glass-panel guide-card">
             <span className="guide-badge" style={{ color: 'hsl(var(--primary))' }}>Syllabus Alignment</span>
             <h3>Second Year Core Courses</h3>
@@ -185,7 +185,7 @@ const VITBhopalGuide = ({ isVitBhopal, userSemester = 1, userProgram = '' }) => 
       </div>
 
       {/* Grid of strategies */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
+      <div className="guide-grid">
         <div className="glass-panel guide-card">
           <span className="guide-badge" style={{ color: 'hsl(var(--primary))' }}>Competitive Learning</span>
           <h3>Kaggle & Hackathons</h3>

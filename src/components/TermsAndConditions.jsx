@@ -7,8 +7,7 @@ const TermsAndConditions = () => {
   return (
     <div style={{
       minHeight: '100vh',
-      backgroundColor: 'hsl(var(--background))',
-      color: 'hsl(var(--text))',
+      color: 'hsl(var(--text-primary))',
       padding: '2rem 1.5rem',
       fontFamily: 'Outfit, sans-serif',
       display: 'flex',
@@ -19,14 +18,10 @@ const TermsAndConditions = () => {
         maxWidth: '850px',
         width: '100%',
         padding: '3rem',
-        borderRadius: '16px',
-        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
-        backdropFilter: 'blur(8px)',
-        border: '1px solid rgba(255, 255, 255, 0.05)',
-        background: 'rgba(20, 20, 20, 0.65)'
+        borderRadius: '16px'
       }}>
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem', borderBottom: '1px solid hsla(var(--border-glass))', paddingBottom: '1.5rem' }}>
           <div>
             <h1 style={{ fontSize: '2.25rem', fontWeight: 800, margin: 0, background: 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               Terms & Conditions
@@ -39,10 +34,10 @@ const TermsAndConditions = () => {
             onClick={handleGoHome}
             style={{
               padding: '0.5rem 1rem',
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              backgroundColor: 'hsla(var(--text-primary) / 0.05)',
+              border: '1px solid hsla(var(--border-glass))',
               borderRadius: '8px',
-              color: 'hsl(var(--text))',
+              color: 'hsl(var(--text-primary))',
               cursor: 'pointer',
               fontWeight: 600,
               fontSize: '0.85rem',
@@ -51,8 +46,8 @@ const TermsAndConditions = () => {
               alignItems: 'center',
               gap: '0.5rem'
             }}
-            onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'hsla(var(--text-primary) / 0.1)'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'hsla(var(--text-primary) / 0.05)'}
           >
             ← Back to App
           </button>
@@ -153,7 +148,7 @@ const TermsAndConditions = () => {
         </section>
 
         {/* Section 7 */}
-        <section style={{ borderTop: '1px solid rgba(255, 255, 255, 0.1)', paddingTop: '1.5rem', marginTop: '2.5rem' }}>
+        <section style={{ borderTop: '1px solid hsla(var(--border-glass))', paddingTop: '1.5rem', marginTop: '2.5rem' }}>
           <h2 style={{ fontSize: '1.15rem', color: 'hsl(var(--accent))', fontWeight: 700, marginBottom: '0.5rem' }}>
             Legal Notice and Inquiries
           </h2>

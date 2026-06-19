@@ -139,6 +139,29 @@ const Auth = ({ onLoginSuccess }) => {
     }
   };
 
+  const handleDemoLogin = async (type) => {
+    setError('');
+    setSuccessMessage('');
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/demo-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        handleLoginSuccess(data.token, data.user);
+      } else {
+        setError(data.error || 'Failed to sign in with test account.');
+      }
+    } catch {
+      setError('Network error initiating demo login.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -648,9 +671,9 @@ const Auth = ({ onLoginSuccess }) => {
                       width: '100%',
                       padding: '0.75rem',
                       borderRadius: '8px',
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      color: 'white',
+                      backgroundColor: 'hsla(var(--text-primary) / 0.05)',
+                      border: '1px solid hsla(var(--border-glass))',
+                      color: 'hsl(var(--text-primary))',
                       outline: 'none'
                     }}
                   >
@@ -661,7 +684,7 @@ const Auth = ({ onLoginSuccess }) => {
                         const options = [];
                         for (let i = 1; i <= maxSem; i++) {
                           options.push(
-                            <option key={i} value={i.toString()} style={{ backgroundColor: '#18181b' }}>
+                            <option key={i} value={i.toString()} style={{ backgroundColor: 'hsl(var(--bg-card))' }}>
                               Semester {i}
                             </option>
                           );
@@ -670,9 +693,9 @@ const Auth = ({ onLoginSuccess }) => {
                       })()
                     ) : (
                       <>
-                        <option value="0" style={{ backgroundColor: '#18181b' }}>Not a Student / Professional</option>
+                        <option value="0" style={{ backgroundColor: 'hsl(var(--bg-card))' }}>Not a Student / Professional</option>
                         {[1,2,3,4,5,6,7,8].map(i => (
-                          <option key={i} value={i.toString()} style={{ backgroundColor: '#18181b' }}>
+                          <option key={i} value={i.toString()} style={{ backgroundColor: 'hsl(var(--bg-card))' }}>
                             Semester {i}
                           </option>
                         ))}
@@ -716,6 +739,34 @@ const Auth = ({ onLoginSuccess }) => {
                 <label htmlFor="consent-check" style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', lineHeight: '1.4' }}>
                   I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'hsl(var(--secondary))', textDecoration: 'underline' }}>Terms & Conditions</a> and consent to data sharing/processing as per the <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'hsl(var(--secondary))', textDecoration: 'underline' }}>Privacy Policy</a>.
                 </label>
+              </div>
+            )}
+
+            {!isSignUp && (
+              <div style={{ marginTop: '1.5rem', borderTop: '1px dashed rgba(255,255,255,0.08)', paddingTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ textAlign: 'center', fontSize: '0.8rem', color: 'hsl(var(--text-muted))', fontWeight: 600 }}>
+                  🧪 Quick Test Accounts (Demo Mode)
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}
+                    onClick={() => handleDemoLogin('student')}
+                    disabled={loading}
+                  >
+                    🎓 Test Student
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}
+                    onClick={() => handleDemoLogin('global')}
+                    disabled={loading}
+                  >
+                    🌍 Test Global
+                  </button>
+                </div>
               </div>
             )}
 

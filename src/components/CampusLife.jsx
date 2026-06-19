@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { motion } from 'motion/react';
 import BounceCards from './BounceCards';
 import Masonry from './Masonry';
 import ElectricBorder from './ElectricBorder';
@@ -36,6 +37,7 @@ function getCategoryIcon(categoryKey) {
 function getDaysRemaining(dateStr) {
   if (!dateStr) return null;
   const eventDate = new Date(dateStr);
+  if (isNaN(eventDate.getTime())) return null;
   const now = new Date();
   const diff = eventDate - now;
   if (diff <= 0) return null;
@@ -429,6 +431,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
   const isManager = user && (user.role === 'club_manager' || user.role === 'admin');
 
   const [activeSubTab, setActiveSubTab] = useState('clubs');
+  const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [recruitments, setRecruitments] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showCreateEvent, setShowCreateEvent] = useState(false);
@@ -439,6 +442,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
   const [formLoading, setFormLoading] = useState(false);
   const [editingClub, setEditingClub] = useState(null);
   const [selectedClubDetails, setSelectedClubDetails] = useState(null);
+
   const [selectedEventDetails, setSelectedEventDetails] = useState(null);
   const [selectedManagerClubId, setSelectedManagerClubId] = useState('');
 
@@ -989,6 +993,31 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
         ))}
       </div>
 
+      {/* Mobile Sub-tab Segmented Control */}
+      <div className="segmented-control">
+        {SUB_TABS.map(tab => {
+          let shortLabel;
+          switch (tab.key) {
+            case 'clubs': shortLabel = 'Clubs'; break;
+            case 'events': shortLabel = 'Events'; break;
+            case 'active_events': shortLabel = 'Live'; break;
+            case 'recruitments': shortLabel = 'Recruit'; break;
+            case 'manager': shortLabel = 'Portal'; break;
+            case 'admin': shortLabel = 'Admin'; break;
+            default: shortLabel = tab.label.replace(/[^\w\s]/g, '').trim();
+          }
+          return (
+            <button
+              key={tab.key}
+              className={`segmented-button ${activeSubTab === tab.key ? 'active' : ''}`}
+              onClick={() => { setActiveSubTab(tab.key); setSelectedCategory('all'); }}
+            >
+              {shortLabel}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Category chips — visible for clubs, events, and active events */}
       {(activeSubTab === 'clubs' || activeSubTab === 'events' || activeSubTab === 'active_events') && (
         <div className="category-chips">
@@ -1005,79 +1034,170 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
         </div>
       )}
 
+      {/* Mobile Category Filter Button Trigger */}
+      {(activeSubTab === 'clubs' || activeSubTab === 'events' || activeSubTab === 'active_events') && (
+        <div className="filter-trigger-container">
+          <button 
+            className="filter-trigger-btn"
+            onClick={() => setShowFilterSheet(true)}
+          >
+            <span>{CATEGORIES.find(c => c.key === selectedCategory)?.icon || '🌟'}</span>
+            <span>Filter: {CATEGORIES.find(c => c.key === selectedCategory)?.label || 'All'}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          {selectedCategory !== 'all' && (
+            <button 
+              className="filter-trigger-btn"
+              onClick={() => setSelectedCategory('all')}
+              style={{ background: 'rgba(239, 68, 68, 0.08)', borderColor: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' }}
+            >
+              ✕ Clear
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Category Filter Bottom Sheet */}
+      {showFilterSheet && (
+        <div className="modal-overlay" onClick={() => setShowFilterSheet(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'hsl(var(--text-primary))' }}>
+                🔍 Filter Category
+              </h2>
+              <button 
+                onClick={() => setShowFilterSheet(false)} 
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'hsl(var(--text-secondary))',
+                  cursor: 'pointer',
+                  fontSize: '1.25rem',
+                  padding: '4px'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+              {CATEGORIES.map(cat => {
+                const isSelected = selectedCategory === cat.key;
+                return (
+                  <button
+                    key={cat.key}
+                    onClick={() => {
+                      setSelectedCategory(cat.key);
+                      setShowFilterSheet(false);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                      padding: '0.85rem 1rem',
+                      background: isSelected ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.01)',
+                      border: isSelected ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(255, 255, 255, 0.03)',
+                      borderRadius: '10px',
+                      color: isSelected ? 'hsl(var(--text-primary))' : 'hsl(var(--text-secondary))',
+                      fontWeight: isSelected ? 700 : 500,
+                      fontSize: '0.92rem',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <span style={{ fontSize: '1.25rem', lineHeight: 1 }}>{cat.icon}</span>
+                      <span>{cat.label}</span>
+                    </div>
+                    {isSelected && (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'hsl(var(--primary))' }}>
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ═══════════════ TAB 1: CLUBS ═══════════════ */}
       {activeSubTab === 'clubs' && (
-        <>
+        <motion.div
+          key="clubs-tab"
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -15 }}
+          transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+        >
           {filteredClubs.length > 0 ? (
             <div className="opp-grid">
-              {filteredClubs.map(club => {
+              {filteredClubs.map((club, index) => {
                 const catColor = getCategoryColor(club.category);
                 const canEditClub = isAdmin || (user && user.role === 'club_manager' && user.clubId === club.id);
                 return (
-                  <div
+                  <motion.div
                     key={club.id}
-                    className="club-flip-wrapper"
-                    style={{ '--cat-color': catColor }}
-                    onClick={() => setSelectedClubDetails(club)}
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.35, delay: index * 0.025, ease: [0.16, 1, 0.3, 1] }}
                   >
-                    <div className="club-flip-inner">
-
-                      {/* ── FRONT: logo + name only ── */}
-                      <div className="club-flip-front">
-                        <ClubLogo club={club} category={club.category} size={72} borderRadius="18px" />
-                        <p className="cf-name">{club.name}</p>
-                        <span className="cf-hint">hover to learn more ✦</span>
-                      </div>
-
-                      {/* ── BACK: all the details ── */}
-                      <div className="club-flip-back">
-                        {/* Mini header */}
-                        <div className="cf-back-header">
-                          <ClubLogo club={club} category={club.category} size={28} borderRadius="8px" />
-                          <p className="cf-back-name">{club.name}</p>
-                          <span className="cf-badge">{club.category}</span>
-                        </div>
-
-                        {/* Description */}
-                        <p className="cf-desc">{club.description}</p>
-
-                        {/* Footer: members + socials + edit */}
-                        <div className="cf-footer">
-                          <span className="cf-members">👥 {club.memberCount} members</span>
-
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            {/* Social icons */}
-                            {club.socialLinks && (
-                              <div className="cf-social">
-                                {club.socialLinks.instagram && (
-                                  <a href={club.socialLinks.instagram} target="_blank" rel="noopener noreferrer" title="Instagram" onClick={e => e.stopPropagation()}>📸</a>
-                                )}
-                                {club.socialLinks.linkedin && (
-                                  <a href={club.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" title="LinkedIn" onClick={e => e.stopPropagation()}>🔗</a>
-                                )}
-                                {club.socialLinks.twitter && (
-                                  <a href={club.socialLinks.twitter} target="_blank" rel="noopener noreferrer" title="Twitter" onClick={e => e.stopPropagation()}>🐦</a>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Edit button (admins / club managers) */}
-                            {canEditClub && (
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); handleStartEditClub(club); }}
-                                className="btn-promote"
-                                style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
-                              >
-                                ⚙️ Edit
-                              </button>
-                            )}
+                    <div
+                      className="club-card"
+                      style={{ '--cat-color': catColor }}
+                      onClick={() => setSelectedClubDetails(club)}
+                    >
+                      <div className="club-card-glow-bar" />
+                      <div className="club-card-header">
+                        <ClubLogo club={club} category={club.category} size={52} borderRadius="12px" />
+                        <div className="club-card-header-info">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <h3 className="club-card-name">{club.name}</h3>
+                            <span className="club-card-badge">{club.category}</span>
                           </div>
+                          <span className="club-card-members">👥 {club.memberCount} members</span>
                         </div>
                       </div>
 
+                      <p className="club-card-desc">{club.description}</p>
+
+                      <div className="club-card-footer" onClick={e => e.stopPropagation()}>
+                        <div className="club-card-socials">
+                          {club.socialLinks?.instagram && (
+                            <a href={club.socialLinks.instagram} target="_blank" rel="noopener noreferrer" title="Instagram">📸</a>
+                          )}
+                          {club.socialLinks?.linkedin && (
+                            <a href={club.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" title="LinkedIn">🔗</a>
+                          )}
+                          {club.socialLinks?.twitter && (
+                            <a href={club.socialLinks.twitter} target="_blank" rel="noopener noreferrer" title="Twitter">🐦</a>
+                          )}
+                        </div>
+                        <div className="club-card-actions">
+                          {canEditClub && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleStartEditClub(club); }}
+                              className="btn-secondary club-action-btn"
+                            >
+                              ✏️ Edit
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedClubDetails(club)}
+                            className="btn-primary club-action-btn"
+                          >
+                            Details
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
@@ -1089,7 +1209,7 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
           )}
 
           {/* EditClubModal moved globally to bottom of file */}
-        </>
+        </motion.div>
       )}
 
       {/* ═══════════════ TAB 2: EVENTS ═══════════════ */}
@@ -1661,13 +1781,8 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, on
             const status = getEventStatus(event);
             const badge = getStatusBadge(status);
             return (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: '0.5rem',
-                padding: '0.6rem 0.85rem', borderRadius: '8px',
-                background: `hsla(${badge.bg}, 0.1)`,
-                border: `1px solid hsla(${badge.color}, 0.3)`
-              }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: `hsl(${badge.color})` }}>{badge.text}</span>
+              <div className={`status-banner ${status.replace('_', '-')}`}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>{badge.text}</span>
                 {event.registrationDeadline && status === 'reg_open' && (
                   <span style={{ fontSize: '0.78rem', color: 'hsl(var(--text-muted))', marginLeft: 'auto' }}>
                     ⏳ Reg. closes {formatDateTime(event.registrationDeadline)}
