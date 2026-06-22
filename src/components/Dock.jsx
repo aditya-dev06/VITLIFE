@@ -37,10 +37,21 @@ export default function Dock({
     updateCoords();
     const timer = setTimeout(updateCoords, 50);
 
+    let resizeObserver = null;
+    if (panelRef.current && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        updateCoords();
+      });
+      resizeObserver.observe(panelRef.current);
+    }
+
     window.addEventListener('resize', updateCoords);
     return () => {
       clearTimeout(timer);
       window.removeEventListener('resize', updateCoords);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
     };
   }, [currentActiveIndex, items]);
 

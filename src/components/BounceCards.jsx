@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { gsap } from 'gsap';
 import './BounceCards.css';
 
@@ -61,7 +61,7 @@ export default function BounceCards({
     }
   };
 
-  const pushSiblings = hoveredIdx => {
+  const pushSiblings = useCallback(hoveredIdx => {
     if (!enableHover || !containerRef.current) return;
 
     const q = gsap.utils.selector(containerRef);
@@ -96,9 +96,9 @@ export default function BounceCards({
         });
       }
     });
-  };
+  }, [enableHover, images, transformStyles, pushOffset]);
 
-  const resetSiblings = () => {
+  const resetSiblings = useCallback(() => {
     if (!enableHover || !containerRef.current) return;
 
     const q = gsap.utils.selector(containerRef);
@@ -114,7 +114,7 @@ export default function BounceCards({
         overwrite: 'auto'
       });
     });
-  };
+  }, [enableHover, images, transformStyles]);
 
   useEffect(() => {
     if (isHovered) {
@@ -122,7 +122,7 @@ export default function BounceCards({
     } else {
       resetSiblings();
     }
-  }, [isHovered]);
+  }, [isHovered, pushSiblings, resetSiblings]);
 
   return (
     <div
