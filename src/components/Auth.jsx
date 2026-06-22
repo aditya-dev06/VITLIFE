@@ -799,10 +799,7 @@ const Auth = ({ onLoginSuccess }) => {
             />
           </div>
           <div className="auth-subtitle">
-            {(() => {
-              const parsed = getRegNumberAndProgram(email);
-              return parsed ? `${parsed.program} Hub` : 'Computational & Data Science Hub';
-            })()}
+            VIT Life - College Lifestyle & Management
           </div>
         </div>
 

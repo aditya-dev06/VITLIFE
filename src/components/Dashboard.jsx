@@ -818,9 +818,9 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
       </div>
       <div style={{ position: 'relative', zIndex: 1 }}>
         <div className="section-header">
-        <h1 className="section-title">Welcome Back, {user ? user.name : 'Data Explorer'}</h1>
+        <h1 className="section-title">Welcome Back, {user ? user.name : 'User'}</h1>
         <p className="section-subtitle">
-          Here is your computational intelligence hub for today. Keep building, coding, and researching.
+          Here is your college lifestyle and management companion for today. Keep track of campus events, active clubs, and your academic roadmap.
         </p>
       </div>
 
@@ -872,17 +872,17 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
           <span className="branch-badge">
             {user && user.isVitBhopal 
               ? `VIT Bhopal Student • ${getRegNumber()} • Sem ${user.semester || 1}` 
-              : (user && user.semester && user.semester !== 0 ? `Global Student • Sem ${user.semester}` : 'Global Data Science & AI Member')}
+              : (user && user.semester && user.semester !== 0 ? `Global Student • Sem ${user.semester}` : 'Global VIT Life Member')}
           </span>
           
           <h2 style={{ marginTop: '0.5rem' }}>
             {user && user.isVitBhopal 
-              ? (user.program || 'Integrated M.Tech CSE (Computational & Data Science)') 
-              : 'Master Computational Science & AI'}
+              ? (user.program || 'Integrated M.Tech CSE') 
+              : 'College Lifestyle & Management'}
           </h2>
           
           <p>
-            Your profile blends mathematical modeling, software systems, and artificial intelligence. Use this dashboard to bridge theoretical knowledge with active hackathons and real-time remote internships.
+            VIT Life is your centralized companion for managing classes, discovering campus clubs, tracking student events, and upgrading your skills.
           </p>
 
           {user && user.isVitBhopal && user.courses && user.courses.length > 0 && (

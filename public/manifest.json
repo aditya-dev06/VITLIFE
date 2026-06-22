@@ -1,7 +1,7 @@
 {
-  "name": "CDS Hub - Career Development & Opportunities",
-  "short_name": "CDS Hub",
-  "description": "Interactive career development dashboard, customized data science roadmap, and automated daily opportunities matching for VIT Bhopal students.",
+  "name": "VIT Life - College Lifestyle & Management App",
+  "short_name": "VIT Life",
+  "description": "Centralized college lifestyle and management portal for VIT Bhopal students, featuring event management, club directories, academic guidelines, and student resources.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
