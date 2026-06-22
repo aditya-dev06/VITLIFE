@@ -1,5 +1,5 @@
-const CACHE_NAME = 'cds-hub-static-cache-v2';
-const API_CACHE_NAME = 'cds-hub-api-cache-v2';
+const CACHE_NAME = 'cds-hub-static-cache-v3';
+const API_CACHE_NAME = 'cds-hub-api-cache-v3';
 
 const STATIC_ASSETS = [
   '/',
