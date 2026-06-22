@@ -1,4 +1,4 @@
-/* ── Obsidian Aurora Dock styles ── */
+/* ── Modern Mobile Navigation Bar styles ── */
 
 .dock-outer {
   position: fixed;
@@ -11,7 +11,6 @@
   justify-content: center;
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   will-change: transform, opacity;
-  height: auto !important; /* height is managed dynamically by motion spring */
 }
 
 /* Hide on scroll down past threshold */
@@ -23,83 +22,83 @@
 
 .dock-panel {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   width: fit-content;
-  gap: 0.75rem;
+  gap: 0.5rem;
   border-radius: 99px;
-  background: rgba(14, 14, 18, 0.75);
+  background: rgba(14, 14, 18, 0.8);
   backdrop-filter: blur(24px) saturate(190%);
   -webkit-backdrop-filter: blur(24px) saturate(190%);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 0.35rem 0.5rem;
+  padding: 4px 10px;
   box-shadow: 
     0 0 0 1px rgba(255, 255, 255, 0.03) inset,
-    0 10px 40px rgba(0, 0, 0, 0.5),
+    0 10px 40px rgba(0, 0, 0, 0.4),
     0 0 20px rgba(99, 91, 255, 0.05);
   position: relative;
 }
 
 .dock-item {
   position: relative;
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  gap: 2px;
+  width: 52px;
+  height: 38px;
+  border-radius: 99px;
+  background: transparent;
+  border: none;
   cursor: pointer;
   outline: none;
-  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  z-index: 1;
+  transition: transform 0.2s ease;
 }
 
-.dock-item:hover,
-.dock-item:focus {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
+.dock-item:active {
+  transform: scale(0.92);
 }
 
-.dock-item.active {
-  background: hsla(var(--primary) / 0.15);
-  border-color: hsla(var(--primary) / 0.4);
-  box-shadow: 0 0 12px hsla(var(--primary) / 0.2);
+/* Sliding active pill indicator */
+.active-pill {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  background: hsla(var(--primary) / 0.16);
+  border: 1px solid hsla(var(--primary) / 0.45);
+  border-radius: 99px; /* Capsule shape */
+  z-index: 0;
+  box-shadow: 0 0 16px hsla(var(--primary) / 0.25);
+  pointer-events: none;
 }
 
 .dock-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: 100%;
   color: rgba(255, 255, 255, 0.45);
   transition: color 0.2s ease;
 }
 
-.dock-item:hover .dock-icon,
-.dock-item:focus .dock-icon {
-  color: hsl(var(--text-primary));
+.dock-icon svg {
+  width: 20px;
+  height: 20px;
 }
 
 .dock-item.active .dock-icon {
   color: hsl(var(--text-primary)) !important;
 }
 
-.dock-label {
-  position: absolute;
-  top: -2.25rem;
-  left: 50%;
-  transform: translateX(-50%);
-  width: fit-content;
-  white-space: pre;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(14, 14, 18, 0.95);
-  backdrop-filter: blur(8px);
-  padding: 0.25rem 0.5rem;
-  font-size: 0.72rem;
+.dock-label-static {
+  font-size: 0.65rem;
   font-weight: 600;
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  pointer-events: none;
+  color: rgba(255, 255, 255, 0.45);
+  transition: color 0.2s ease;
+}
+
+.dock-item.active .dock-label-static {
+  color: hsl(var(--text-primary)) !important;
 }
 
 /* Hide Dock on Desktop viewports, as desktop uses the sidebar */
@@ -120,46 +119,28 @@
     0 0 20px hsla(var(--primary) / 0.03) !important;
 }
 
-.light-theme .dock-item {
-  background: hsl(var(--bg-card-hover)) !important;
-  border: 1px solid hsla(var(--border-glass)) !important;
-  transition: background 0.3s cubic-bezier(0.16, 1, 0.3, 1), 
-              border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1), 
-              box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
-}
-
-.light-theme .dock-item:hover,
-.light-theme .dock-item:focus {
-  background: hsl(var(--bg-card)) !important;
-  border-color: hsla(var(--primary) / 0.3) !important;
-  box-shadow: 0 4px 12px hsla(var(--primary) / 0.05) !important;
-}
-
 .light-theme .dock-icon {
   color: hsl(var(--text-secondary)) !important;
-  transition: color 0.3s ease !important;
 }
 
-.light-theme .dock-item:hover .dock-icon,
-.light-theme .dock-item:focus .dock-icon {
-  color: hsl(var(--primary)) !important;
-}
-
-.light-theme .dock-item.active {
-  background: hsla(var(--primary) / 0.08) !important;
-  border-color: hsla(var(--primary) / 0.35) !important;
-  box-shadow: 
-    0 4px 12px hsla(var(--primary) / 0.08),
-    0 0 0 1px hsla(var(--primary) / 0.1) !important;
+.light-theme .dock-label-static {
+  color: hsl(var(--text-secondary)) !important;
 }
 
 .light-theme .dock-item.active .dock-icon {
   color: hsl(var(--primary)) !important;
 }
 
-.light-theme .dock-label {
-  background: hsl(var(--bg-card)) !important;
-  color: hsl(var(--text-primary)) !important;
-  border: 1px solid hsla(var(--border-glass)) !important;
-  box-shadow: var(--shadow-lg) !important;
+.light-theme .dock-item.active .dock-label-static {
+  color: hsl(var(--primary)) !important;
+}
+
+/* Light Theme active-pill overrides */
+.light-theme .active-pill {
+  background: hsla(var(--primary) / 0.08) !important;
+  border-color: hsla(var(--primary) / 0.35) !important;
+  box-shadow: 
+    0 4px 12px hsla(var(--primary) / 0.08),
+    0 0 0 1px hsla(var(--primary) / 0.1) !important;
+  border-radius: 99px !important;
 }

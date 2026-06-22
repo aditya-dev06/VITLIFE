@@ -1,16 +1,17 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { Analytics } from '@vercel/analytics/react';
-import Dashboard from './components/Dashboard';
-import Roadmap from './components/Roadmap';
-import Opportunities from './components/Opportunities';
 import VITBhopalGuide from './components/VITBhopalGuide';
-import CampusLife from './components/CampusLife';
 import Auth from './components/Auth';
 import RotatingText from './components/RotatingText';
 import TermsAndConditions from './components/TermsAndConditions';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import Dock from './components/Dock';
 import { motion, AnimatePresence } from 'motion/react';
+
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const Roadmap = lazy(() => import('./components/Roadmap'));
+const Opportunities = lazy(() => import('./components/Opportunities'));
+const CampusLife = lazy(() => import('./components/CampusLife'));
 
 // Default Initial Skills Database
 const INITIAL_SKILLS = [
@@ -913,7 +914,13 @@ function App() {
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}
           >
-            {renderActiveComponent()}
+            <Suspense fallback={
+              <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', minHeight: '50vh' }}>
+                <h3>Loading...</h3>
+              </div>
+            }>
+              {renderActiveComponent()}
+            </Suspense>
           </motion.div>
         </AnimatePresence>
       </main>
@@ -1184,6 +1191,7 @@ function App() {
           </div>
         </div>
       )}
+      <Analytics />
     </div>
   );
 }
@@ -1249,7 +1257,6 @@ function EditProfileModal({ user, onClose, onSave }) {
           </div>
         </form>
       </div>
-      <Analytics />
     </div>
   );
 }

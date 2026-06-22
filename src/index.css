@@ -2847,7 +2847,7 @@ button, input, textarea, select {
   }
 
   .roadmap-level::before {
-    left: 14px !important;
+    left: 16px !important;
     top: 52px !important;
   }
 
@@ -3047,6 +3047,9 @@ button, input, textarea, select {
   }
   .event-masonry-grid {
     justify-content: center !important;
+  }
+  .event-masonry-grid > .electric-border {
+    width: 100% !important;
   }
 
   /* App-like Sticky Bottom Nav */

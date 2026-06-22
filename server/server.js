@@ -47,7 +47,18 @@ app.use(cors());
 app.use(express.json());
 
 app.use((req, res, next) => {
-  console.log(`[HTTP] ${req.method} ${req.url} - IP: ${req.ip} - Auth: ${req.headers.authorization || 'None'}`);
+  let maskedAuth = 'None';
+  if (req.headers.authorization) {
+    const authHeader = req.headers.authorization;
+    const lowerHeader = authHeader.toLowerCase();
+    if (lowerHeader.startsWith('bearer ')) {
+      const token = authHeader.substring(7);
+      maskedAuth = `Bearer ${token.substring(0, 15)}...`;
+    } else {
+      maskedAuth = `${authHeader.substring(0, 15)}...`;
+    }
+  }
+  console.log(`[HTTP] ${req.method} ${req.url} - IP: ${req.ip} - Auth: ${maskedAuth}`);
   const originalJson = res.json;
   res.json = function(body) {
     console.log(`[HTTP RESPONSE] ${req.method} ${req.url} -> Status: ${res.statusCode}`);
@@ -878,17 +889,21 @@ const deleteExpiredEvents = async () => {
       await deleteEvent(event.id);
       
       // Clear associated base64 image data from the 'uploads' collection
-      if (db) {
-        const cleanPosterUrls = [event.posterUrl, ...(event.posterUrls || [])].filter(Boolean);
-        for (const pUrl of cleanPosterUrls) {
-          if (pUrl.startsWith('/uploads/')) {
-            const filename = pUrl.replace('/uploads/', '');
-            await db.collection('uploads').deleteOne({ filename });
-            // Local fallback delete
-            const filePath = path.join(UPLOADS_DIR, filename);
-            if (fs.existsSync(filePath)) {
-              try { fs.unlinkSync(filePath); } catch (e) {}
+      const cleanPosterUrls = [event.posterUrl, ...(event.posterUrls || [])].filter(Boolean);
+      for (const pUrl of cleanPosterUrls) {
+        if (pUrl.startsWith('/uploads/')) {
+          const filename = pUrl.replace('/uploads/', '');
+          if (db) {
+            try {
+              await db.collection('uploads').deleteOne({ filename });
+            } catch (err) {
+              console.error("Failed to delete poster from database:", err.message);
             }
+          }
+          // Local fallback delete
+          const filePath = path.join(UPLOADS_DIR, filename);
+          if (fs.existsSync(filePath)) {
+            try { fs.unlinkSync(filePath); } catch (e) {}
           }
         }
       }
@@ -1141,7 +1156,7 @@ const logActivity = async (email, action, req) => {
 })();
 
 // ================= DIAGNOSTICS =================
-app.get('/api/db-status', (req, res) => {
+app.get('/api/db-status', authenticate, requireAdmin, (req, res) => {
   res.json({
     status: dbConnectionStatus,
     connected: !!db,
@@ -1244,11 +1259,13 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     } catch (err) {
       console.error("Background email sending failed to %s:", lowerEmail, err.message);
       // Fallback logging for developers
-      console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
-      console.log(`TO: ${lowerEmail}`);
-      console.log(`SUBJECT: VIT Bhopal Opportunity Hub - Email Verification Code`);
-      console.log(`Your verification code is: ${rawCode}`);
-      console.log(`================================================================`);
+      if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+        console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
+        console.log(`TO: ${lowerEmail}`);
+        console.log(`SUBJECT: VIT Bhopal Opportunity Hub - Email Verification Code`);
+        console.log(`Your verification code is: ${rawCode}`);
+        console.log(`================================================================`);
+      }
     }
 
     res.json({ success: true, message: 'Verification code sent.', email: lowerEmail });
@@ -1351,11 +1368,13 @@ app.post('/api/auth/resend-code', authLimiter, authRateLimiter(5, 15 * 60 * 1000
     } catch (err) {
       console.error("Background resend email sending failed to %s:", lowerEmail, err.message);
       // Fallback logging for developers
-      console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
-      console.log(`TO: ${lowerEmail}`);
-      console.log(`SUBJECT: VIT Bhopal Opportunity Hub - Resend Verification Code`);
-      console.log(`Your verification code is: ${rawCode}`);
-      console.log(`================================================================`);
+      if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+        console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
+        console.log(`TO: ${lowerEmail}`);
+        console.log(`SUBJECT: VIT Bhopal Opportunity Hub - Resend Verification Code`);
+        console.log(`Your verification code is: ${rawCode}`);
+        console.log(`================================================================`);
+      }
     }
 
     res.json({ success: true, message: 'New verification code sent.' });
@@ -1538,11 +1557,13 @@ app.post('/api/auth/forgot-password', authLimiter, authRateLimiter(5, 15 * 60 * 
     } catch (err) {
       console.error("Background reset email sending failed to %s:", lowerEmail, err.message);
       // Fallback logging for developers
-      console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
-      console.log(`TO: ${lowerEmail}`);
-      console.log(`SUBJECT: VIT Bhopal Opportunity Hub - Password Reset Code`);
-      console.log(`Your verification code is: ${rawCode}`);
-      console.log(`================================================================`);
+      if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+        console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
+        console.log(`TO: ${lowerEmail}`);
+        console.log(`SUBJECT: VIT Bhopal Opportunity Hub - Password Reset Code`);
+        console.log(`Your verification code is: ${rawCode}`);
+        console.log(`================================================================`);
+      }
     }
 
     res.json(genericSuccessResponse);
@@ -1721,7 +1742,7 @@ app.get('/api/opportunities', async (req, res) => {
 });
 
 // 2. POST Route: Trigger research and stream logs in real time
-app.post('/api/research', (req, res) => {
+app.post('/api/research', authenticate, requireAdmin, (req, res) => {
   res.writeHead(200, {
     'Content-Type': 'text/plain; charset=utf-8',
     'Transfer-Encoding': 'chunked',
