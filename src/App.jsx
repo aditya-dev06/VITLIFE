@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { useTimetableSync } from './hooks/useTimetableSync';
 import { Analytics } from '@vercel/analytics/react';
 import VITBhopalGuide from './components/VITBhopalGuide';
 import Auth from './components/Auth';
-import RotatingText from './components/RotatingText';
+import TypewriterText from './components/TypewriterText';
 import TermsAndConditions from './components/TermsAndConditions';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import Dock from './components/Dock';
@@ -12,6 +13,7 @@ const Dashboard = lazy(() => import('./components/Dashboard'));
 const Roadmap = lazy(() => import('./components/Roadmap'));
 const Opportunities = lazy(() => import('./components/Opportunities'));
 const CampusLife = lazy(() => import('./components/CampusLife'));
+const TimetablePage = lazy(() => import('./components/TimetablePage'));
 
 // Default Initial Skills Database
 const INITIAL_SKILLS = [
@@ -224,6 +226,8 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [token, setToken] = useState(localStorage.getItem('ds_ai_token'));
   const [user, setUser] = useState(null);
+  // Offline-first timetable sync
+  const { syncStatus: timetableSyncStatus, saveTimetable } = useTimetableSync(token);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [xpPoints, setXpPoints] = useState(0);
   const [skills, setSkills] = useState([]);
@@ -237,8 +241,30 @@ function App() {
   const [scrollProgress, setScrollProgress] = useState(0);
   const [showAboutUs, setShowAboutUs] = useState(false);
   const [showMobileProfileSheet, setShowMobileProfileSheet] = useState(false);
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const [theme, setTheme] = useState(localStorage.getItem('ds_ai_theme') || 'dark');
+  const [installPrompt, setInstallPrompt] = useState(null); // PWA install prompt
   const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    const handleAppInstalled = () => setInstallPrompt(null);
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') setInstallPrompt(null);
+  };
 
   useEffect(() => {
     const root = document.documentElement;
@@ -308,8 +334,8 @@ function App() {
     const diffY = touchStartY.current - e.changedTouches[0].clientY;
 
     if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 75) {
-      const tabs = user && user.isVitBhopal 
-        ? ['dashboard', 'opportunities', 'guide', 'campus'] 
+      const tabs = user 
+        ? ['dashboard', 'opportunities', 'timetable', 'guide', 'campus'] 
         : ['dashboard', 'opportunities', 'guide'];
 
       const currentIndex = tabs.indexOf(activeTab);
@@ -337,6 +363,7 @@ function App() {
   const handleLogout = useCallback(() => {
     localStorage.removeItem('ds_ai_token');
     localStorage.removeItem('ds_ai_user');
+    localStorage.removeItem('ds_guest_user');  // also clear guest session
     setToken(null);
     setUser(null);
     setSkills(INITIAL_SKILLS);
@@ -440,9 +467,20 @@ function App() {
       });
     } else {
       Promise.resolve().then(() => {
-        setSkills(INITIAL_SKILLS);
-        setXpPoints(0);
-        setUser(null);
+        // Check for a saved guest session first
+        const savedGuest = localStorage.getItem('ds_guest_user');
+        if (savedGuest) {
+          try {
+            const guestUser = JSON.parse(savedGuest);
+            setUser(guestUser);
+          } catch {
+            localStorage.removeItem('ds_guest_user');
+          }
+        } else {
+          setSkills(INITIAL_SKILLS);
+          setXpPoints(0);
+          setUser(null);
+        }
         setLoading(false);
       });
     }
@@ -458,10 +496,17 @@ function App() {
   }, [token, fetchOpportunities, fetchClubs, fetchEvents]);
 
   const handleLoginSuccess = (newToken, newUser) => {
-    localStorage.setItem('ds_ai_token', newToken);
-    localStorage.setItem('ds_ai_user', JSON.stringify(newUser));
-    setToken(newToken);
-    setUser(newUser);
+    if (newUser?.isGuest) {
+      // Guest: no token, persist guest user locally
+      localStorage.setItem('ds_guest_user', JSON.stringify(newUser));
+      setToken(null);
+      setUser(newUser);
+    } else {
+      localStorage.setItem('ds_ai_token', newToken);
+      localStorage.setItem('ds_ai_user', JSON.stringify(newUser));
+      setToken(newToken);
+      setUser(newUser);
+    }
   };
 
   // Sync skill status changes to the Express server
@@ -561,6 +606,12 @@ function App() {
     }
   };
 
+  const handleUpdateTimetable = async (newTimetable) => {
+    // saveTimetable: writes to localStorage immediately, then syncs to server
+    // fully offline-safe — queues pending sync and retries on reconnect
+    await saveTimetable(newTimetable, user, setUser);
+  };
+
   // Extract student registration number from college email (firstname.regnumber@vitbhopal.ac.in)
   const getRegNumber = () => {
     if (!user || !user.isVitBhopal || !user.email) return '';
@@ -612,8 +663,20 @@ function App() {
             userProgram={user ? user.program : ''}
           />
         );
+      case 'timetable':
+        if (!user) {
+          setActiveTab('dashboard');
+          return null;
+        }
+        return (
+          <TimetablePage 
+            user={user}
+            onUpdateTimetable={handleUpdateTimetable}
+            syncStatus={timetableSyncStatus}
+          />
+        );
       case 'campus':
-        if (!user || !user.isVitBhopal) {
+        if (!user) {
           setActiveTab('dashboard');
           return null;
         }
@@ -662,8 +725,8 @@ function App() {
     );
   }
 
-  // Render Login/Signup if not authenticated
-  if (!token) {
+  // Render Login/Signup if not authenticated (guests bypass this with user.isGuest)
+  if (!token && !user?.isGuest) {
     return <Auth onLoginSuccess={handleLoginSuccess} />;
   }
 
@@ -678,21 +741,13 @@ function App() {
           <div>
             <div className="brand-logo" style={{ display: 'flex', alignItems: 'center', gap: '0.1rem' }}>
               <span className="logo-gradient-text">VIT</span>
-              <RotatingText
-                texts={user && user.isVitBhopal ? ['HON', 'LIFE'] : ['HON']}
-                mainClassName="brand-rotating-text"
-                staggerFrom="last"
-                initial={{ y: "100%", opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: "-120%", opacity: 0 }}
-                staggerDuration={0.025}
-                splitLevelClassName="overflow-hidden"
-                transition={{ type: "spring", damping: 30, stiffness: 400 }}
-                rotationInterval={4500}
+              <TypewriterText
+                words={user?.isGuest ? ['GUEST'] : (user && user.isVitBhopal ? ['LIFE', 'BHOPAL'] : ['BHOPAL'])}
+                className="brand-rotating-text"
               />
             </div>
             <div className="branch-badge">
-              {user && user.isVitBhopal ? 'VIT Bhopal Student' : 'Global User'}
+              {user?.isGuest ? '👤 Guest Session' : (user && user.isVitBhopal ? 'VIT Bhopal Student' : 'Global User')}
             </div>
           </div>
         </div>
@@ -719,10 +774,18 @@ function App() {
                 🏫 {user && user.isVitBhopal ? 'VIT Bhopal Guide' : 'DS & AI Guide'}
               </button>
             </li>
-            {user && user.isVitBhopal && (
+            {user && (
               <li className={`nav-item ${activeTab === 'campus' ? 'active' : ''}`}>
                 <button onClick={() => handleTabClick('campus')}>
-                  🎪 Campus Life
+                  🎪 College Life
+                </button>
+              </li>
+            )}
+            {/* Timetable available to all including guests (saves locally) */}
+            {user && (
+              <li className={`nav-item ${activeTab === 'timetable' ? 'active' : ''}`}>
+                <button onClick={() => handleTabClick('timetable')}>
+                  📅 Schedule
                 </button>
               </li>
             )}
@@ -749,9 +812,26 @@ function App() {
         </nav>
 
         <div className="sidebar-status">
-          <div className="status-dot"></div>
-          <span>Sync Status: Active</span>
+          <div className={`status-dot ${user?.isGuest ? 'status-dot--guest' : ''}`}></div>
+          <span>{user?.isGuest ? 'Local only — not synced' : 'Sync Status: Active'}</span>
         </div>
+
+        {/* PWA Install Button — shown only when browser fires beforeinstallprompt */}
+        {installPrompt && (
+          <button
+            className="pwa-install-btn"
+            onClick={handleInstallApp}
+            title="Install app to your device"
+          >
+            {/* Download-to-device SVG icon */}
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Install App
+          </button>
+        )}
 
         <div className="sidebar-footer">
           <div className="user-profile-capsule">
@@ -764,31 +844,67 @@ function App() {
                   {user ? user.name : 'CDS Student'}
                 </div>
                 <div className="college">
-                  {user && user.isVitBhopal 
-                    ? `${getRegNumber()} • Sem ${user.semester || 1}` 
-                    : (user && user.semester && user.semester !== 0 ? `Sem ${user.semester}` : 'Global')}
+                  {user?.isGuest
+                    ? 'Guest • Not signed in'
+                    : (user && user.isVitBhopal
+                      ? `${getRegNumber()} • Sem ${user.semester || 1}`
+                      : (user && user.semester && user.semester !== 0 ? `Sem ${user.semester}` : 'Global'))}
                 </div>
               </div>
             </div>
             <div className="profile-actions">
-              {user && (
-                <button 
-                  className="profile-btn" 
+              {user?.isGuest ? (
+                // Guest: Show Sign Up CTA — clicking clears guest session and returns to Auth
+                <button
+                  className="profile-btn"
+                  onClick={handleLogout}
+                  title="Create Account"
+                  style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0.25rem 0.55rem', letterSpacing: '0.03em', color: 'hsl(var(--primary))' }}
+                >
+                  Sign&nbsp;Up
+                </button>
+              ) : (
+                // Verified user: show edit-profile gear button
+                <button
+                  className="profile-btn"
                   onClick={() => setShowEditProfile(true)}
                   title="Edit Profile"
                 >
                   <svg stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="1.15em" width="1.15em" xmlns="http://www.w3.org/2000/svg">
                     <circle cx="12" cy="12" r="3"></circle>
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                   </svg>
                 </button>
               )}
               <button 
                 className="profile-btn" 
+                onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+                title="Toggle Theme"
+              >
+                {theme === 'dark' ? (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" height="1.15em" width="1.15em">
+                    <circle cx="12" cy="12" r="5" />
+                    <line x1="12" y1="1" x2="12" y2="3" />
+                    <line x1="12" y1="21" x2="12" y2="23" />
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                    <line x1="1" y1="12" x2="3" y2="12" />
+                    <line x1="21" y1="12" x2="23" y2="12" />
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" height="1.15em" width="1.15em">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                  </svg>
+                )}
+              </button>
+              <button 
+                className="profile-btn" 
                 onClick={handleLogout}
                 title="Log Out"
               >
-                <svg stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="1.1em" width="1.1em" xmlns="http://www.w3.org/2000/svg">
+                <svg stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="1.15em" width="1.15em" xmlns="http://www.w3.org/2000/svg">
                   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                   <polyline points="16 17 21 12 16 7"></polyline>
                   <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -821,22 +937,30 @@ function App() {
           <div className="top-bar-mobile-header-row">
             <div className="top-bar-mobile-brand">
               <span className="logo-gradient-text" style={{ fontWeight: 800 }}>VIT</span>
-              <RotatingText
-                texts={user && user.isVitBhopal ? ['HON', 'LIFE'] : ['HON']}
-                mainClassName="brand-rotating-text"
-                staggerFrom="last"
-                initial={{ y: "100%", opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: "-120%", opacity: 0 }}
-                staggerDuration={0.025}
-                splitLevelClassName="overflow-hidden"
-                transition={{ type: "spring", damping: 30, stiffness: 400 }}
-                rotationInterval={4500}
+              <TypewriterText
+                words={user?.isGuest ? ['GUEST'] : (user && user.isVitBhopal ? ['LIFE', 'BHOPAL'] : ['BHOPAL'])}
+                className="brand-rotating-text"
               />
             </div>
 
             {/* Mobile Header Actions (Profile & Theme togglers) */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              {/* PWA Install button — mobile */}
+              {installPrompt && (
+                <button
+                  className="top-bar-mobile-theme-btn pwa-install-btn-mobile"
+                  onClick={handleInstallApp}
+                  title="Install App"
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.72rem', fontWeight: 700, color: 'hsl(var(--primary))' }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Install
+                </button>
+              )}
               <button 
                 className="top-bar-mobile-theme-btn"
                 onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
@@ -997,6 +1121,19 @@ function App() {
             onClick: () => handleTabClick('opportunities'),
             className: activeTab === 'opportunities' ? 'active' : ''
           },
+          ...(user ? [{
+            icon: (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <line x1="16" y1="2" x2="16" y2="6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <line x1="8" y1="2" x2="8" y2="6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <line x1="3" y1="10" x2="21" y2="10" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ),
+            label: 'Schedule',
+            onClick: () => handleTabClick('timetable'),
+            className: activeTab === 'timetable' ? 'active' : ''
+          }] : []),
           {
             icon: (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
@@ -1008,16 +1145,14 @@ function App() {
             onClick: () => handleTabClick('guide'),
             className: activeTab === 'guide' ? 'active' : ''
           },
-          ...(user && user.isVitBhopal ? [{
+          ...(user ? [{
             icon: (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <line x1="16" y1="2" x2="16" y2="6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <line x1="8" y1="2" x2="8" y2="6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <line x1="3" y1="10" x2="21" y2="10" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M22 10v6M2 10l10-5 10 5-10 5z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             ),
-            label: 'Campus',
+            label: 'College Life',
             onClick: () => handleTabClick('campus'),
             className: activeTab === 'campus' ? 'active' : ''
           }] : [])

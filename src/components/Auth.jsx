@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import RotatingText from './RotatingText';
+import TypewriterText from './TypewriterText';
 
 const COURSES_LIST = [
   { code: 'DSA', name: 'Data Structures & Algorithms' },
@@ -139,26 +139,31 @@ const Auth = ({ onLoginSuccess }) => {
     }
   };
 
-  const handleDemoLogin = async (type) => {
-    setError('');
-    setSuccessMessage('');
-    setLoading(true);
-    try {
-      const res = await fetch('/api/auth/demo-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        handleLoginSuccess(data.token, data.user);
-      } else {
-        setError(data.error || 'Failed to sign in with test account.');
-      }
-    } catch {
-      setError('Network error initiating demo login.');
-    } finally {
-      setLoading(false);
+  const handleGuestContinue = () => {
+    // Generate or reuse a persistent guest ID for this browser
+    let guestId = localStorage.getItem('ds_guest_id');
+    if (!guestId) {
+      guestId = 'guest_' + crypto.randomUUID();
+      localStorage.setItem('ds_guest_id', guestId);
+    }
+
+    const guestUser = {
+      id: guestId,
+      name: 'Guest',
+      email: guestId + '@guest.local',
+      isGuest: true,
+      isVitBhopal: false,
+      semester: 1,
+      xpPoints: 0,
+      skillsProgress: {},
+      timetable: JSON.parse(localStorage.getItem('ds_guest_timetable') || '[]'),
+      role: 'guest',
+      verified: true,
+    };
+
+    // No token for guests — App.jsx handles isGuest separately
+    if (onLoginSuccess) {
+      onLoginSuccess(null, guestUser);
     }
   };
 
@@ -743,30 +748,19 @@ const Auth = ({ onLoginSuccess }) => {
             )}
 
             {!isSignUp && (
-              <div style={{ marginTop: '1.5rem', borderTop: '1px dashed rgba(255,255,255,0.08)', paddingTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <div style={{ textAlign: 'center', fontSize: '0.8rem', color: 'hsl(var(--text-muted))', fontWeight: 600 }}>
-                  🧪 Quick Test Accounts (Demo Mode)
-                </div>
-                <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}
-                    onClick={() => handleDemoLogin('student')}
-                    disabled={loading}
-                  >
-                    🎓 Test Student
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}
-                    onClick={() => handleDemoLogin('global')}
-                    disabled={loading}
-                  >
-                    🌍 Test Global
-                  </button>
-                </div>
+              <div style={{ marginTop: '1.25rem', borderTop: '1px dashed rgba(255,255,255,0.08)', paddingTop: '1.25rem' }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ width: '100%', padding: '0.6rem', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: 0.85 }}
+                  onClick={handleGuestContinue}
+                  disabled={loading}
+                >
+                  👤 Continue as Guest
+                </button>
+                <p style={{ textAlign: 'center', fontSize: '0.7rem', color: 'hsl(var(--text-muted))', marginTop: '0.5rem', lineHeight: 1.4 }}>
+                  Browse without an account. Progress won’t sync to the cloud.
+                </p>
               </div>
             )}
 
@@ -785,17 +779,9 @@ const Auth = ({ onLoginSuccess }) => {
         <div className="auth-brand">
           <div className="auth-logo" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.1rem' }}>
             <span className="logo-gradient-text">VIT</span>
-            <RotatingText
-              texts={isVitBhopal ? ['HON', 'LIFE'] : ['HON']}
-              mainClassName="auth-rotating-text"
-              staggerFrom="last"
-              initial={{ y: "100%", opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: "-120%", opacity: 0 }}
-              staggerDuration={0.025}
-              splitLevelClassName="overflow-hidden"
-              transition={{ type: "spring", damping: 30, stiffness: 400 }}
-              rotationInterval={4500}
+            <TypewriterText
+              words={isVitBhopal ? ['LIFE', 'BHOPAL'] : ['BHOPAL']}
+              className="auth-rotating-text"
             />
           </div>
           <div className="auth-subtitle">

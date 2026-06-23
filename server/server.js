@@ -282,9 +282,23 @@ const ensureIndexes = async (database) => {
 if (MONGODB_URI) {
   console.log("Connecting to MongoDB Atlas...");
   dbConnectionStatus = "Connecting";
-  client = new MongoClient(MONGODB_URI);
-  dbConnectingPromise = client.connect()
+  client = new MongoClient(MONGODB_URI, {
+    connectTimeoutMS: 3000,
+    serverSelectionTimeoutMS: 3000
+  });
+  let connectionTimeout;
+  const timeoutPromise = new Promise(resolve => {
+    connectionTimeout = setTimeout(() => {
+      if (!db) {
+        console.warn("⚠️ MongoDB connection attempt is taking too long (>4s). Proceeding with local fallbacks...");
+      }
+      resolve();
+    }, 4000);
+  });
+
+  const actualConnectPromise = client.connect()
     .then(async c => {
+      clearTimeout(connectionTimeout);
       db = c.db();
       dbConnectionStatus = "Connected";
       dbConnectionError = null;
@@ -315,10 +329,16 @@ if (MONGODB_URI) {
       }
     })
     .catch(err => {
+      clearTimeout(connectionTimeout);
       dbConnectionStatus = "Failed";
       dbConnectionError = err.message || String(err);
       console.error("Failed to connect to MongoDB Atlas, falling back to local files:", err);
     });
+
+  dbConnectingPromise = Promise.race([
+    actualConnectPromise,
+    timeoutPromise
+  ]);
 } else {
   dbConnectionStatus = "Local Fallback Mode (No MONGODB_URI)";
   console.log("No MONGODB_URI set, running in local fallback file mode.");
@@ -1171,7 +1191,8 @@ app.get('/api/db-status', authenticate, requireAdmin, (req, res) => {
 // 1. Register User (with email verification support & unverified recycling)
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
-    if (!smtpHealthy) {
+    const isDev = process.env.NODE_ENV !== 'production' || !process.env.VERCEL;
+    if (!smtpHealthy && !isDev) {
       return res.status(503).json({ error: '🔧 Registration is temporarily unavailable due to maintenance. Please try again later.' });
     }
     const { name, email, password, isVitBhopal, courses, semester } = req.body;
@@ -1321,7 +1342,8 @@ app.post('/api/auth/verify', authLimiter, authRateLimiter(5, 15 * 60 * 1000), as
 // Resend Verification Code Endpoint
 app.post('/api/auth/resend-code', authLimiter, authRateLimiter(5, 15 * 60 * 1000), async (req, res) => {
   try {
-    if (!smtpHealthy) {
+    const isDev = process.env.NODE_ENV !== 'production' || !process.env.VERCEL;
+    if (!smtpHealthy && !isDev) {
       return res.status(503).json({ error: '🔧 Email service is temporarily unavailable. Please try again later.' });
     }
     const { email } = req.body;
@@ -1441,78 +1463,11 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   }
 });
 
-// 2b. Demo Login Route for local testing
-app.post('/api/auth/demo-login', async (req, res) => {
-  try {
-    const { type } = req.body;
-    let email = '';
-    let name = '';
-    let isVitBhopal = false;
-    let program = '';
-    let courses = [];
-    let semester = '1';
-    let role = 'student';
-
-    if (type === 'student') {
-      email = 'demo.student@vitbhopal.ac.in';
-      name = 'Demo VIT Student';
-      isVitBhopal = true;
-      program = 'Integrated M.Tech CSE (Computational & Data Science)';
-      courses = ['DSA', 'DBMS', 'Linear Algebra'];
-      semester = '3';
-      role = 'student';
-    } else if (type === 'global') {
-      email = 'demo.global@gmail.com';
-      name = 'Demo Global User';
-      isVitBhopal = false;
-      semester = '0';
-      role = 'user';
-    } else {
-      return res.status(400).json({ error: 'Invalid demo user type.' });
-    }
-
-    // Check if user already exists
-    let user = await findUserByEmail(email);
-    if (!user) {
-      // Create user
-      user = {
-        name,
-        isVitBhopal,
-        semester,
-        courses,
-        program,
-        verified: true,
-        role,
-        skillsProgress: {},
-        passwordHash: 'dummyhash',
-        salt: 'dummysalt',
-        createdAt: new Date().toISOString()
-      };
-      await saveUser(email, user);
-    } else {
-      // Ensure the existing user is verified for testing
-      user.verified = true;
-      await saveUser(email, user);
-    }
-
-    await logActivity(email, 'demo-login', req);
-
-    const token = generateToken(email, user.passwordHash);
-
-    const userProfile = { ...user };
-    delete userProfile.passwordHash;
-    delete userProfile.salt;
-
-    res.json({ token, user: userProfile });
-  } catch (error) {
-    res.status(500).json({ error: 'Demo authentication error: ' + error.message });
-  }
-});
-
 // Forgot Password Request Endpoint
 app.post('/api/auth/forgot-password', authLimiter, authRateLimiter(5, 15 * 60 * 1000), async (req, res) => {
   try {
-    if (!smtpHealthy) {
+    const isDev = process.env.NODE_ENV !== 'production' || !process.env.VERCEL;
+    if (!smtpHealthy && !isDev) {
       return res.status(503).json({ error: '🔧 Password reset is temporarily unavailable due to maintenance. Please try again later.' });
     }
     const { email } = req.body;
@@ -1644,7 +1599,7 @@ app.get('/api/user/profile', authenticate, async (req, res) => {
 // 4. Update User Profile Progress / Stats
 app.post('/api/user/profile', authenticate, async (req, res) => {
   try {
-    const { name, xpPoints, skillsProgress, courses, semester } = req.body;
+    const { name, xpPoints, skillsProgress, courses, semester, timetable } = req.body;
     const user = await findUserByEmail(req.user.email);
 
     if (!user) {
@@ -1668,6 +1623,9 @@ app.post('/api/user/profile', authenticate, async (req, res) => {
     }
     if (semester !== undefined) {
       user.semester = parseInt(semester, 10) || 1;
+    }
+    if (timetable !== undefined) {
+      user.timetable = Array.isArray(timetable) ? timetable : [];
     }
 
     await saveUser(req.user.email, user);
@@ -1965,7 +1923,9 @@ app.get('/api/clubs/:id/managers', async (req, res) => {
     if (dbConnectingPromise) await dbConnectingPromise;
     if (db) {
       try {
-        const dbUsers = await db.collection('users').find({ role: 'club_manager', clubId: id }).toArray();
+        const dbUsers = await db.collection('users').find(
+          { role: 'club_manager', clubId: id, verified: true }  // exclude unverified
+        ).toArray();
         managers = dbUsers.map(u => ({ name: u.name, email: u.email, role: u.role, clubId: u.clubId }));
       } catch (err) {
         console.error("MongoDB get club managers error:", err);
@@ -1974,7 +1934,7 @@ app.get('/api/clubs/:id/managers', async (req, res) => {
     if (managers.length === 0) {
       const localUsers = loadUsers();
       managers = Object.values(localUsers)
-        .filter(u => u.role === 'club_manager' && u.clubId === id)
+        .filter(u => u.role === 'club_manager' && u.clubId === id && u.verified === true)  // exclude unverified
         .map(u => ({ name: u.name, email: u.email, role: u.role, clubId: u.clubId }));
     }
     res.json({ managers });
@@ -2307,19 +2267,22 @@ app.get('/api/admin/users', authenticate, requireAdmin, async (req, res) => {
     let users = [];
     if (db) {
       try {
-        users = await db.collection('users').find({}, {
-          projection: { name: 1, email: 1, role: 1, clubId: 1, registrationNumber: 1, program: 1, _id: 0 }
-        }).toArray();
+      users = await db.collection('users').find(
+          { verified: true },  // exclude unverified — they only appear in activity logs
+          { projection: { name: 1, email: 1, role: 1, clubId: 1, registrationNumber: 1, program: 1, verified: 1, _id: 0 } }
+        ).toArray();
       } catch (err) {
         console.error("MongoDB admin/users error:", err);
       }
     }
     if (users.length === 0) {
       const localUsers = loadUsers();
-      users = Object.values(localUsers).map(u => ({
-        name: u.name, email: u.email, role: u.role || 'student',
-        clubId: u.clubId || null, registrationNumber: u.registrationNumber || '', program: u.program || ''
-      }));
+      users = Object.values(localUsers)
+        .filter(u => u.verified === true)  // exclude unverified users
+        .map(u => ({
+          name: u.name, email: u.email, role: u.role || 'student',
+          clubId: u.clubId || null, registrationNumber: u.registrationNumber || '', program: u.program || ''
+        }));
     }
     
     const usersWithFlag = users.map(u => ({
@@ -2349,6 +2312,11 @@ app.post('/api/admin/promote', authenticate, requireAdmin, async (req, res) => {
     const targetUser = await findUserByEmail(email);
     if (!targetUser) {
       return res.status(404).json({ error: 'User not found.' });
+    }
+    
+    // Block promoting unverified users — they must verify email first
+    if (targetUser.verified !== true) {
+      return res.status(400).json({ error: 'Cannot promote an unverified user. The user must verify their email first.' });
     }
     
     // Safeguards

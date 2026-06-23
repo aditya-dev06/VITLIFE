@@ -959,8 +959,8 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
     return (
       <div className="campus-container">
         <div className="section-header">
-          <h1 className="section-title">Campus Life</h1>
-          <p className="section-subtitle">Loading campus data...</p>
+          <h1 className="section-title">College Life</h1>
+          <p className="section-subtitle">Loading college life data...</p>
         </div>
         <div className="empty-state">
           <div style={{ fontSize: '3rem', marginBottom: '1rem', animation: 'pulse 1.5s ease-in-out infinite' }}>🎪</div>
@@ -972,11 +972,10 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
 
   return (
     <div className="campus-container">
-      {/* Header */}
       <div className="section-header">
-        <h1 className="section-title">Campus Life</h1>
+        <h1 className="section-title">College Life</h1>
         <p className="section-subtitle">
-          Discover clubs, events, and opportunities across VIT Bhopal campus.
+          Discover clubs, events, and opportunities to upgrade your college life.
         </p>
       </div>
 

@@ -95,10 +95,37 @@ body.light-theme {
   -webkit-text-fill-color: transparent !important;
 }
 
-.light-theme .sidebar .brand-rotating-text {
-  background: linear-gradient(135deg, hsl(250 89% 65%), hsl(185 85% 55%)) !important;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) !important;
+.light-theme .brand-rotating-text {
+  background: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  height: auto !important;
+  min-width: unset !important;
+  margin-left: 0.25rem !important;
 }
+
+.light-theme .brand-rotating-text .typewriter-text {
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary))) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  color: transparent !important;
+}
+
+.light-theme .brand-rotating-text .typewriter-cursor {
+  background-color: hsl(var(--primary)) !important;
+}
+
+.light-theme .sidebar .brand-rotating-text .typewriter-text {
+  background: linear-gradient(135deg, hsl(250 89% 65%), hsl(185 85% 55%)) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+.light-theme .sidebar .brand-rotating-text .typewriter-cursor {
+  background-color: hsl(250 89% 65%) !important;
+}
+
 
 .light-theme .sidebar .branch-badge {
   background: rgba(43, 224, 245, 0.12) !important;
@@ -722,10 +749,55 @@ button, input, textarea, select {
   animation: pulse 1.5s infinite ease-in-out;
 }
 
+.status-dot.status-dot--guest {
+  background-color: #a78bfa;
+  box-shadow: 0 0 8px #a78bfa;
+}
+
 .sidebar-footer {
   padding: 1rem 0;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
+
+/* ── PWA Install Button (sidebar) ── */
+.pwa-install-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  margin: 0.5rem 0;
+  padding: 0.55rem 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(99, 91, 255, 0.35);
+  background: linear-gradient(135deg, rgba(99,91,255,0.15), rgba(139,92,246,0.1));
+  color: hsl(var(--primary));
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  animation: installPulse 2.5s ease-in-out infinite;
+}
+
+.pwa-install-btn:hover {
+  background: linear-gradient(135deg, rgba(99,91,255,0.3), rgba(139,92,246,0.2));
+  border-color: hsl(var(--primary));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(99,91,255,0.25);
+}
+
+@keyframes installPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99,91,255,0.2); }
+  50%       { box-shadow: 0 0 0 6px rgba(99,91,255,0); }
+}
+
+/* Light theme */
+.light-theme .pwa-install-btn {
+  background: linear-gradient(135deg, rgba(99,91,255,0.1), rgba(139,92,246,0.06));
+  color: hsl(var(--primary));
+}
+
 
 .user-profile-capsule {
   display: flex;
@@ -734,14 +806,14 @@ button, input, textarea, select {
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 8px;
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 0.4rem;
   width: 100%;
 }
 
 .user-profile {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .avatar {
@@ -761,7 +833,7 @@ button, input, textarea, select {
 .user-info .name {
   font-size: 0.8rem;
   font-weight: 600;
-  max-width: 100px;
+  max-width: 55px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -774,7 +846,7 @@ button, input, textarea, select {
 
 .profile-actions {
   display: flex;
-  gap: 0.25rem;
+  gap: 0.15rem;
 }
 
 .profile-btn {
@@ -782,13 +854,13 @@ button, input, textarea, select {
   border: none;
   color: hsl(var(--text-muted));
   cursor: pointer;
-  padding: 0.25rem;
+  padding: 0.15rem;
   border-radius: 4px;
   transition: var(--transition-smooth);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
 }
 
 .profile-btn:hover {
@@ -2784,7 +2856,7 @@ button, input, textarea, select {
     padding-right: 14px !important;
     width: 100%;
     min-height: 100vh;
-    background-color: hsl(var(--bg-deep));
+    background: radial-gradient(circle at 50% 0%, hsla(var(--primary) / 0.08), transparent 70%), hsl(var(--bg-deep)) !important;
     overflow-x: hidden;
   }
 
@@ -2835,6 +2907,25 @@ button, input, textarea, select {
   .search-box {
     min-width: 0 !important;
     width: 100% !important;
+  }
+
+  .opp-tabs {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    gap: 2px !important;
+    padding: 2px !important;
+    border-radius: 8px !important;
+  }
+
+  .opp-tab {
+    flex: 1 !important;
+    min-width: 0 !important;
+    padding: 0.55rem 0.25rem !important;
+    font-size: 0.76rem !important;
+    border-radius: 6px !important;
+    text-align: center !important;
   }
 
   /* Roadmap Timeline Adaptations */
@@ -3390,4 +3481,303 @@ button, input, textarea, select {
 /* GitHub pill gets a secondary-hued glow */
 .top-bar-link[href*="github"]:hover {
   box-shadow: 0 0 18px hsla(var(--secondary) / 0.22);
+}
+
+/* ========== LIVE CLASS TRACKER PANEL ========== */
+.live-tracker-panel {
+  padding: 1.5rem 2rem;
+  margin-bottom: 2rem;
+  background: linear-gradient(135deg, hsla(var(--bg-card) / 0.7), hsla(var(--bg-card) / 0.3));
+  border: 1px solid hsla(var(--border-glass));
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  transition: all 0.3s ease;
+}
+
+.live-tracker-panel.ongoing {
+  border-left: 4px solid hsl(var(--primary));
+  box-shadow: 0 0 25px hsla(var(--primary) / 0.08);
+}
+
+.live-tracker-panel.upcoming {
+  border-left: 4px solid hsl(var(--secondary));
+  box-shadow: 0 0 25px hsla(var(--secondary) / 0.08);
+}
+
+.live-tracker-panel.holiday {
+  border-left: 4px solid #10b981;
+}
+
+.live-tracker-panel.setup {
+  border-left: 4px solid hsl(var(--accent));
+  background: linear-gradient(135deg, hsla(var(--bg-card) / 0.5), hsla(var(--bg-card) / 0.2));
+}
+
+.tracker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.tracker-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: hsl(var(--primary));
+}
+
+.tracker-status-badge.upcoming {
+  color: hsl(var(--secondary));
+}
+
+.tracker-status-badge.free-day {
+  color: #10b981;
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: hsl(var(--primary));
+  animation: pulse-glow 1.5s infinite ease-in-out;
+  display: inline-block;
+}
+
+@keyframes pulse-glow {
+  0% {
+    transform: scale(0.8);
+    box-shadow: 0 0 0 0 hsla(var(--primary) / 0.7);
+  }
+  70% {
+    transform: scale(1.2);
+    box-shadow: 0 0 0 8px hsla(var(--primary) / 0);
+  }
+  100% {
+    transform: scale(0.8);
+    box-shadow: 0 0 0 0 hsla(var(--primary) / 0);
+  }
+}
+
+.tracker-manage-btn {
+  background: transparent;
+  border: 1px solid hsla(var(--border-glass));
+  color: hsl(var(--text-secondary));
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tracker-manage-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: hsl(var(--text-secondary));
+  color: hsl(var(--text-primary));
+}
+
+.tracker-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .tracker-content {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+}
+
+.tracker-main-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.tracker-slot {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: hsl(var(--secondary));
+  letter-spacing: 0.05em;
+}
+
+.tracker-course-code {
+  font-size: 1.8rem;
+  font-weight: 800;
+  margin: 0;
+  color: hsl(var(--text-primary));
+  line-height: 1.2;
+}
+
+.tracker-room-type {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: hsl(var(--text-secondary));
+}
+
+.tracker-time-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tracker-time-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: hsl(var(--text-secondary));
+  font-weight: 600;
+}
+
+.tracker-time-remaining {
+  color: hsl(var(--primary));
+  font-weight: 700;
+}
+
+.tracker-progress-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.tracker-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--secondary)));
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.tracker-time-countdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  text-align: right;
+}
+
+@media (max-width: 768px) {
+  .tracker-time-countdown {
+    text-align: left;
+  }
+}
+
+.countdown-number {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: hsl(var(--secondary));
+}
+
+.countdown-time {
+  font-size: 0.85rem;
+  color: hsl(var(--text-muted));
+}
+
+.tracker-footer {
+  border-top: 1px solid hsla(var(--border-glass));
+  padding-top: 0.75rem;
+  font-size: 0.8rem;
+  color: hsl(var(--text-secondary));
+}
+
+.tracker-footer strong {
+  color: hsl(var(--text-primary));
+}
+
+/* Holiday & Setup Specifics */
+.tracker-content-holiday {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .tracker-content-holiday {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+.holiday-text h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.15rem;
+  color: hsl(var(--text-primary));
+}
+
+.holiday-text p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: hsl(var(--text-secondary));
+  line-height: 1.5;
+}
+
+.tracker-content-setup {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .tracker-content-setup {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+.setup-icon {
+  font-size: 2.2rem;
+  background: rgba(255, 255, 255, 0.04);
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid hsla(var(--border-glass));
+  flex-shrink: 0;
+}
+
+.setup-text {
+  flex: 1;
+}
+
+.setup-text h3 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.15rem;
+  color: hsl(var(--text-primary));
+}
+
+.setup-text p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: hsl(var(--text-secondary));
+  line-height: 1.5;
+}
+
+/* Light Theme tweaks */
+.light-theme .live-tracker-panel {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.015), rgba(0, 0, 0, 0.005));
+}
+.light-theme .tracker-manage-btn:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+.light-theme .tracker-progress-bar-bg {
+  background: rgba(0, 0, 0, 0.05);
+}
+.light-theme .setup-icon {
+  background: rgba(0, 0, 0, 0.02);
 }

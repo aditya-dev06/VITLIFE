@@ -1,0 +1,26 @@
+.typewriter-container {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.typewriter-text {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  font-weight: inherit;
+}
+
+.typewriter-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  background-color: #ffffff;
+  margin-left: 2px;
+  animation: typewriter-blink 0.8s step-end infinite;
+  vertical-align: middle;
+}
+
+@keyframes typewriter-blink {
+  50% { opacity: 0; }
+}

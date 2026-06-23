@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import BounceCards from './BounceCards';
 import Hyperspeed from './Hyperspeed';
 
@@ -81,6 +81,56 @@ const eventTransformStyles = [
   'rotate(-4deg) translate(22px)',
   'rotate(3deg) translate(45px)'
 ];
+
+const SLOT_MAPPING = {
+  A11: { day: 1, start: '08:30', end: '10:00' },
+  B11: { day: 1, start: '10:05', end: '11:35' },
+  C11: { day: 1, start: '11:40', end: '13:10' },
+  A21: { day: 1, start: '13:15', end: '14:45' },
+  A14: { day: 1, start: '14:50', end: '16:20' },
+  B21: { day: 1, start: '16:25', end: '17:55' },
+  C21: { day: 1, start: '18:00', end: '19:30' },
+
+  D11: { day: 2, start: '08:30', end: '10:00' },
+  E11: { day: 2, start: '10:05', end: '11:35' },
+  F11: { day: 2, start: '11:40', end: '13:10' },
+  D21: { day: 2, start: '13:15', end: '14:45' },
+  E14: { day: 2, start: '14:50', end: '16:20' },
+  E21: { day: 2, start: '16:25', end: '17:55' },
+  F21: { day: 2, start: '18:00', end: '19:30' },
+
+  A12: { day: 3, start: '08:30', end: '10:00' },
+  B12: { day: 3, start: '10:05', end: '11:35' },
+  C12: { day: 3, start: '11:40', end: '13:10' },
+  A22: { day: 3, start: '13:15', end: '14:45' },
+  B14: { day: 3, start: '14:50', end: '16:20' },
+  B22: { day: 3, start: '16:25', end: '17:55' },
+  A24: { day: 3, start: '18:00', end: '19:30' },
+
+  D12: { day: 4, start: '08:30', end: '10:00' },
+  E12: { day: 4, start: '10:05', end: '11:35' },
+  F12: { day: 4, start: '11:40', end: '13:10' },
+  D22: { day: 4, start: '13:15', end: '14:45' },
+  F14: { day: 4, start: '14:50', end: '16:20' },
+  E22: { day: 4, start: '16:25', end: '17:55' },
+  F22: { day: 4, start: '18:00', end: '19:30' },
+
+  A13: { day: 5, start: '08:30', end: '10:00' },
+  B13: { day: 5, start: '10:05', end: '11:35' },
+  C13: { day: 5, start: '11:40', end: '13:10' },
+  A23: { day: 5, start: '13:15', end: '14:45' },
+  C14: { day: 5, start: '14:50', end: '16:20' },
+  B23: { day: 5, start: '16:25', end: '17:55' },
+  B24: { day: 5, start: '18:00', end: '19:30' },
+
+  D13: { day: 6, start: '08:30', end: '10:00' },
+  E13: { day: 6, start: '10:05', end: '11:35' },
+  F13: { day: 6, start: '11:40', end: '13:10' },
+  D23: { day: 6, start: '13:15', end: '14:45' },
+  D14: { day: 6, start: '14:50', end: '16:20' },
+  D24: { day: 6, start: '16:25', end: '17:55' },
+  E23: { day: 6, start: '18:00', end: '19:30' }
+};
 
 const CATEGORIES = [
   { key: 'all', label: 'All', icon: '🌟' },
@@ -695,6 +745,297 @@ function DashboardEventCardItem({
 
 const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, clubs = [], events = [], fetchEvents, token, theme }) => {
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 15000); // Check every 15 seconds to ensure quick updates
+    return () => clearInterval(timer);
+  }, []);
+
+  const getLiveClassInfo = () => {
+    if (!user || !user.timetable || user.timetable.length === 0) {
+      return { status: 'no_timetable' };
+    }
+
+    const timeToMinutes = (t) => {
+      const [h, m] = t.split(':').map(Number);
+      return h * 60 + m;
+    };
+
+    const currentDay = currentTime.getDay(); // 0 (Sunday) to 6 (Saturday)
+    const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+
+    const classesWithSchedule = user.timetable.map(entry => {
+      const schedule = SLOT_MAPPING[entry.slot];
+      if (!schedule) return null;
+      return {
+        ...entry,
+        day: schedule.day,
+        start: schedule.start,
+        end: schedule.end,
+        startMinutes: timeToMinutes(schedule.start),
+        endMinutes: timeToMinutes(schedule.end)
+      };
+    }).filter(Boolean);
+
+    if (classesWithSchedule.length === 0) {
+      return { status: 'no_timetable' };
+    }
+
+    // If Sunday (0), find the next day with classes starting from Monday (1)
+    if (currentDay === 0) {
+      let nextClass = null;
+      let dayDiff = 1;
+      for (let i = 1; i <= 6; i++) {
+        const targetDay = i;
+        const targetDayClasses = classesWithSchedule
+          .filter(c => c.day === targetDay)
+          .sort((a, b) => a.startMinutes - b.startMinutes);
+        if (targetDayClasses.length > 0) {
+          nextClass = targetDayClasses[0];
+          dayDiff = (targetDay - currentDay + 7) % 7;
+          break;
+        }
+      }
+      return {
+        status: 'subsequent_days',
+        nextClass,
+        dayDiff,
+        nextDayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][(currentDay + dayDiff) % 7]
+      };
+    }
+
+    // Filter today's classes (Monday=1...Saturday=6)
+    const todayClasses = classesWithSchedule
+      .filter(c => c.day === currentDay)
+      .sort((a, b) => a.startMinutes - b.startMinutes);
+
+    // 1. Ongoing class check
+    const ongoing = todayClasses.find(c => currentMinutes >= c.startMinutes && currentMinutes < c.endMinutes);
+
+    // 2. Upcoming class today check
+    const upcomingToday = todayClasses.find(c => c.startMinutes > currentMinutes);
+
+    if (ongoing) {
+      const totalDuration = ongoing.endMinutes - ongoing.startMinutes;
+      const elapsed = currentMinutes - ongoing.startMinutes;
+      const progress = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
+      const remainingMinutes = ongoing.endMinutes - currentMinutes;
+
+      // Find the next class today or in subsequent days
+      let next = upcomingToday || null;
+      if (!next) {
+        for (let i = 1; i <= 7; i++) {
+          const targetDay = (currentDay + i) % 7;
+          if (targetDay === 0) continue;
+          const targetDayClasses = classesWithSchedule
+            .filter(c => c.day === targetDay)
+            .sort((a, b) => a.startMinutes - b.startMinutes);
+          if (targetDayClasses.length > 0) {
+            next = targetDayClasses[0];
+            break;
+          }
+        }
+      }
+
+      return {
+        status: 'ongoing',
+        currentClass: ongoing,
+        nextClass: next,
+        progress,
+        remainingMinutes
+      };
+    }
+
+    if (upcomingToday) {
+      const waitMinutes = upcomingToday.startMinutes - currentMinutes;
+      return {
+        status: 'upcoming_today',
+        nextClass: upcomingToday,
+        waitMinutes
+      };
+    }
+
+    // No classes left today. Look for next days
+    let nextClass = null;
+    let dayDiff = 1;
+    for (let i = 1; i <= 7; i++) {
+      const targetDay = (currentDay + i) % 7;
+      if (targetDay === 0) continue;
+      const targetDayClasses = classesWithSchedule
+        .filter(c => c.day === targetDay)
+        .sort((a, b) => a.startMinutes - b.startMinutes);
+      if (targetDayClasses.length > 0) {
+        nextClass = targetDayClasses[0];
+        dayDiff = i;
+        break;
+      }
+    }
+
+    if (nextClass) {
+      return {
+        status: 'subsequent_days',
+        nextClass,
+        dayDiff,
+        nextDayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][(currentDay + dayDiff) % 7]
+      };
+    }
+
+    return { status: 'idle' };
+  };
+
+  const renderLiveClassTracker = () => {
+    const info = getLiveClassInfo();
+
+    if (info.status === 'no_timetable') {
+      return (
+        <div className="glass-panel live-tracker-panel setup">
+          <div className="tracker-content-setup">
+            <div className="setup-icon">📅</div>
+            <div className="setup-text">
+              <h3>Track Your Class Schedule Live</h3>
+              <p>
+                Upload your VTOP timetable screenshot once to automatically trace your active classes, display remaining time, and navigate classrooms easily.
+              </p>
+            </div>
+            <button className="btn-primary" onClick={() => onNavigate('timetable')}>
+              Set Up Timetable
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (info.status === 'ongoing') {
+      const classTypeLabel = info.currentClass.type === 'LT' ? 'Lecture (Theory)' 
+        : info.currentClass.type === 'LTP' ? 'Theory + Tutorial + Practical'
+        : info.currentClass.type === 'LP' ? 'Lab Practical' : 'Tutorial';
+
+      return (
+        <div className="glass-panel live-tracker-panel ongoing">
+          <div className="tracker-header">
+            <span className="tracker-status-badge">
+              <span className="pulse-dot"></span>
+              ONGOING CLASS
+            </span>
+            <button className="tracker-manage-btn" onClick={() => onNavigate('timetable')}>
+              Manage Schedule
+            </button>
+          </div>
+          
+          <div className="tracker-content">
+            <div className="tracker-main-info">
+              <span className="tracker-slot">Slot {info.currentClass.slot}</span>
+              <h2 className="tracker-course-code">{info.currentClass.courseCode}</h2>
+              <div className="tracker-room-type">
+                <span>📍 Room: {info.currentClass.room}</span>
+                <span>•</span>
+                <span>{classTypeLabel}</span>
+              </div>
+            </div>
+            
+            <div className="tracker-time-progress">
+              <div className="tracker-time-row">
+                <span>🕒 {info.currentClass.start} - {info.currentClass.end}</span>
+                <span className="tracker-time-remaining">
+                  {info.remainingMinutes} min{info.remainingMinutes > 1 ? 's' : ''} remaining
+                </span>
+              </div>
+              <div className="tracker-progress-bar-bg">
+                <div className="tracker-progress-bar-fill" style={{ width: `${info.progress}%` }}></div>
+              </div>
+            </div>
+          </div>
+          
+          {info.nextClass && (
+            <div className="tracker-footer">
+              <span>NEXT CLASS: </span>
+              <strong>{info.nextClass.courseCode}</strong>
+              <span> ({info.nextClass.slot}) at {info.nextClass.start} in Room {info.nextClass.room}</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (info.status === 'upcoming_today') {
+      const classTypeLabel = info.nextClass.type === 'LT' ? 'Lecture (Theory)' 
+        : info.nextClass.type === 'LTP' ? 'Theory + Tutorial + Practical'
+        : info.nextClass.type === 'LP' ? 'Lab Practical' : 'Tutorial';
+
+      return (
+        <div className="glass-panel live-tracker-panel upcoming">
+          <div className="tracker-header">
+            <span className="tracker-status-badge upcoming">
+              ⏳ UPCOMING CLASS TODAY
+            </span>
+            <button className="tracker-manage-btn" onClick={() => onNavigate('timetable')}>
+              Manage Schedule
+            </button>
+          </div>
+          
+          <div className="tracker-content">
+            <div className="tracker-main-info">
+              <span className="tracker-slot">Slot {info.nextClass.slot}</span>
+              <h2 className="tracker-course-code">{info.nextClass.courseCode}</h2>
+              <div className="tracker-room-type">
+                <span>📍 Room: {info.nextClass.room}</span>
+                <span>•</span>
+                <span>{classTypeLabel}</span>
+              </div>
+            </div>
+            
+            <div className="tracker-time-countdown">
+              <span className="countdown-number">starts in {info.waitMinutes} mins</span>
+              <span className="countdown-time">at {info.nextClass.start}</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (info.status === 'subsequent_days') {
+      return (
+        <div className="glass-panel live-tracker-panel holiday">
+          <div className="tracker-header">
+            <span className="tracker-status-badge free-day">
+              🌴 NO MORE CLASSES TODAY
+            </span>
+            <button className="tracker-manage-btn" onClick={() => onNavigate('timetable')}>
+              Manage Schedule
+            </button>
+          </div>
+          
+          <div className="tracker-content-holiday">
+            <div className="holiday-text">
+              <h3>All classes completed for today!</h3>
+              <p>
+                Next scheduled class is <strong>{info.nextClass.courseCode}</strong> (Slot {info.nextClass.slot}) on <strong>{info.nextDayName}</strong> at <strong>{info.nextClass.start}</strong> in Room <strong>{info.nextClass.room}</strong>.
+              </p>
+            </div>
+            <button className="btn-secondary" onClick={() => onNavigate('timetable')} style={{ flexShrink: 0 }}>
+              View Schedule
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobileDevice(window.innerWidth <= 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   const inProgressSkills = stats.inProgressSkillsList || [];
   const activeOpportunities = opportunities ? opportunities.slice(0, 3) : [];
 
@@ -804,28 +1145,32 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
 
   return (
     <div style={{ position: 'relative', width: '100%', minHeight: '100%', overflow: 'hidden' }}>
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100vw',
-        height: '100vh',
-        zIndex: 0,
-        opacity: theme === 'light' ? 0.6 : 0.5,
-        pointerEvents: 'none'
-      }}>
-        <Hyperspeed effectOptions={theme === 'light' ? LIGHT_HYPERSPEED_OPTIONS : DARK_HYPERSPEED_OPTIONS} />
-      </div>
+      {!isMobileDevice && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          zIndex: 0,
+          opacity: theme === 'light' ? 0.6 : 0.5,
+          pointerEvents: 'none'
+        }}>
+          <Hyperspeed effectOptions={theme === 'light' ? LIGHT_HYPERSPEED_OPTIONS : DARK_HYPERSPEED_OPTIONS} />
+        </div>
+      )}
       <div style={{ position: 'relative', zIndex: 1 }}>
         <div className="section-header">
         <h1 className="section-title">Welcome Back, {user ? user.name : 'User'}</h1>
         <p className="section-subtitle">
-          Here is your college lifestyle and management companion for today. Keep track of campus events, active clubs, and your academic roadmap.
+          Here is your college lifestyle and management companion for today. Keep track of college events, active clubs, and your academic roadmap.
         </p>
       </div>
 
+      {user && renderLiveClassTracker()}
+
       {/* Upcoming Events Section */}
-      {user && user.isVitBhopal && (
+      {user && (
         <div className="glass-panel dashboard-panel">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <div>
@@ -882,7 +1227,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
           </h2>
           
           <p>
-            VIT Life is your centralized companion for managing classes, discovering campus clubs, tracking student events, and upgrading your skills.
+            VIT Life is your centralized companion for managing classes, discovering college clubs, tracking student events, and upgrading your skills.
           </p>
 
           {user && user.isVitBhopal && user.courses && user.courses.length > 0 && (
