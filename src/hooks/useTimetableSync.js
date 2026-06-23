@@ -1,21 +1,12 @@
-/**
- * useTimetableSync
- *
- * Handles offline-first timetable persistence:
- *  - Saves immediately to localStorage (always works offline)
- *  - Tries to sync to server; if it fails, stores a pending payload
- *  - On `window.online` event, retries any pending sync automatically
- *  - Exposes `syncStatus`: 'synced' | 'offline' | 'syncing' | 'pending'
- */
 import { useState, useEffect, useCallback } from 'react';
 
-const PENDING_SYNC_KEY = 'timetable_pending_sync';
+const PENDING_SYNC_KEY = 'profile_pending_sync';
 
-export function useTimetableSync(token) {
+export function useProfileSync(token) {
   const [syncStatus, setSyncStatus] = useState('synced'); // 'synced' | 'offline' | 'syncing' | 'pending'
 
-  // Push timetable to server, return true on success
-  const pushToServer = useCallback(async (timetable) => {
+  // Push updates to server, return true on success
+  const pushToServer = useCallback(async (updates) => {
     if (!token) return false;
     try {
       const res = await fetch('/api/user/profile', {
@@ -24,7 +15,7 @@ export function useTimetableSync(token) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ timetable }),
+        body: JSON.stringify(updates),
         // Hard 6-second timeout so we don't hang indefinitely
         signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined,
       });
@@ -38,14 +29,20 @@ export function useTimetableSync(token) {
   const retryPendingSync = useCallback(async () => {
     const raw = localStorage.getItem(PENDING_SYNC_KEY);
     if (!raw) return;
-    const { timetable } = JSON.parse(raw);
-    setSyncStatus('syncing');
-    const ok = await pushToServer(timetable);
-    if (ok) {
+    try {
+      const updates = JSON.parse(raw);
+      setSyncStatus('syncing');
+      const ok = await pushToServer(updates);
+      if (ok) {
+        localStorage.removeItem(PENDING_SYNC_KEY);
+        setSyncStatus('synced');
+      } else {
+        setSyncStatus('pending');
+      }
+    } catch {
+      // If parsing fails, remove the corrupted payload to prevent infinite retries
       localStorage.removeItem(PENDING_SYNC_KEY);
       setSyncStatus('synced');
-    } else {
-      setSyncStatus('pending');
     }
   }, [pushToServer]);
 
@@ -56,65 +53,81 @@ export function useTimetableSync(token) {
     return () => window.removeEventListener('online', handle);
   }, [retryPendingSync]);
 
-  // On mount: check for any pending timetable sync and handle it
+  // On mount: check for any pending profile sync and handle it
   useEffect(() => {
     const raw = localStorage.getItem(PENDING_SYNC_KEY);
     if (!raw) return;
 
     if (!navigator.onLine) {
-      // Defer setState out of synchronous effect body
       Promise.resolve().then(() => setSyncStatus('pending'));
       return;
     }
 
-    const { timetable } = JSON.parse(raw);
-    // pushToServer is async — setState only called inside .then()
-    pushToServer(timetable).then((ok) => {
-      if (ok) {
-        localStorage.removeItem(PENDING_SYNC_KEY);
-        setSyncStatus('synced');
-      } else {
-        setSyncStatus('pending');
-      }
-    });
+    try {
+      const updates = JSON.parse(raw);
+      pushToServer(updates).then((ok) => {
+        if (ok) {
+          localStorage.removeItem(PENDING_SYNC_KEY);
+          setSyncStatus('synced');
+        } else {
+          setSyncStatus('pending');
+        }
+      });
+    } catch {
+      localStorage.removeItem(PENDING_SYNC_KEY);
+    }
   }, [pushToServer]);
 
   /**
-   * saveTimetable(timetable, userObj, setUser)
+   * saveProfileUpdate(updatePayload, userObj, setUser)
    *
-   * 1. Writes to localStorage immediately (offline-safe)
+   * 1. Writes to localStorage immediately (offline-safe, optimistic UI)
    * 2. Updates React state
-   * 3. Tries server sync; queues for retry if offline
+   * 3. Tries server sync; queues for retry if offline or fails
    */
-  const saveTimetable = useCallback(async (newTimetable, userObj, setUser) => {
-    // 1. Persist locally (always)
-    if (userObj) {
-      const updatedUser = { ...userObj, timetable: newTimetable };
+  const saveProfileUpdate = useCallback(async (updatePayload, userObj, setUser) => {
+    // 1. Update local state immediately
+    if (userObj && setUser) {
+      const updatedUser = { ...userObj, ...updatePayload };
       setUser(updatedUser);
       localStorage.setItem('ds_ai_user', JSON.stringify(updatedUser));
     }
 
     if (!token) return;
 
+    // Get current pending updates from localStorage
+    let currentPending = {};
+    const raw = localStorage.getItem(PENDING_SYNC_KEY);
+    if (raw) {
+      try {
+        currentPending = JSON.parse(raw);
+      } catch {
+        currentPending = {};
+      }
+    }
+
+    // Merge new updates into pending queue
+    const mergedUpdates = { ...currentPending, ...updatePayload };
+
     // 2. If offline, queue it
     if (!navigator.onLine) {
-      localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify({ timetable: newTimetable }));
+      localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(mergedUpdates));
       setSyncStatus('pending');
       return;
     }
 
     // 3. Try server sync
     setSyncStatus('syncing');
-    const ok = await pushToServer(newTimetable);
+    const ok = await pushToServer(mergedUpdates);
     if (ok) {
       localStorage.removeItem(PENDING_SYNC_KEY);
       setSyncStatus('synced');
     } else {
       // Server reachable but failed (or timed out) — queue for retry
-      localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify({ timetable: newTimetable }));
+      localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(mergedUpdates));
       setSyncStatus('pending');
     }
   }, [token, pushToServer]);
 
-  return { syncStatus, saveTimetable };
+  return { syncStatus, saveProfileUpdate };
 }

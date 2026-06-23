@@ -134,7 +134,8 @@ const Masonry = ({
         ? (aspect ? (columnWidth / aspect) : (columnWidth / 1.3))
         : 120; // fallback height for no-image placeholder card
       
-      const height = imgHeight + 200; // estimated text details height
+      const textHeight = columns === 1 ? 275 : 245;
+      const height = imgHeight + textHeight; // dynamic estimated text details height to prevent bottom overflow
       const y = colHeights[col];
 
       colHeights[col] += height;

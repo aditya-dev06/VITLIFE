@@ -1,10 +1,11 @@
 /* Core Design System & Theme Settings */
-@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=Sora:wght@300;400;500;600;700;800&display=swap');
 
 :root {
   /* Typography Fonts */
-  --font-heading: 'Outfit', sans-serif;
-  --font-body: 'Plus Jakarta Sans', sans-serif;
+  --font-heading: 'Space Grotesk', sans-serif;
+  --font-accent: 'Sora', sans-serif;
+  --font-body: 'Inter', sans-serif;
   --font-mono: 'Geist Mono', 'Courier New', Courier, monospace;
 
   /* HSL Obsidian Deep Palette */
@@ -206,6 +207,8 @@ body.light-theme {
 /* Floating Top Bar (scrolled states) */
 .light-theme .top-bar.scrolled .top-bar-nav {
   background: hsla(var(--bg-card) / 0.8) !important;
+  backdrop-filter: blur(22px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(190%) !important;
   border-color: rgba(0, 0, 0, 0.06) !important;
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.01) inset,
@@ -494,6 +497,39 @@ body.light-theme {
   box-shadow: 0 0 6px hsla(var(--primary) / 0.3) !important;
 }
 
+/* Scrollbar Thumb Light Mode Contrast Override */
+.light-theme ::-webkit-scrollbar-thumb {
+  background: hsla(0, 0%, 0%, 0.15) !important;
+}
+.light-theme ::-webkit-scrollbar-thumb:hover {
+  background: hsla(var(--primary) / 0.6) !important;
+}
+
+/* Mobile Day selector unselected button text color contrast override */
+.light-theme .day-tab-btn {
+  color: hsl(var(--text-secondary)) !important;
+}
+.light-theme .day-tab-btn.active {
+  color: hsl(var(--text-primary)) !important;
+}
+
+/* Roadmap Level Skill Status badges - light theme contrast overrides */
+.light-theme .status-todo {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: hsl(var(--text-muted)) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+.light-theme .status-progress {
+  background: hsla(192, 85%, 30%, 0.08) !important;
+  color: hsl(192, 85%, 30%) !important;
+  border-color: hsla(192, 85%, 30%, 0.2) !important;
+}
+.light-theme .status-done {
+  background: rgba(22, 163, 74, 0.08) !important;
+  color: rgb(22, 163, 74) !important;
+  border-color: rgba(22, 163, 74, 0.2) !important;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -521,7 +557,11 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: -0.035em;
 }
 
-button, input, textarea, select {
+button, .btn-primary, .btn-secondary, .tracker-manage-btn, .btn-promote {
+  font-family: var(--font-accent);
+}
+
+input, textarea, select {
   font-family: inherit;
 }
 
@@ -575,6 +615,7 @@ button, input, textarea, select {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  font-family: var(--font-accent);
 }
 
 .status-badge {
@@ -626,7 +667,126 @@ button, input, textarea, select {
   color: hsl(265, 80%, 68%);
 }
 
-/* Layout Grid & Structures */
+/* Premium Bento Grid System */
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.bento-item {
+  background: hsla(var(--bg-card) / 0.55) !important;
+  backdrop-filter: blur(24px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+  border: 1px solid hsla(var(--border-glass)) !important;
+  border-radius: 1.5rem !important;
+  padding: 1.75rem;
+  transition: var(--transition-spring) !important;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3) !important;
+}
+
+.bento-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, hsla(var(--primary) / 0.3), transparent);
+  pointer-events: none;
+}
+
+.bento-item:hover {
+  transform: translateY(-4px) translateZ(0) !important;
+  border-color: hsla(var(--primary) / 0.35) !important;
+  box-shadow: 
+    0 20px 45px -15px rgba(0, 0, 0, 0.6), 
+    0 0 0 1px hsla(var(--primary) / 0.2) !important;
+}
+
+/* Bento grid item span options */
+.bento-item.span-2 {
+  grid-column: span 2;
+}
+
+.bento-item.span-3 {
+  grid-column: span 3;
+}
+
+.bento-item.row-2 {
+  grid-row: span 2;
+}
+
+.bento-item.live-tracker-item {
+  order: 1;
+}
+.bento-item.profile-stats-item {
+  order: 2;
+}
+.bento-item.upcoming-events-item {
+  order: 3;
+}
+.bento-item.active-opportunities-item {
+  order: 4;
+}
+
+@media (max-width: 1024px) {
+  .bento-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .bento-grid {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+  .bento-item.span-2, .bento-item.span-3 {
+    grid-column: span 1;
+  }
+  /* Mobile reordering: show Upcoming Events immediately after the class tracker */
+  .bento-item.live-tracker-item {
+    order: 1;
+  }
+  .bento-item.upcoming-events-item {
+    order: 2;
+  }
+  .bento-item.profile-stats-item {
+    order: 3;
+  }
+  .bento-item.active-opportunities-item {
+    order: 4;
+  }
+}
+
+/* Horizontal scroll container for event cards in bento grid */
+.event-scroll-container {
+  display: flex;
+  gap: 1.25rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 0.25rem 0.25rem 0.75rem 0.25rem;
+  width: 100%;
+}
+.event-scroll-container::-webkit-scrollbar {
+  display: none;
+}
+.event-scroll-container > div {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+.event-scroll-container .event-card {
+  width: 260px !important;
+  max-width: 260px !important;
+  flex-shrink: 0 !important;
+}
+
 .app-container {
   display: flex;
   min-height: 100vh;
@@ -754,6 +914,11 @@ button, input, textarea, select {
   box-shadow: 0 0 8px #a78bfa;
 }
 
+.status-dot.status-dot--pending {
+  background-color: #f97316;
+  box-shadow: 0 0 8px #f97316;
+}
+
 .sidebar-footer {
   padding: 1rem 0;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
@@ -874,6 +1039,8 @@ button, input, textarea, select {
   margin-left: 240px;
   padding: 2rem;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Common Components */
@@ -1075,12 +1242,24 @@ button, input, textarea, select {
   flex-direction: column;
   gap: 1.5rem;
   position: relative;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  margin-bottom: 2rem;
+  transition: var(--transition-smooth);
+}
+
+.roadmap-level.active-recommended-level {
+  border-color: hsl(var(--primary));
+  border-style: dashed;
+  background: hsla(var(--primary) / 0.02);
+  box-shadow: 0 0 15px hsla(var(--primary) / 0.05);
 }
 
 .roadmap-level::before {
   content: '';
   position: absolute;
-  left: 20px;
+  left: 45px; /* aligned to center of 42px level number inside 24px padded container */
   top: 60px;
   bottom: -40px;
   width: 2px;
@@ -1728,6 +1907,11 @@ button, input, textarea, select {
   padding: 0;
 }
 
+/* Prevent clipping of rotated/translated hover cards inside event cards */
+.event-card .bounceCardsContainer {
+  overflow: visible !important;
+}
+
 .event-card:hover {
   transform: translateY(-1.5px) translateZ(0);
   border-color: hsla(var(--cat-color, var(--primary)) / 0.3) !important;
@@ -2198,6 +2382,7 @@ button, input, textarea, select {
   background: hsla(var(--accent) / 0.12);
   color: hsl(var(--accent));
   border: 1px solid hsla(var(--accent) / 0.2);
+  font-family: var(--font-accent);
 }
 
 .countdown-badge.past {
@@ -2673,7 +2858,7 @@ button, input, textarea, select {
     right: 0;
     z-index: 990;
     justify-content: center !important;
-    padding: 0.5rem 1rem !important;
+    padding: calc(0.5rem + env(safe-area-inset-top, 0px)) 1rem 0.5rem 1rem !important;
     margin-bottom: 0 !important;
     background: transparent;
     transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
@@ -2850,7 +3035,7 @@ button, input, textarea, select {
   /* Main Content adjustment */
   .main-content {
     margin-left: 0 !important;
-    padding-top: 96px !important; /* Clears fixed top-bar header */
+    padding-top: calc(96px + env(safe-area-inset-top, 0px)) !important; /* Clears fixed top-bar header with notch safety */
     padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 16px) + 16px) !important;
     padding-left: 14px !important;
     padding-right: 14px !important;
@@ -2938,7 +3123,7 @@ button, input, textarea, select {
   }
 
   .roadmap-level::before {
-    left: 16px !important;
+    left: 32px !important; /* aligned to center of 32px level number inside 16px padded container */
     top: 52px !important;
   }
 
@@ -3610,6 +3795,7 @@ button, input, textarea, select {
   text-transform: uppercase;
   color: hsl(var(--secondary));
   letter-spacing: 0.05em;
+  font-family: var(--font-accent);
 }
 
 .tracker-course-code {
@@ -3678,6 +3864,7 @@ button, input, textarea, select {
   font-size: 1.25rem;
   font-weight: 800;
   color: hsl(var(--secondary));
+  font-family: var(--font-accent);
 }
 
 .countdown-time {

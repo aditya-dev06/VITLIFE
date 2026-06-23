@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
+    chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -18,6 +19,13 @@ export default defineConfig({
             if (id.includes('gsap')) {
               return 'vendor-gsap';
             }
+            if (id.includes('motion')) {
+              return 'vendor-motion';
+            }
+            if (id.includes('react') || id.includes('scheduler')) {
+              return 'vendor-react';
+            }
+            return 'vendor-others';
           }
         }
       }
@@ -40,6 +48,16 @@ export default defineConfig({
             {
               name: 'vendor-gsap',
               test: /[\\/]node_modules[\\/]gsap[\\/]/,
+              priority: 10
+            },
+            {
+              name: 'vendor-motion',
+              test: /[\\/]node_modules[\\/]motion[\\/]/,
+              priority: 10
+            },
+            {
+              name: 'vendor-react',
+              test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/,
               priority: 10
             }
           ]

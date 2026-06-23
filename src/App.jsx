@@ -1,11 +1,7 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
-import { useTimetableSync } from './hooks/useTimetableSync';
+import { useProfileSync } from './hooks/useTimetableSync';
 import { Analytics } from '@vercel/analytics/react';
-import VITBhopalGuide from './components/VITBhopalGuide';
-import Auth from './components/Auth';
 import TypewriterText from './components/TypewriterText';
-import TermsAndConditions from './components/TermsAndConditions';
-import PrivacyPolicy from './components/PrivacyPolicy';
 import Dock from './components/Dock';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -14,6 +10,11 @@ const Roadmap = lazy(() => import('./components/Roadmap'));
 const Opportunities = lazy(() => import('./components/Opportunities'));
 const CampusLife = lazy(() => import('./components/CampusLife'));
 const TimetablePage = lazy(() => import('./components/TimetablePage'));
+const VITBhopalGuide = lazy(() => import('./components/VITBhopalGuide'));
+const Auth = lazy(() => import('./components/Auth'));
+const TermsAndConditions = lazy(() => import('./components/TermsAndConditions'));
+const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
+
 
 // Default Initial Skills Database
 const INITIAL_SKILLS = [
@@ -226,8 +227,8 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [token, setToken] = useState(localStorage.getItem('ds_ai_token'));
   const [user, setUser] = useState(null);
-  // Offline-first timetable sync
-  const { syncStatus: timetableSyncStatus, saveTimetable } = useTimetableSync(token);
+  // Offline-first profile sync
+  const { syncStatus: profileSyncStatus, saveProfileUpdate } = useProfileSync(token);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [xpPoints, setXpPoints] = useState(0);
   const [skills, setSkills] = useState([]);
@@ -519,7 +520,6 @@ function App() {
     });
     setSkills(updated);
 
-    // Compute updated progress object
     const newProgress = {};
     updated.forEach(s => {
       if (s.status !== 'To Do') {
@@ -527,89 +527,23 @@ function App() {
       }
     });
 
-    if (user) {
-      const updatedUser = { ...user, skillsProgress: newProgress };
-      setUser(updatedUser);
-      localStorage.setItem('ds_ai_user', JSON.stringify(updatedUser));
-    }
-
-    if (token) {
-      try {
-        await fetch('/api/user/profile', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ skillsProgress: newProgress })
-        });
-      } catch (err) {
-        console.error("Failed to sync skills with backend: ", err);
-      }
-    }
+    await saveProfileUpdate({ skillsProgress: newProgress }, user, setUser);
   };
-
-
 
   const handleUpdateSemester = async (newSemester) => {
     const semNum = parseInt(newSemester, 10) || 1;
-    if (user) {
-      const updatedUser = { ...user, semester: semNum };
-      setUser(updatedUser);
-      localStorage.setItem('ds_ai_user', JSON.stringify(updatedUser));
-    }
-
-    if (token) {
-      try {
-        await fetch('/api/user/profile', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ semester: semNum })
-        });
-      } catch (err) {
-        console.error("Failed to sync semester with backend: ", err);
-      }
-    }
+    await saveProfileUpdate({ semester: semNum }, user, setUser);
   };
 
   const handleUpdateProfile = async (newName, newSemester) => {
     if (!newName.trim()) return;
     const semNum = parseInt(newSemester, 10) || 1;
-    if (user) {
-      const updatedUser = { ...user, name: newName.trim(), semester: semNum };
-      setUser(updatedUser);
-      localStorage.setItem('ds_ai_user', JSON.stringify(updatedUser));
-    }
-
-    if (token) {
-      try {
-        const res = await fetch('/api/user/profile', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ name: newName.trim(), semester: semNum })
-        });
-        if (res.ok) {
-          setShowEditProfile(false);
-        } else {
-          const err = await res.json();
-          alert(err.error || 'Failed to update profile.');
-        }
-      } catch (err) {
-        console.error("Failed to sync profile with backend: ", err);
-      }
-    }
+    await saveProfileUpdate({ name: newName.trim(), semester: semNum }, user, setUser);
+    setShowEditProfile(false);
   };
 
   const handleUpdateTimetable = async (newTimetable) => {
-    // saveTimetable: writes to localStorage immediately, then syncs to server
-    // fully offline-safe — queues pending sync and retries on reconnect
-    await saveTimetable(newTimetable, user, setUser);
+    await saveProfileUpdate({ timetable: newTimetable }, user, setUser);
   };
 
   // Extract student registration number from college email (firstname.regnumber@vitbhopal.ac.in)
@@ -672,7 +606,7 @@ function App() {
           <TimetablePage 
             user={user}
             onUpdateTimetable={handleUpdateTimetable}
-            syncStatus={timetableSyncStatus}
+            syncStatus={profileSyncStatus}
           />
         );
       case 'campus':
@@ -710,10 +644,26 @@ function App() {
 
   // Handle client-side routing for legal compliance documents
   if (window.location.pathname === '/terms') {
-    return <TermsAndConditions />;
+    return (
+      <Suspense fallback={
+        <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', backgroundColor: 'hsl(var(--bg-deep))' }}>
+          <h2>Loading Terms & Conditions...</h2>
+        </div>
+      }>
+        <TermsAndConditions />
+      </Suspense>
+    );
   }
   if (window.location.pathname === '/privacy') {
-    return <PrivacyPolicy />;
+    return (
+      <Suspense fallback={
+        <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', backgroundColor: 'hsl(var(--bg-deep))' }}>
+          <h2>Loading Privacy Policy...</h2>
+        </div>
+      }>
+        <PrivacyPolicy />
+      </Suspense>
+    );
   }
 
   // If loading user profile, show brief loading screen
@@ -727,7 +677,15 @@ function App() {
 
   // Render Login/Signup if not authenticated (guests bypass this with user.isGuest)
   if (!token && !user?.isGuest) {
-    return <Auth onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <Suspense fallback={
+        <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', backgroundColor: 'hsl(var(--bg-deep))' }}>
+          <h2>Loading Secure Authentication...</h2>
+        </div>
+      }>
+        <Auth onLoginSuccess={handleLoginSuccess} />
+      </Suspense>
+    );
   }
 
   return (
@@ -812,8 +770,24 @@ function App() {
         </nav>
 
         <div className="sidebar-status">
-          <div className={`status-dot ${user?.isGuest ? 'status-dot--guest' : ''}`}></div>
-          <span>{user?.isGuest ? 'Local only — not synced' : 'Sync Status: Active'}</span>
+          <div className={`status-dot ${
+            user?.isGuest 
+              ? 'status-dot--guest' 
+              : profileSyncStatus === 'synced' 
+                ? 'status-dot--synced' 
+                : profileSyncStatus === 'syncing' 
+                  ? 'crawling' 
+                  : 'status-dot--pending'
+          }`}></div>
+          <span>
+            {user?.isGuest 
+              ? 'Local only — not synced' 
+              : profileSyncStatus === 'synced' 
+                ? 'Sync Status: Synced' 
+                : profileSyncStatus === 'syncing' 
+                  ? 'Sync Status: Syncing...' 
+                  : 'Sync Status: Offline (Pending)'}
+          </span>
         </div>
 
         {/* PWA Install Button — shown only when browser fires beforeinstallprompt */}

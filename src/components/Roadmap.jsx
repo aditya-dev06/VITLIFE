@@ -83,18 +83,10 @@ const Roadmap = ({ skills, userCourses = [], userSemester = 1, onUpdateSkillStat
             <div 
               key={level.num} 
               className={`roadmap-level ${isActiveLevel ? 'active-recommended-level' : ''}`}
-              style={isActiveLevel ? {
-                border: '2px dashed hsl(var(--primary))',
-                padding: '1.5rem',
-                borderRadius: '12px',
-                background: 'hsla(var(--primary) / 0.02)',
-                boxShadow: '0 0 15px hsla(var(--primary) / 0.05)',
-                marginBottom: '2rem'
-              } : { marginBottom: '2rem' }}
             >
               <div className="level-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                  <div className="level-number" style={isActiveLevel ? { background: 'hsl(var(--primary))', color: 'black' } : {}}>{level.num}</div>
+                  <div className="level-number" style={isActiveLevel ? { background: 'hsl(var(--primary))', color: 'white' } : {}}>{level.num}</div>
                   <div className="level-title-container">
                     <h3>{level.name}</h3>
                     <p>{level.subtitle}</p>

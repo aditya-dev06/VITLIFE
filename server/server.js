@@ -50,12 +50,13 @@ app.use((req, res, next) => {
   let maskedAuth = 'None';
   if (req.headers.authorization) {
     const authHeader = req.headers.authorization;
-    const lowerHeader = authHeader.toLowerCase();
+    const lowerHeader = authHeader.trim().toLowerCase();
     if (lowerHeader.startsWith('bearer ')) {
-      const token = authHeader.substring(7);
-      maskedAuth = `Bearer ${token.substring(0, 15)}...`;
+      maskedAuth = 'Bearer [MASKED]';
+    } else if (lowerHeader.startsWith('basic ')) {
+      maskedAuth = 'Basic [MASKED]';
     } else {
-      maskedAuth = `${authHeader.substring(0, 15)}...`;
+      maskedAuth = '[MASKED]';
     }
   }
   console.log(`[HTTP] ${req.method} ${req.url} - IP: ${req.ip} - Auth: ${maskedAuth}`);
@@ -227,7 +228,7 @@ const hashSecurityCode = (code) => {
 // Strict rate limiter to prevent brute force (5 attempts per IP + email combination every 15 minutes)
 const rateLimitCache = new Map();
 const authRateLimiter = (limit = 5, windowMs = 15 * 60 * 1000) => {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const ip = req.ip;
     const email = (req.body.email || '').toLowerCase().trim();
     if (!email) {
@@ -235,7 +236,31 @@ const authRateLimiter = (limit = 5, windowMs = 15 * 60 * 1000) => {
     }
     const key = `${ip}:${email}`;
     const now = Date.now();
-    
+
+    if (db) {
+      try {
+        const col = db.collection('rate_limits');
+        const record = await col.findOne({ key });
+        if (record) {
+          const lastAttemptTime = record.lastAttempt instanceof Date ? record.lastAttempt.getTime() : record.lastAttempt;
+          if (now - lastAttemptTime > windowMs) {
+            await col.updateOne({ key }, { $set: { attempts: 1, lastAttempt: new Date(now) } });
+          } else if (record.attempts >= limit) {
+            const remainingMinutes = Math.ceil((windowMs - (now - lastAttemptTime)) / 60000);
+            return res.status(429).json({ error: `Too many failed attempts. Please try again after ${remainingMinutes} minute(s).` });
+          } else {
+            await col.updateOne({ key }, { $inc: { attempts: 1 }, $set: { lastAttempt: new Date(now) } });
+          }
+        } else {
+          await col.updateOne({ key }, { $set: { attempts: 1, lastAttempt: new Date(now) } }, { upsert: true });
+        }
+        return next();
+      } catch (err) {
+        console.error("MongoDB rate-limiting error, falling back to memory:", err.message);
+      }
+    }
+
+    // Fallback to in-memory rate-limiter
     if (rateLimitCache.has(key)) {
       const record = rateLimitCache.get(key);
       if (now - record.lastAttempt > windowMs) {
@@ -271,8 +296,18 @@ const ensureIndexes = async (database) => {
     await database.collection('events').createIndex({ id: 1 }, { unique: true });
     await database.collection('events').createIndex({ clubId: 1 });
     await database.collection('events').createIndex({ date: 1 });
+    await database.collection('events').createIndex({ category: 1 });
     await database.collection('recruitments').createIndex({ id: 1 }, { unique: true });
     await database.collection('recruitments').createIndex({ clubId: 1 });
+    await database.collection('recruitments').createIndex({ deadline: 1 });
+    await database.collection('opportunities').createIndex({ type: 1 });
+    await database.collection('opportunities').createIndex({ matchScore: -1 });
+    await database.collection('opportunities').createIndex({ tags: 1 });
+    await database.collection('settings').createIndex({ key: 1 }, { unique: true });
+    await database.collection('activity_logs').createIndex({ timestamp: -1 });
+    await database.collection('activity_logs').createIndex({ email: 1 });
+    await database.collection('rate_limits').createIndex({ key: 1 }, { unique: true });
+    await database.collection('rate_limits').createIndex({ lastAttempt: 1 }, { expireAfterSeconds: 900 });
     console.log("✅ Database indexes verified/created successfully.");
   } catch (err) {
     console.error("❌ Failed to verify database indexes:", err.message);
@@ -304,29 +339,6 @@ if (MONGODB_URI) {
       dbConnectionError = null;
       console.log("Successfully connected to MongoDB Database!");
       ensureIndexes(db).catch(err => console.error("Index creation error:", err.message));
-
-      // Zero-Delay Deployment: Fetch/Save persistent JWT secret from MongoDB if not provided via environment variables
-      if (!process.env.JWT_SECRET) {
-        try {
-          const settingsColl = db.collection('settings');
-          const doc = await settingsColl.findOne({ key: 'jwt_secret' });
-          if (doc && doc.value) {
-            JWT_SECRET = doc.value;
-            console.log("🔒 Loaded persistent JWT_SECRET from MongoDB Atlas settings.");
-          } else {
-            const newSecret = crypto.randomBytes(64).toString('hex');
-            await settingsColl.updateOne(
-              { key: 'jwt_secret' },
-              { $set: { value: newSecret } },
-              { upsert: true }
-            );
-            JWT_SECRET = newSecret;
-            console.log("🔒 Generated and saved new persistent JWT_SECRET in MongoDB Atlas settings.");
-          }
-        } catch (err) {
-          console.warn("Could not retrieve persistent JWT_SECRET from settings collection:", err.message);
-        }
-      }
     })
     .catch(err => {
       clearTimeout(connectionTimeout);
@@ -344,24 +356,97 @@ if (MONGODB_URI) {
   console.log("No MONGODB_URI set, running in local fallback file mode.");
 }
 
-// Load or generate a persistent secret so session tokens remain valid across server restarts
-const SECRET_FILE = path.join(DATA_DIR, 'secret.key');
-let JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  console.warn("⚠️ WARNING: JWT_SECRET environment variable is not defined!");
-  console.warn("In serverless/stateless environments like Vercel, a missing JWT_SECRET will cause users to be logged out randomly because each instance generates its own key.");
-  console.warn("Please configure a persistent JWT_SECRET in your Vercel/environment variables.");
+let JWT_SECRET = null;
+let jwtSecretPromise = null;
+
+const getLocalFallbackSecret = () => {
+  const SECRET_FILE = path.join(DATA_DIR, 'secret.key');
   if (fs.existsSync(SECRET_FILE)) {
-    JWT_SECRET = fs.readFileSync(SECRET_FILE, 'utf8').trim();
-  } else {
-    JWT_SECRET = crypto.randomBytes(64).toString('hex');
     try {
-      fs.writeFileSync(SECRET_FILE, JWT_SECRET, 'utf8');
+      const fileSecret = fs.readFileSync(SECRET_FILE, 'utf8').trim();
+      if (fileSecret.length >= 32) {
+        return fileSecret;
+      }
     } catch (err) {
-      console.warn("Could not save persistent secret key to disk fallback:", err.message);
+      console.warn("Could not read local secret key file:", err.message);
     }
   }
-}
+
+  const newSecret = crypto.randomBytes(64).toString('hex');
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(SECRET_FILE, newSecret, 'utf8');
+  } catch (err) {
+    console.warn("Could not save persistent secret key to disk fallback:", err.message);
+  }
+  return newSecret;
+};
+
+const ensureJwtSecret = async () => {
+  if (JWT_SECRET) return JWT_SECRET;
+  if (jwtSecretPromise) return jwtSecretPromise;
+
+  jwtSecretPromise = (async () => {
+    // 1. Check environment variable first
+    let secret = process.env.JWT_SECRET;
+    if (secret && secret.trim().length >= 32) {
+      JWT_SECRET = secret.trim();
+      return JWT_SECRET;
+    }
+
+    // 2. Try fetching from MongoDB Atlas if available
+    if (MONGODB_URI) {
+      try {
+        if (dbConnectingPromise) {
+          await dbConnectingPromise;
+        }
+        if (db) {
+          const settingsColl = db.collection('settings');
+          const doc = await settingsColl.findOne({ key: 'jwt_secret' });
+          if (doc && doc.value && doc.value.trim().length >= 32) {
+            JWT_SECRET = doc.value.trim();
+            console.log("🔒 Loaded persistent JWT_SECRET from MongoDB Atlas settings.");
+            return JWT_SECRET;
+          } else {
+            const newSecret = crypto.randomBytes(64).toString('hex');
+            try {
+              const res = await settingsColl.findOneAndUpdate(
+                { key: 'jwt_secret' },
+                { $setOnInsert: { value: newSecret } },
+                { upsert: true, returnDocument: 'after' }
+              );
+              const finalDoc = await settingsColl.findOne({ key: 'jwt_secret' });
+              if (finalDoc && finalDoc.value && finalDoc.value.trim().length >= 32) {
+                JWT_SECRET = finalDoc.value.trim();
+              } else {
+                JWT_SECRET = newSecret;
+              }
+            } catch (updateErr) {
+              const finalDoc = await settingsColl.findOne({ key: 'jwt_secret' });
+              if (finalDoc && finalDoc.value && finalDoc.value.trim().length >= 32) {
+                JWT_SECRET = finalDoc.value.trim();
+              } else {
+                JWT_SECRET = newSecret;
+              }
+            }
+            console.log("🔒 Generated and saved persistent JWT_SECRET in MongoDB Atlas settings.");
+            return JWT_SECRET;
+          }
+        }
+      } catch (err) {
+        console.warn("Could not retrieve persistent JWT_SECRET from settings collection:", err.message);
+      }
+    }
+
+    // 3. Fallback to local files
+    JWT_SECRET = getLocalFallbackSecret();
+    return JWT_SECRET;
+  })();
+
+  return jwtSecretPromise;
+};
 
 // Seed opportunities if empty
 const writeInitialSeeds = () => {
@@ -630,13 +715,46 @@ const getOpportunities = async () => {
   }
   if (db) {
     try {
-      const data = await db.collection('opportunities').findOne({ type: 'metadata' });
-      if (data) {
-        return {
-          lastUpdated: data.lastUpdated,
-          opportunities: data.opportunities || []
-        };
+      // Self-healing migration check: check if the old single-document format exists and migrate it
+      const oldDoc = await db.collection('opportunities').findOne({ type: 'metadata' });
+      if (oldDoc && Array.isArray(oldDoc.opportunities)) {
+        console.log("Found legacy opportunities structure in MongoDB. Migrating to individual documents...");
+        
+        // 1. Upsert metadata document
+        await db.collection('opportunities').updateOne(
+          { _id: 'metadata' },
+          { $set: { lastUpdated: oldDoc.lastUpdated || new Date().toISOString().replace('T', ' ').substring(0, 19) } },
+          { upsert: true }
+        );
+
+        // 2. Insert individual opportunity documents
+        if (oldDoc.opportunities.length > 0) {
+          const docs = oldDoc.opportunities.map(opp => ({
+            ...opp,
+            _id: opp.id || `opp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+          }));
+          try {
+            await db.collection('opportunities').insertMany(docs, { ordered: false });
+          } catch (insertErr) {
+            // Ignore duplicate key errors if some documents were partially migrated
+          }
+        }
+
+        // 3. Remove the legacy single-document entry
+        await db.collection('opportunities').deleteOne({ type: 'metadata' });
+        console.log("✅ Opportunities migration completed successfully.");
       }
+
+      // Read new normalized structure
+      const meta = await db.collection('opportunities').findOne({ _id: 'metadata' });
+      const opportunities = await db.collection('opportunities')
+        .find({ _id: { $ne: 'metadata' } })
+        .toArray();
+
+      return {
+        lastUpdated: meta ? meta.lastUpdated : '',
+        opportunities: opportunities || []
+      };
     } catch (err) {
       console.error("MongoDB getOpportunities error, falling back to file:", err);
     }
@@ -661,16 +779,24 @@ const saveOpportunities = async (opportunitiesData) => {
   }
   if (db) {
     try {
+      // 1. Update/Upsert the metadata document
       await db.collection('opportunities').updateOne(
-        { type: 'metadata' },
-        { $set: {
-            type: 'metadata',
-            lastUpdated: opportunitiesData.lastUpdated,
-            opportunities: opportunitiesData.opportunities
-          }
-        },
+        { _id: 'metadata' },
+        { $set: { lastUpdated: opportunitiesData.lastUpdated } },
         { upsert: true }
       );
+      
+      // 2. Remove all existing individual opportunity documents
+      await db.collection('opportunities').deleteMany({ _id: { $ne: 'metadata' } });
+      
+      // 3. Bulk insert fresh opportunities
+      if (opportunitiesData.opportunities && opportunitiesData.opportunities.length > 0) {
+        const docs = opportunitiesData.opportunities.map(opp => ({
+          ...opp,
+          _id: opp.id || `opp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        }));
+        await db.collection('opportunities').insertMany(docs);
+      }
       console.log("Successfully synced opportunities to MongoDB Atlas!");
       return;
     } catch (err) {
@@ -907,12 +1033,24 @@ const deleteExpiredEvents = async () => {
     for (const event of expiredEvents) {
       console.log(`Auto-deleting expired event: ${event.title} (ID: ${event.id})`);
       await deleteEvent(event.id);
-      
-      // Clear associated base64 image data from the 'uploads' collection
-      const cleanPosterUrls = [event.posterUrl, ...(event.posterUrls || [])].filter(Boolean);
+
+      // Clear associated base64 image data from the 'uploads' collection and local disk
+      const cleanPosterUrls = [
+        event.posterUrl,
+        ...(event.posterUrls || []),
+        event.schedulePosterUrl
+      ].filter(Boolean);
+
       for (const pUrl of cleanPosterUrls) {
+        let filename = '';
         if (pUrl.startsWith('/uploads/')) {
-          const filename = pUrl.replace('/uploads/', '');
+          filename = pUrl.replace('/uploads/', '');
+        } else if (pUrl.includes('/uploads/')) {
+          filename = pUrl.split('/uploads/')[1];
+        }
+
+        if (filename) {
+          filename = filename.split('?')[0].split('#')[0];
           if (db) {
             try {
               await db.collection('uploads').deleteOne({ filename });
@@ -922,8 +1060,12 @@ const deleteExpiredEvents = async () => {
           }
           // Local fallback delete
           const filePath = path.join(UPLOADS_DIR, filename);
-          if (fs.existsSync(filePath)) {
-            try { fs.unlinkSync(filePath); } catch (e) {}
+          try {
+            await fs.promises.access(filePath);
+            await fs.promises.unlink(filePath);
+            console.log(`Successfully unlinked expired event poster file: ${filename}`);
+          } catch (e) {
+            // File doesn't exist or is not accessible
           }
         }
       }
@@ -1043,20 +1185,42 @@ const parseVitBhopalEmail = (email) => {
   return { registrationNumber, program };
 };
 
-// PBKDF2 Password Hashing
+// PBKDF2 & Scrypt Password Hashing
 const generateSalt = () => {
   return crypto.randomBytes(16).toString('hex');
 };
 
-const hashPassword = (password, salt) => {
+const hashPasswordLegacy = (password, salt) => {
   const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512');
   return hash.toString('hex');
 };
 
+const hashPasswordScrypt = (password, salt) => {
+  const hash = crypto.scryptSync(password, salt, 64, { N: 16384, r: 8, p: 1 });
+  return `scrypt$${hash.toString('hex')}`;
+};
+
+const hashPassword = (password, salt) => {
+  return hashPasswordScrypt(password, salt);
+};
+
+const verifyPassword = (password, salt, storedHash) => {
+  if (typeof storedHash !== 'string') return false;
+  if (storedHash.startsWith('scrypt$')) {
+    const hash = crypto.scryptSync(password, salt, 64, { N: 16384, r: 8, p: 1 });
+    const computed = `scrypt$${hash.toString('hex')}`;
+    return computed === storedHash;
+  }
+  // Legacy PBKDF2 check
+  const legacyComputed = hashPasswordLegacy(password, salt);
+  return legacyComputed === storedHash;
+};
+
 // Custom Session Token generation and validation (with password hash segement for session revocation)
-const generateToken = (email, passwordHash) => {
+const generateToken = async (email, passwordHash) => {
+  const secret = await ensureJwtSecret();
   const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
-  const hmac = crypto.createHmac('sha256', JWT_SECRET);
+  const hmac = crypto.createHmac('sha256', secret);
   const hashPiece = passwordHash.substring(0, 10);
   hmac.update(`${email}:${expiresAt}:${hashPiece}`);
   const signature = hmac.digest('hex');
@@ -1078,7 +1242,8 @@ const verifyToken = async (token) => {
     const user = await findUserByEmail(email);
     if (!user) return null;
 
-    const hmac = crypto.createHmac('sha256', JWT_SECRET);
+    const secret = await ensureJwtSecret();
+    const hmac = crypto.createHmac('sha256', secret);
     const hashPiece = user.passwordHash.substring(0, 10);
     hmac.update(`${email}:${expiresAt}:${hashPiece}`);
     const expectedSignature = hmac.digest('hex');
@@ -1191,7 +1356,7 @@ app.get('/api/db-status', authenticate, requireAdmin, (req, res) => {
 // 1. Register User (with email verification support & unverified recycling)
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
-    const isDev = process.env.NODE_ENV !== 'production' || !process.env.VERCEL;
+    const isDev = process.env.NODE_ENV === 'development' || (!process.env.NODE_ENV && !process.env.VERCEL);
     if (!smtpHealthy && !isDev) {
       return res.status(503).json({ error: '🔧 Registration is temporarily unavailable due to maintenance. Please try again later.' });
     }
@@ -1280,7 +1445,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     } catch (err) {
       console.error("Background email sending failed to %s:", lowerEmail, err.message);
       // Fallback logging for developers
-      if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+      if (isDev) {
         console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
         console.log(`TO: ${lowerEmail}`);
         console.log(`SUBJECT: VIT Bhopal Opportunity Hub - Email Verification Code`);
@@ -1327,7 +1492,7 @@ app.post('/api/auth/verify', authLimiter, authRateLimiter(5, 15 * 60 * 1000), as
     await saveUser(lowerEmail, user);
     await logActivity(lowerEmail, 'email_verified', req);
 
-    const token = generateToken(lowerEmail, user.passwordHash);
+    const token = await generateToken(lowerEmail, user.passwordHash);
 
     const userProfile = { ...user };
     delete userProfile.passwordHash;
@@ -1342,7 +1507,7 @@ app.post('/api/auth/verify', authLimiter, authRateLimiter(5, 15 * 60 * 1000), as
 // Resend Verification Code Endpoint
 app.post('/api/auth/resend-code', authLimiter, authRateLimiter(5, 15 * 60 * 1000), async (req, res) => {
   try {
-    const isDev = process.env.NODE_ENV !== 'production' || !process.env.VERCEL;
+    const isDev = process.env.NODE_ENV === 'development' || (!process.env.NODE_ENV && !process.env.VERCEL);
     if (!smtpHealthy && !isDev) {
       return res.status(503).json({ error: '🔧 Email service is temporarily unavailable. Please try again later.' });
     }
@@ -1390,7 +1555,7 @@ app.post('/api/auth/resend-code', authLimiter, authRateLimiter(5, 15 * 60 * 1000
     } catch (err) {
       console.error("Background resend email sending failed to %s:", lowerEmail, err.message);
       // Fallback logging for developers
-      if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+      if (isDev) {
         console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
         console.log(`TO: ${lowerEmail}`);
         console.log(`SUBJECT: VIT Bhopal Opportunity Hub - Resend Verification Code`);
@@ -1421,9 +1586,15 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Invalid email or password.' });
     }
 
-    const hash = hashPassword(password, user.salt);
-    if (hash !== user.passwordHash) {
+    const isValid = verifyPassword(password, user.salt, user.passwordHash);
+    if (!isValid) {
       return res.status(400).json({ error: 'Invalid email or password.' });
+    }
+
+    // Progressive self-healing migration to Scrypt
+    if (!user.passwordHash.startsWith('scrypt$')) {
+      user.passwordHash = hashPasswordScrypt(password, user.salt);
+      console.log(`🔒 Auto-migrated user ${lowerEmail} password hash from PBKDF2 to Scrypt.`);
     }
 
     // Strict Lockout for Unverified Logins
@@ -1451,7 +1622,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     await saveUser(lowerEmail, user);
     await logActivity(lowerEmail, 'login', req);
 
-    const token = generateToken(lowerEmail, user.passwordHash);
+    const token = await generateToken(lowerEmail, user.passwordHash);
 
     const userProfile = { ...user };
     delete userProfile.passwordHash;
@@ -1466,7 +1637,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
 // Forgot Password Request Endpoint
 app.post('/api/auth/forgot-password', authLimiter, authRateLimiter(5, 15 * 60 * 1000), async (req, res) => {
   try {
-    const isDev = process.env.NODE_ENV !== 'production' || !process.env.VERCEL;
+    const isDev = process.env.NODE_ENV === 'development' || (!process.env.NODE_ENV && !process.env.VERCEL);
     if (!smtpHealthy && !isDev) {
       return res.status(503).json({ error: '🔧 Password reset is temporarily unavailable due to maintenance. Please try again later.' });
     }
@@ -1512,7 +1683,7 @@ app.post('/api/auth/forgot-password', authLimiter, authRateLimiter(5, 15 * 60 * 
     } catch (err) {
       console.error("Background reset email sending failed to %s:", lowerEmail, err.message);
       // Fallback logging for developers
-      if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+      if (isDev) {
         console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
         console.log(`TO: ${lowerEmail}`);
         console.log(`SUBJECT: VIT Bhopal Opportunity Hub - Password Reset Code`);

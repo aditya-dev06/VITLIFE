@@ -446,29 +446,31 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
 
       initPasses() {
         this.renderPass = new RenderPass(this.scene, this.camera);
+        this.bloomEffect = new BloomEffect({
+          luminanceThreshold: 0.2,
+          luminanceSmoothing: 0,
+          resolutionScale: 1
+        });
         this.bloomPass = new EffectPass(
           this.camera,
-          new BloomEffect({
-            luminanceThreshold: 0.2,
-            luminanceSmoothing: 0,
-            resolutionScale: 1
-          })
+          this.bloomEffect
         );
 
-        const smaaPass = new EffectPass(
+        this.smaaEffect = new SMAAEffect(
+          this.assets.smaa.search,
+          this.assets.smaa.area,
+          SMAAPreset.MEDIUM
+        );
+        this.smaaPass = new EffectPass(
           this.camera,
-          new SMAAEffect(
-            this.assets.smaa.search,
-            this.assets.smaa.area,
-            SMAAPreset.MEDIUM
-          )
+          this.smaaEffect
         );
         this.renderPass.renderToScreen = false;
         this.bloomPass.renderToScreen = false;
-        smaaPass.renderToScreen = true;
+        this.smaaPass.renderToScreen = true;
         this.composer.addPass(this.renderPass);
         this.composer.addPass(this.bloomPass);
-        this.composer.addPass(smaaPass);
+        this.composer.addPass(this.smaaPass);
       }
 
       loadAssets() {
@@ -593,35 +595,123 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
       dispose() {
         this.disposed = true;
 
+        // 0. Cancel any pending animation frames
+        if (this.rafId) {
+          try {
+            cancelAnimationFrame(this.rafId);
+          } catch (e) {
+            console.warn("Failed to cancel animation frame:", e);
+          }
+        }
+
+        // 1. Dispose of Composer & Passes first
+        if (this.composer) {
+          if (this.composer.passes) {
+            this.composer.passes.forEach(pass => {
+              if (pass && typeof pass.dispose === 'function') {
+                try {
+                  pass.dispose();
+                } catch (e) {
+                  console.warn("Failed to dispose pass:", e);
+                }
+              }
+            });
+          }
+          try {
+            this.composer.dispose();
+          } catch (e) {
+            console.warn("Failed to dispose composer:", e);
+          }
+        }
+
+        // 2. Dispose of individual effects
+        if (this.bloomEffect && typeof this.bloomEffect.dispose === 'function') {
+          try {
+            this.bloomEffect.dispose();
+          } catch (e) {
+            console.warn("Failed to dispose bloomEffect:", e);
+          }
+        }
+        if (this.smaaEffect && typeof this.smaaEffect.dispose === 'function') {
+          try {
+            this.smaaEffect.dispose();
+          } catch (e) {
+            console.warn("Failed to dispose smaaEffect:", e);
+          }
+        }
+
+        // 3. Dispose of all Scene Geometries, Materials, and Textures
         if (this.scene) {
-          this.scene.traverse(object => {
-            const obj = object;
-            if (!obj.isMesh) return;
-
-            if (obj.geometry) obj.geometry.dispose();
-
+          this.scene.traverse(obj => {
+            if (obj.geometry) {
+              try {
+                obj.geometry.dispose();
+              } catch (e) {
+                console.warn("Failed to dispose geometry:", e);
+              }
+            }
             if (obj.material) {
               if (Array.isArray(obj.material)) {
-                obj.material.forEach(material => material.dispose());
+                obj.material.forEach(mat => {
+                  try {
+                    if (mat.map) mat.map.dispose();
+                    if (mat.lightMap) mat.lightMap.dispose();
+                    if (mat.bumpMap) mat.bumpMap.dispose();
+                    if (mat.normalMap) mat.normalMap.dispose();
+                    if (mat.specularMap) mat.specularMap.dispose();
+                    if (mat.envMap) mat.envMap.dispose();
+                    mat.dispose();
+                  } catch (e) {
+                    console.warn("Failed to dispose material array element:", e);
+                  }
+                });
               } else {
-                obj.material.dispose();
+                try {
+                  const mat = obj.material;
+                  if (mat.map) mat.map.dispose();
+                  if (mat.lightMap) mat.lightMap.dispose();
+                  if (mat.bumpMap) mat.bumpMap.dispose();
+                  if (mat.normalMap) mat.normalMap.dispose();
+                  if (mat.specularMap) mat.specularMap.dispose();
+                  if (mat.envMap) mat.envMap.dispose();
+                  mat.dispose();
+                } catch (e) {
+                  console.warn("Failed to dispose material:", e);
+                }
               }
             }
           });
-          this.scene.clear();
-        }
-
-        if (this.renderer) {
-          this.renderer.dispose();
-          this.renderer.forceContextLoss();
-          if (this.renderer.domElement && this.renderer.domElement.parentNode) {
-            this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
+          try {
+            this.scene.clear();
+          } catch (e) {
+            console.warn("Failed to clear scene:", e);
           }
         }
-        if (this.composer) {
-          this.composer.dispose();
+
+        // 4. Finally, force WebGL context loss and dispose of WebGLRenderer
+        if (this.renderer) {
+          try {
+            const gl = this.renderer.getContext();
+            const ext = gl ? gl.getExtension('WEBGL_lose_context') : null;
+            if (ext) {
+              ext.loseContext();
+            } else if (typeof this.renderer.forceContextLoss === 'function') {
+              this.renderer.forceContextLoss();
+            }
+            this.renderer.dispose();
+          } catch (e) {
+            console.warn("Failed to dispose renderer:", e);
+          }
+          if (this.renderer.domElement && this.renderer.domElement.parentNode) {
+            try {
+              this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
+            } catch (e) {
+              console.warn("Failed to remove canvas element:", e);
+            }
+          }
         }
 
+        // 5. Unregister all Event Listeners
         document.removeEventListener('visibilitychange', this.onVisibilityChange);
         window.removeEventListener('resize', this.onWindowResize);
         if (this.container) {
@@ -681,7 +771,7 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
             this.composer.setSize(w, h);
             this.hasValidSize = true;
           } else {
-            requestAnimationFrame(this.tick);
+            this.rafId = requestAnimationFrame(this.tick);
             return;
           }
         }
@@ -700,7 +790,7 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
           this.update(delta);
         }
 
-        requestAnimationFrame(this.tick);
+        this.rafId = requestAnimationFrame(this.tick);
       }
     }
 

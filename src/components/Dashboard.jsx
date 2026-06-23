@@ -178,6 +178,14 @@ function getDaysRemaining(dateStr) {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
+function getCardOpacity(status) {
+  switch (status) {
+    case 'ended': return 0.4;
+    case 'reg_closed': return 0.55;
+    default: return 1;
+  }
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return '';
   try {
@@ -220,13 +228,7 @@ function getStatusBadge(status) {
   }
 }
 
-function getCardOpacity(status) {
-  switch (status) {
-    case 'ended': return 0.4;
-    case 'reg_closed': return 0.55;
-    default: return 1;
-  }
-}
+
 
 
 function ClubLogo({ club, category, size = 24, borderRadius = '50%' }) {
@@ -579,7 +581,6 @@ function DashboardEventCardItem({
   theme
 }) {
   const [imageLoaded, setImageLoaded] = useState(false);
-  const [cardWidth, setCardWidth] = useState('280px'); // default width before image loads
   const [isHovered, setIsHovered] = useState(false);
 
   const daysLeft = getDaysRemaining(event.registrationDeadline || event.date);
@@ -591,17 +592,8 @@ function DashboardEventCardItem({
   const badge = getStatusBadge(status);
   const opacity = getCardOpacity(status);
 
-  const handleImageLoad = (e) => {
-    const { naturalWidth, naturalHeight } = e.target;
-    if (naturalWidth && naturalHeight) {
-      const aspect = naturalWidth / naturalHeight;
-      let calculatedWidth = Math.round(240 * aspect);
-      
-      // Enforce clean min and max constraints
-      calculatedWidth = Math.max(180, Math.min(320, calculatedWidth));
-      setCardWidth(`${calculatedWidth}px`);
-      setImageLoaded(true);
-    }
+  const handleImageLoad = () => {
+    setImageLoaded(true);
   };
 
   const hasMultiplePosters = event.posterUrls && event.posterUrls.length > 1;
@@ -622,10 +614,10 @@ function DashboardEventCardItem({
         '--cat-color': catColor,
         border: event.pinned ? '1px solid hsla(var(--primary) / 0.5)' : undefined,
         boxShadow: event.pinned ? '0 0 15px hsla(var(--primary) / 0.15)' : undefined,
-        width: showBounce ? '280px' : cardWidth
+        width: '260px',
+        flexShrink: 0
       }}
     >
-      {/* Pinned Badge */}
       {event.pinned && (
         <div style={{
           position: 'absolute', top: '0.75rem', left: '0.75rem',
@@ -638,7 +630,6 @@ function DashboardEventCardItem({
         </div>
       )}
 
-      {/* Status Badge */}
       <div 
         className={`status-badge ${status.replace('_', '-')}`}
         style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', zIndex: 5 }}
@@ -646,15 +637,14 @@ function DashboardEventCardItem({
         {badge.text}
       </div>
 
-      {/* Poster Image */}
       {event.posterUrl && (
         showBounce ? (
-          <div style={{ height: '160px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
+          <div style={{ height: '130px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
             <BounceCards
               className="event-card-bounce"
               images={event.posterUrls}
               containerWidth="100%"
-              containerHeight={160}
+              containerHeight={130}
               animationDelay={0.3}
               animationStagger={0.05}
               easeType="elastic.out(1, 0.7)"
@@ -672,7 +662,8 @@ function DashboardEventCardItem({
             loading="lazy"
             style={{
               width: '100%',
-              height: 'auto',
+              height: '130px',
+              objectFit: 'cover',
               display: 'block',
               borderBottom: '1px solid hsla(var(--border-glass))',
               opacity: imageLoaded ? 1 : 0.3,
@@ -684,7 +675,6 @@ function DashboardEventCardItem({
         )
       )}
 
-      {/* Details */}
       <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flexGrow: 1, gap: '0.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
           <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0, flex: 1 }}>
@@ -711,7 +701,6 @@ function DashboardEventCardItem({
           {event.venue && <span>📍 {event.venue}</span>}
         </div>
 
-        {/* Registration deadline & Price row */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.73rem', alignItems: 'center' }}>
           {event.registrationDeadline && (
             <span style={{ color: status === 'reg_closed' || status === 'ended' ? 'hsl(0, 60%, 55%)' : 'hsl(140, 60%, 50%)', fontWeight: 600 }}>
@@ -892,7 +881,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
 
     if (info.status === 'no_timetable') {
       return (
-        <div className="glass-panel live-tracker-panel setup">
+        <div className="bento-item span-2 live-tracker-item live-tracker-panel setup">
           <div className="tracker-content-setup">
             <div className="setup-icon">📅</div>
             <div className="setup-text">
@@ -915,7 +904,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
         : info.currentClass.type === 'LP' ? 'Lab Practical' : 'Tutorial';
 
       return (
-        <div className="glass-panel live-tracker-panel ongoing">
+        <div className="bento-item span-2 live-tracker-item live-tracker-panel ongoing">
           <div className="tracker-header">
             <span className="tracker-status-badge">
               <span className="pulse-dot"></span>
@@ -967,7 +956,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
         : info.nextClass.type === 'LP' ? 'Lab Practical' : 'Tutorial';
 
       return (
-        <div className="glass-panel live-tracker-panel upcoming">
+        <div className="bento-item span-2 live-tracker-item live-tracker-panel upcoming">
           <div className="tracker-header">
             <span className="tracker-status-badge upcoming">
               ⏳ UPCOMING CLASS TODAY
@@ -999,7 +988,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
 
     if (info.status === 'subsequent_days') {
       return (
-        <div className="glass-panel live-tracker-panel holiday">
+        <div className="bento-item span-2 live-tracker-item live-tracker-panel holiday">
           <div className="tracker-header">
             <span className="tracker-status-badge free-day">
               🌴 NO MORE CLASSES TODAY
@@ -1025,6 +1014,137 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
     }
 
     return null;
+  };
+
+  const renderProfileStatsWidget = () => {
+    const hours = new Date().getHours();
+    let greeting = 'Good Evening';
+    if (hours < 12) greeting = 'Good Morning';
+    else if (hours < 18) greeting = 'Good Afternoon';
+
+    const coursesCount = user && user.courses ? user.courses.length : 0;
+    
+    return (
+      <div className="profile-stats-widget" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+            <div style={{ 
+              width: '46px', 
+              height: '46px', 
+              borderRadius: '50%', 
+              background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.35rem',
+              fontWeight: 'bold',
+              color: '#fff',
+              boxShadow: '0 4px 10px hsla(var(--primary) / 0.3)'
+            }}>
+              {user && user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+            </div>
+            <div>
+              <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', fontWeight: 500 }}>{greeting},</div>
+              <h4 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'hsl(var(--text-primary))', fontFamily: 'var(--font-heading)' }}>
+                {user ? user.name.split(' ')[0] : 'Student'}
+              </h4>
+              {user && user.isVitBhopal && (
+                <div style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))', fontFamily: 'var(--font-mono)', marginTop: '0.15rem', fontWeight: 600 }}>
+                  {getRegNumber()}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+            <div style={{ flex: 1, padding: '0.85rem', background: 'rgba(255,255,255,0.03)', borderRadius: '1rem', border: '1px solid hsla(var(--border-glass))', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <div style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Courses</div>
+              <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'hsl(var(--secondary))' }}>{coursesCount}</div>
+            </div>
+            <div style={{ flex: 1, padding: '0.85rem', background: 'rgba(255,255,255,0.03)', borderRadius: '1rem', border: '1px solid hsla(var(--border-glass))', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <div style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Semester</div>
+              <select
+                value={user ? user.semester : '1'}
+                onChange={(e) => onUpdateSemester(e.target.value)}
+                style={{
+                  fontSize: '1.25rem',
+                  fontWeight: 800,
+                  color: 'hsl(var(--accent))',
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  margin: 0,
+                  outline: 'none',
+                  cursor: 'pointer',
+                  width: '100%'
+                }}
+              >
+                {user && user.isVitBhopal ? (
+                  (() => {
+                    const isIntegrated = (user.program && user.program.startsWith('Integrated M.Tech')) || 
+                                         (user.email && (user.email.toLowerCase().includes('bim') || user.email.toLowerCase().includes('mim')));
+                    const maxSem = isIntegrated ? 10 : 8;
+                    const options = [];
+                    for (let i = 1; i <= maxSem; i++) {
+                      options.push(
+                        <option 
+                          key={i} 
+                          value={i.toString()} 
+                          style={{ 
+                            backgroundColor: theme === 'light' ? '#ffffff' : '#18181b',
+                            color: theme === 'light' ? 'hsl(var(--text-primary))' : '#ffffff',
+                            fontSize: '0.9rem'
+                          }}
+                        >
+                          Sem {i}
+                        </option>
+                      );
+                    }
+                    return options;
+                  })()
+                ) : (
+                  <>
+                    <option 
+                      value="0" 
+                      style={{ 
+                        backgroundColor: theme === 'light' ? '#ffffff' : '#18181b',
+                        color: theme === 'light' ? 'hsl(var(--text-primary))' : '#ffffff',
+                        fontSize: '0.9rem'
+                      }}
+                    >
+                      N/A
+                    </option>
+                    {[1,2,3,4,5,6,7,8].map(i => (
+                      <option 
+                        key={i} 
+                        value={i.toString()} 
+                        style={{ 
+                          backgroundColor: theme === 'light' ? '#ffffff' : '#18181b',
+                          color: theme === 'light' ? 'hsl(var(--text-primary))' : '#ffffff',
+                          fontSize: '0.9rem'
+                        }}
+                      >
+                        Sem {i}
+                      </option>
+                    ))}
+                  </>
+                )}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginTop: '1.5rem' }}>
+          <button 
+            className="btn-secondary" 
+            onClick={() => onNavigate('roadmap')} 
+            style={{ width: '100%', padding: '0.7rem', fontSize: '0.85rem', fontWeight: 700, borderRadius: '12px' }}
+          >
+            🚀 Open Learning Roadmap
+          </button>
+        </div>
+      </div>
+    );
   };
 
   useEffect(() => {
@@ -1080,7 +1200,6 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
       const status = getEventStatus(e);
       if (status === 'ended') return false;
 
-      // Legacy fallback for events without start/end datetimes
       if (!e.eventStartDateTime && !e.eventEndDateTime && e.date) {
         const eventDate = new Date(e.date);
         const today = new Date();
@@ -1097,6 +1216,16 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
       let score = 0;
       if (event.pinned) {
         score += 10000;
+      }
+
+      // Prioritize user's own uploaded events
+      if (user && event.createdBy === user.email) {
+        score += 20000;
+      }
+
+      // Prioritize events from user's club
+      if (user && user.clubId && event.clubId === user.clubId) {
+        score += 15000;
       }
 
       const category = (event.category || '').toLowerCase();
@@ -1167,181 +1296,85 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
         </p>
       </div>
 
-      {user && renderLiveClassTracker()}
-
-      {/* Upcoming Events Section */}
       {user && (
-        <div className="glass-panel dashboard-panel">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '1.3rem' }}>Upcoming & Recommended Events</h3>
-              <p style={{ color: 'hsl(var(--text-muted))', fontSize: '0.85rem', margin: '0.25rem 0 0 0' }}>
-                Events recommended based on your program & courses. Sponsored events are featured at the top.
-              </p>
-            </div>
+        <div className="bento-grid">
+          {/* Live class tracker takes 2 columns in the bento grid */}
+          {renderLiveClassTracker()}
+          
+          {/* Profile Welcome Stats card takes 1 column */}
+          <div className="bento-item profile-stats-item">
+            {renderProfileStatsWidget()}
           </div>
-
-          {recommendedEvents.length > 0 ? (
-            <div style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '1.5rem',
-              width: '100%',
-              alignItems: 'flex-start'
-            }}>
-              {recommendedEvents.map(event => (
-                <DashboardEventCardItem
-                  key={event.id}
-                  event={event}
-                  clubs={clubs}
-                  user={user}
-                  token={token}
-                  setSelectedEvent={setSelectedEvent}
-                  handleTogglePin={handleTogglePin}
-                  theme={theme}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state">
-              <span style={{ fontSize: '2.5rem' }}>📅</span>
-              <p>No upcoming events recommended at this time.</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Info Banner */}
-      <div className="glass-panel info-banner">
-        <div className="info-banner-content" style={{ maxWidth: '100%' }}>
-          <span className="branch-badge">
-            {user && user.isVitBhopal 
-              ? `VIT Bhopal Student • ${getRegNumber()} • Sem ${user.semester || 1}` 
-              : (user && user.semester && user.semester !== 0 ? `Global Student • Sem ${user.semester}` : 'Global VIT Life Member')}
-          </span>
           
-          <h2 style={{ marginTop: '0.5rem' }}>
-            {user && user.isVitBhopal 
-              ? (user.program || 'Integrated M.Tech CSE') 
-              : 'College Lifestyle & Management'}
-          </h2>
-          
-          <p>
-            VIT Life is your centralized companion for managing classes, discovering college clubs, tracking student events, and upgrading your skills.
-          </p>
-
-          {user && user.isVitBhopal && user.courses && user.courses.length > 0 && (
-            <div style={{ marginTop: '1rem', marginBottom: '1.25rem' }}>
-              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'hsl(var(--secondary))', marginBottom: '0.5rem' }}>
-                📌 Active Semester Courses Highlighted:
+          {/* Upcoming Events Bento Item takes 2 columns in the second row */}
+          <div className="bento-item span-2 upcoming-events-item" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div>
+                <div style={{ fontSize: '0.85rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Upcoming & Recommended Events</div>
+                <h3 style={{ margin: '0.25rem 0 0 0', fontSize: '1.25rem', fontFamily: 'var(--font-heading)', fontWeight: 700 }}>Events For You</h3>
               </div>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                {user.courses.map((course) => (
-                  <span 
-                    key={course} 
-                    style={{ 
-                      fontSize: '0.75rem', 
-                      fontWeight: 700, 
-                      padding: '0.2rem 0.5rem', 
-                      background: 'rgba(6, 182, 212, 0.1)', 
-                      color: 'hsl(var(--secondary))', 
-                      border: '1px solid rgba(6, 182, 212, 0.2)',
-                      borderRadius: '4px' 
-                    }}
-                  >
-                    {course}
-                  </span>
+              <button className="btn-secondary" onClick={() => onNavigate('campus')} style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', borderRadius: '8px' }}>
+                View All
+              </button>
+            </div>
+
+            {recommendedEvents.length > 0 ? (
+              <div className="event-scroll-container">
+                {recommendedEvents.slice(0, 8).map(event => (
+                  <div key={event.id}>
+                    <DashboardEventCardItem
+                      event={event}
+                      clubs={clubs}
+                      user={user}
+                      token={token}
+                      setSelectedEvent={setSelectedEvent}
+                      handleTogglePin={handleTogglePin}
+                      theme={theme}
+                    />
+                  </div>
                 ))}
               </div>
+            ) : (
+              <div style={{ display: 'flex', flexGrow: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', minHeight: '120px' }}>
+                <span style={{ fontSize: '2rem' }}>📅</span>
+                <p style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>No recommended events at this time.</p>
+              </div>
+            )}
+          </div>
+          
+          {/* Active Opportunities Stats card takes 1 column in the second row */}
+          <div className="bento-item stat-card active-opportunities-item" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', padding: '1.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+              <div>
+                <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Active Openings</div>
+                <div style={{ fontSize: '2.5rem', fontWeight: 800, color: 'hsl(var(--primary))', marginTop: '0.5rem', fontFamily: 'var(--font-heading)' }}>{opportunities.length}</div>
+              </div>
+              <div style={{ 
+                width: '46px', 
+                height: '46px', 
+                borderRadius: '12px', 
+                background: 'hsla(var(--primary) / 0.12)', 
+                color: 'hsl(var(--primary))',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.5rem'
+              }}>
+                🎯
+              </div>
             </div>
-          )}
-
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '1.25rem' }}>
-            <button className="btn-primary" onClick={() => onNavigate('roadmap')}>
-              View Skill Roadmap
-            </button>
-
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.85rem', color: theme === 'light' ? 'hsl(var(--text-secondary))' : 'rgba(255, 255, 255, 0.7)', fontWeight: 600 }}>Active Semester:</span>
-              <select
-                value={user ? user.semester : '1'}
-                onChange={(e) => onUpdateSemester(e.target.value)}
-                style={{
-                  padding: '0.35rem 0.75rem',
-                  borderRadius: '6px',
-                  backgroundColor: theme === 'light' ? 'rgba(0, 0, 0, 0.04)' : 'rgba(255, 255, 255, 0.08)',
-                  border: theme === 'light' ? '1px solid rgba(0, 0, 0, 0.12)' : '1px solid rgba(255, 255, 255, 0.15)',
-                  color: theme === 'light' ? 'hsl(var(--text-primary))' : 'white',
-                  outline: 'none',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
+            <div style={{ marginTop: '1.5rem', width: '100%' }}>
+              <button 
+                className="btn-primary" 
+                onClick={() => onNavigate('opportunities')} 
+                style={{ width: '100%', padding: '0.6rem', fontSize: '0.8rem', fontWeight: 700, borderRadius: '10px' }}
               >
-                {user && user.isVitBhopal ? (
-                  (() => {
-                    const isIntegrated = (user.program && user.program.startsWith('Integrated M.Tech')) || 
-                                         (user.email && (user.email.toLowerCase().includes('bim') || user.email.toLowerCase().includes('mim')));
-                    const maxSem = isIntegrated ? 10 : 8;
-                    const options = [];
-                    for (let i = 1; i <= maxSem; i++) {
-                      options.push(
-                        <option 
-                          key={i} 
-                          value={i.toString()} 
-                          style={{ 
-                            backgroundColor: theme === 'light' ? '#ffffff' : '#18181b',
-                            color: theme === 'light' ? 'hsl(var(--text-primary))' : '#ffffff'
-                          }}
-                        >
-                          Sem {i}
-                        </option>
-                      );
-                    }
-                    return options;
-                  })()
-                ) : (
-                  <>
-                    <option 
-                      value="0" 
-                      style={{ 
-                        backgroundColor: theme === 'light' ? '#ffffff' : '#18181b',
-                        color: theme === 'light' ? 'hsl(var(--text-primary))' : '#ffffff'
-                      }}
-                    >
-                      Not a Student
-                    </option>
-                    {[1,2,3,4,5,6,7,8].map(i => (
-                      <option 
-                        key={i} 
-                        value={i.toString()} 
-                        style={{ 
-                          backgroundColor: theme === 'light' ? '#ffffff' : '#18181b',
-                          color: theme === 'light' ? 'hsl(var(--text-primary))' : '#ffffff'
-                        }}
-                      >
-                        Sem {i}
-                      </option>
-                    ))}
-                  </>
-                )}
-              </select>
+                🔍 Explore Jobs & Internships
+              </button>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="stats-grid">
-        <div className="glass-panel stat-card">
-          <div className="stat-info">
-            <div className="label">Active Opportunities</div>
-            <div className="value">{opportunities.length}</div>
-          </div>
-          <div className="stat-icon" style={{ background: 'hsla(300, 100%, 50%, 0.15)', color: '#f50057' }}>
-            🎯
-          </div>
-        </div>
-      </div>
+      )}
 
 
 
