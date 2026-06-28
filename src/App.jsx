@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useProfileSync } from './hooks/useTimetableSync';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -6,15 +6,15 @@ import TypewriterText from './components/TypewriterText';
 import Dock from './components/Dock';
 import { motion, AnimatePresence } from 'motion/react';
 
-const Dashboard = lazy(() => import('./components/Dashboard'));
-const Roadmap = lazy(() => import('./components/Roadmap'));
-const Opportunities = lazy(() => import('./components/Opportunities'));
-const CampusLife = lazy(() => import('./components/CampusLife'));
-const TimetablePage = lazy(() => import('./components/TimetablePage'));
-const VITBhopalGuide = lazy(() => import('./components/VITBhopalGuide'));
-const Auth = lazy(() => import('./components/Auth'));
-const TermsAndConditions = lazy(() => import('./components/TermsAndConditions'));
-const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
+import Dashboard from './components/Dashboard';
+import Roadmap from './components/Roadmap';
+import Opportunities from './components/Opportunities';
+import CampusLife from './components/CampusLife';
+import TimetablePage from './components/TimetablePage';
+import VITBhopalGuide from './components/VITBhopalGuide';
+import Auth from './components/Auth';
+import TermsAndConditions from './components/TermsAndConditions';
+import PrivacyPolicy from './components/PrivacyPolicy';
 
 
 // Default Initial Skills Database
