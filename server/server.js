@@ -192,6 +192,174 @@ const uploadToCloudinary = (fileBuffer, folder = 'vitlife_events') => {
   });
 };
 
+// Automatic Expired Events & Assets Cleanup System (older than 30 days)
+const cleanupExpiredEvents = async () => {
+  console.log("🧹 Running expired events cleanup task...");
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+  // Helper to extract Cloudinary Public ID
+  const getCloudinaryPublicId = (url) => {
+    if (!url || !url.includes('res.cloudinary.com')) return null;
+    try {
+      const parts = url.split(/\/image\/upload\/(?:v\d+\/)?/);
+      if (parts.length < 2) return null;
+      const pathAndExt = parts[1];
+      const lastDot = pathAndExt.lastIndexOf('.');
+      if (lastDot === -1) return pathAndExt;
+      return pathAndExt.substring(0, lastDot);
+    } catch (err) {
+      return null;
+    }
+  };
+
+  // Helper to delete an image asset (Cloudinary / DB / Local)
+  const deleteImage = async (url) => {
+    if (!url) return;
+    try {
+      // 1. Cloudinary
+      if (url.includes('res.cloudinary.com') && isCloudinaryConfigured) {
+        const publicId = getCloudinaryPublicId(url);
+        if (publicId) {
+          await cloudinary.uploader.destroy(publicId);
+          console.log(`🧹 Deleted Cloudinary image: ${publicId}`);
+        }
+      }
+      // 2. Local uploads / MongoDB base64
+      else if (url.startsWith('/uploads/') || url.includes('/uploads/')) {
+        let filename = '';
+        if (url.startsWith('/uploads/')) {
+          filename = url.replace('/uploads/', '');
+        } else {
+          filename = url.split('/uploads/')[1];
+        }
+        const safeFilename = path.basename(filename);
+
+        // Delete from MongoDB uploads
+        if (dbConnectingPromise) await dbConnectingPromise;
+        if (db) {
+          try {
+            await db.collection('uploads').deleteOne({ filename: safeFilename });
+            console.log(`🧹 Deleted MongoDB upload: ${safeFilename}`);
+          } catch (dbErr) {
+            console.error("Failed to delete upload from MongoDB:", dbErr.message);
+          }
+        }
+
+        // Delete from local disk
+        const filePath = path.join(UPLOADS_DIR, safeFilename);
+        if (fs.existsSync(filePath)) {
+          try {
+            fs.unlinkSync(filePath);
+            console.log(`🧹 Deleted local cache image file: ${safeFilename}`);
+          } catch (fsErr) {
+            console.error("Failed to delete local image file:", fsErr.message);
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`Error deleting image asset (${url}):`, err.message);
+    }
+  };
+
+  // 1. Clean up from MongoDB
+  if (dbConnectingPromise) await dbConnectingPromise;
+  if (db) {
+    try {
+      const allEvents = await db.collection('events').find({}).toArray();
+      const expiredEvents = allEvents.filter(event => {
+        let eventTime = null;
+        if (event.eventEndDateTime) {
+          eventTime = new Date(event.eventEndDateTime).getTime();
+        } else if (event.eventStartDateTime) {
+          eventTime = new Date(event.eventStartDateTime).getTime();
+        } else if (event.date) {
+          eventTime = new Date(event.date).getTime();
+        }
+        return eventTime && eventTime < thirtyDaysAgo;
+      });
+
+      console.log(`🧹 Found ${expiredEvents.length} expired events in MongoDB.`);
+
+      for (const event of expiredEvents) {
+        // Collect all image URLs
+        const imagesToDelete = [];
+        if (event.posterUrl) imagesToDelete.push(event.posterUrl);
+        if (event.schedulePosterUrl) imagesToDelete.push(event.schedulePosterUrl);
+        if (Array.isArray(event.posterUrls)) {
+          event.posterUrls.forEach(url => {
+            if (url && !imagesToDelete.includes(url)) {
+              imagesToDelete.push(url);
+            }
+          });
+        }
+
+        // Delete all images
+        for (const url of imagesToDelete) {
+          await deleteImage(url);
+        }
+
+        // Delete the event document
+        await db.collection('events').deleteOne({ id: event.id });
+        console.log(`🧹 Deleted expired event from MongoDB: "${event.title}" (ID: ${event.id})`);
+      }
+    } catch (err) {
+      console.error("MongoDB expired events cleanup failed:", err.message);
+    }
+  }
+
+  // 2. Clean up from local events.json file
+  if (fs.existsSync(EVENTS_FILE)) {
+    try {
+      const fileData = JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf-8'));
+      const localEvents = fileData.events || [];
+      const activeEvents = [];
+      let deletedCount = 0;
+
+      for (const event of localEvents) {
+        let eventTime = null;
+        if (event.eventEndDateTime) {
+          eventTime = new Date(event.eventEndDateTime).getTime();
+        } else if (event.eventStartDateTime) {
+          eventTime = new Date(event.eventStartDateTime).getTime();
+        } else if (event.date) {
+          eventTime = new Date(event.date).getTime();
+        }
+
+        if (eventTime && eventTime < thirtyDaysAgo) {
+          // Collect and delete images
+          const imagesToDelete = [];
+          if (event.posterUrl) imagesToDelete.push(event.posterUrl);
+          if (event.schedulePosterUrl) imagesToDelete.push(event.schedulePosterUrl);
+          if (Array.isArray(event.posterUrls)) {
+            event.posterUrls.forEach(url => {
+              if (url && !imagesToDelete.includes(url)) {
+                imagesToDelete.push(url);
+              }
+            });
+          }
+
+          for (const url of imagesToDelete) {
+            await deleteImage(url);
+          }
+
+          console.log(`🧹 Deleted expired event from events.json: "${event.title}" (ID: ${event.id})`);
+          deletedCount++;
+        } else {
+          activeEvents.push(event);
+        }
+      }
+
+      if (deletedCount > 0) {
+        fileData.events = activeEvents;
+        fs.writeFileSync(EVENTS_FILE, JSON.stringify(fileData, null, 2), 'utf-8');
+        console.log(`🧹 Updated events.json, removed ${deletedCount} expired events.`);
+      }
+    } catch (err) {
+      console.error("Local events.json cleanup failed:", err.message);
+    }
+  }
+};
+
 // Email Configuration (SMTP Transporter)
 const smtpHost = process.env.SMTP_HOST;
 const smtpPort = parseInt(process.env.SMTP_PORT, 10) || 587;
@@ -2749,8 +2917,28 @@ const scheduleDailyScraper = () => {
   });
 };
 
+// --- CRON CLEANUP ENDPOINT ---
+app.get('/api/cron/cleanup', async (req, res) => {
+  try {
+    await cleanupExpiredEvents();
+    res.json({ success: true, message: 'Expired events and assets cleanup completed.' });
+  } catch (err) {
+    console.error("Cron cleanup handler failed:", err);
+    res.status(500).json({ error: 'Cleanup failed: ' + err.message });
+  }
+});
+
 if (!process.env.VERCEL) {
   scheduleDailyScraper();
+
+  // Run expired events cleanup locally on boot and then every 24 hours
+  setTimeout(() => {
+    cleanupExpiredEvents().catch(err => console.error("Local startup cleanup failed:", err));
+  }, 10000); // 10s delay to allow DB connection to settle
+
+  setInterval(() => {
+    cleanupExpiredEvents().catch(err => console.error("Local interval cleanup failed:", err));
+  }, 24 * 60 * 60 * 1000);
 
   app.listen(PORT, () => {
     console.log(`=========================================`);
