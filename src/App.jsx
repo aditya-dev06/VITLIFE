@@ -691,7 +691,7 @@ function App() {
           <h2>Loading Secure Authentication...</h2>
         </div>
       }>
-        <Auth onLoginSuccess={handleLoginSuccess} />
+        <Auth onLoginSuccess={handleLoginSuccess} theme={theme} />
       </Suspense>
     );
   }

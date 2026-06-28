@@ -3279,6 +3279,20 @@ input, textarea, select {
     pointer-events: none;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   }
+
+  /* Futuristic Cyber scanlines overlay for WebGL Hyperspeed */
+  .auth-hero-cyber-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+    background: linear-gradient(
+      rgba(18, 16, 16, 0) 50%, 
+      rgba(0, 0, 0, 0.25) 50%
+    );
+    background-size: 100% 4px;
+    opacity: 0.25;
+  }
 }
 
 /* ── Light Theme Auth Overrides ── */

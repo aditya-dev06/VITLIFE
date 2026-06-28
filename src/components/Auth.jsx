@@ -1,149 +1,78 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import TypewriterText from './TypewriterText';
+import Hyperspeed from './Hyperspeed';
 
-/* ═══════════════════════════════════════════════════════════════
-   PARTICLE CONSTELLATION CANVAS — Interactive starfield background
-   ═══════════════════════════════════════════════════════════════ */
-const ParticleCanvas = () => {
-  const canvasRef = useRef(null);
-  const mouseRef = useRef({ x: -1000, y: -1000 });
-  const particlesRef = useRef([]);
-  const animFrameRef = useRef(null);
+const DARK_HYPERSPEED_OPTIONS = {
+  distortion: 'turbulentDistortion',
+  length: 400,
+  roadWidth: 10,
+  islandWidth: 2,
+  lanesPerRoad: 4,
+  fov: 90,
+  fovSpeedUp: 150,
+  speedUp: 2,
+  carLightsFade: 0.4,
+  totalSideLightSticks: 20,
+  lightPairsPerRoadWay: 40,
+  shoulderLinesWidthPercentage: 0.05,
+  brokenLinesWidthPercentage: 0.1,
+  brokenLinesLengthPercentage: 0.5,
+  lightStickWidth: [0.12, 0.5],
+  lightStickHeight: [1.3, 1.7],
+  movingAwaySpeed: [60, 80],
+  movingCloserSpeed: [-120, -160],
+  carLightsLength: [400 * 0.03, 400 * 0.2],
+  carLightsRadius: [0.05, 0.14],
+  carWidthPercentage: [0.3, 0.5],
+  carShiftX: [-0.8, 0.8],
+  carFloorSeparation: [0, 5],
+  colors: {
+    roadColor: 0x080808,
+    islandColor: 0x0a0a0a,
+    background: 0x000000,
+    shoulderLines: 0xffffff,
+    brokenLines: 0xffffff,
+    leftCars: [0xd856bf, 0x6750a2, 0xc247ac],
+    rightCars: [0x03b3c3, 0x0e5ea5, 0x324555],
+    sticks: 0x03b3c3
+  }
+};
 
-  const initParticles = useCallback((w, h) => {
-    const count = Math.min(Math.floor((w * h) / 8000), 120);
-    const particles = [];
-    for (let i = 0; i < count; i++) {
-      particles.push({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        vx: (Math.random() - 0.5) * 0.4,
-        vy: (Math.random() - 0.5) * 0.4,
-        r: Math.random() * 2 + 0.5,
-        opacity: Math.random() * 0.5 + 0.2,
-        pulseSpeed: Math.random() * 0.02 + 0.005,
-        pulsePhase: Math.random() * Math.PI * 2,
-      });
-    }
-    particlesRef.current = particles;
-  }, []);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    let w = canvas.parentElement.offsetWidth;
-    let h = canvas.parentElement.offsetHeight;
-    canvas.width = w;
-    canvas.height = h;
-    initParticles(w, h);
-
-    const handleResize = () => {
-      w = canvas.parentElement.offsetWidth;
-      h = canvas.parentElement.offsetHeight;
-      canvas.width = w;
-      canvas.height = h;
-      initParticles(w, h);
-    };
-
-    const handleMouseMove = (e) => {
-      const rect = canvas.getBoundingClientRect();
-      mouseRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    };
-
-    const handleMouseLeave = () => {
-      mouseRef.current = { x: -1000, y: -1000 };
-    };
-
-    window.addEventListener('resize', handleResize);
-    canvas.addEventListener('mousemove', handleMouseMove);
-    canvas.addEventListener('mouseleave', handleMouseLeave);
-
-    let time = 0;
-    const draw = () => {
-      time += 1;
-      ctx.clearRect(0, 0, w, h);
-      const particles = particlesRef.current;
-      const mouse = mouseRef.current;
-
-      // Update & draw particles
-      for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
-        p.x += p.vx;
-        p.y += p.vy;
-
-        // Wrap around edges
-        if (p.x < 0) p.x = w;
-        if (p.x > w) p.x = 0;
-        if (p.y < 0) p.y = h;
-        if (p.y > h) p.y = 0;
-
-        // Mouse repulsion
-        const dx = p.x - mouse.x;
-        const dy = p.y - mouse.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 120) {
-          const force = (120 - dist) / 120;
-          p.x += (dx / dist) * force * 2;
-          p.y += (dy / dist) * force * 2;
-        }
-
-        // Pulse opacity
-        const pulse = Math.sin(time * p.pulseSpeed + p.pulsePhase) * 0.3 + 0.7;
-        const alpha = p.opacity * pulse;
-
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(147, 130, 255, ${alpha})`;
-        ctx.fill();
-
-        // Connect nearby particles with lines
-        for (let j = i + 1; j < particles.length; j++) {
-          const p2 = particles[j];
-          const lx = p.x - p2.x;
-          const ly = p.y - p2.y;
-          const ld = Math.sqrt(lx * lx + ly * ly);
-          if (ld < 140) {
-            const lineAlpha = (1 - ld / 140) * 0.15;
-            ctx.beginPath();
-            ctx.moveTo(p.x, p.y);
-            ctx.lineTo(p2.x, p2.y);
-            ctx.strokeStyle = `rgba(147, 130, 255, ${lineAlpha})`;
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
-          }
-        }
-      }
-
-      // Mouse glow
-      if (mouse.x > 0 && mouse.y > 0) {
-        const grad = ctx.createRadialGradient(mouse.x, mouse.y, 0, mouse.x, mouse.y, 150);
-        grad.addColorStop(0, 'rgba(99, 91, 255, 0.08)');
-        grad.addColorStop(1, 'rgba(99, 91, 255, 0)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(mouse.x - 150, mouse.y - 150, 300, 300);
-      }
-
-      animFrameRef.current = requestAnimationFrame(draw);
-    };
-
-    draw();
-
-    return () => {
-      cancelAnimationFrame(animFrameRef.current);
-      window.removeEventListener('resize', handleResize);
-      canvas.removeEventListener('mousemove', handleMouseMove);
-      canvas.removeEventListener('mouseleave', handleMouseLeave);
-    };
-  }, [initParticles]);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 1 }}
-    />
-  );
+const LIGHT_HYPERSPEED_OPTIONS = {
+  distortion: 'turbulentDistortion',
+  length: 400,
+  roadWidth: 10,
+  islandWidth: 2,
+  lanesPerRoad: 4,
+  fov: 90,
+  fovSpeedUp: 150,
+  speedUp: 2,
+  carLightsFade: 0.4,
+  totalSideLightSticks: 20,
+  lightPairsPerRoadWay: 40,
+  shoulderLinesWidthPercentage: 0.05,
+  brokenLinesWidthPercentage: 0.1,
+  brokenLinesLengthPercentage: 0.5,
+  lightStickWidth: [0.12, 0.5],
+  lightStickHeight: [1.3, 1.7],
+  movingAwaySpeed: [60, 80],
+  movingCloserSpeed: [-120, -160],
+  carLightsLength: [400 * 0.03, 400 * 0.2],
+  carLightsRadius: [0.05, 0.14],
+  carWidthPercentage: [0.3, 0.5],
+  carShiftX: [-0.8, 0.8],
+  carFloorSeparation: [0, 5],
+  colors: {
+    roadColor: 0xebedf2,
+    islandColor: 0xdae2ed,
+    background: 0xd3dbe8,
+    shoulderLines: 0xffffff,
+    brokenLines: 0xffffff,
+    leftCars: [0x635bff, 0x9d4edd, 0xf754a8],
+    rightCars: [0x00f5d4, 0x2be0f5, 0x0ea5e9],
+    sticks: 0x2be0f5
+  }
 };
 
 /* ═══════════════════════════════════════════════════════════════
@@ -156,14 +85,18 @@ const HERO_FEATURES = [
   { icon: '⏰', label: 'Timetable', desc: 'Class schedules' },
 ];
 
-const AnimatedHeroPanel = () => {
+const AnimatedHeroPanel = ({ theme }) => {
+  const isLightTheme = theme === 'light';
   return (
     <div className="auth-hero-panel">
-      <ParticleCanvas />
+      {/* 3D WebGL Hyperspeed Background */}
+      <Hyperspeed effectOptions={isLightTheme ? LIGHT_HYPERSPEED_OPTIONS : DARK_HYPERSPEED_OPTIONS} />
+      
       <div className="auth-floating-orb auth-orb-1" />
       <div className="auth-floating-orb auth-orb-2" />
       <div className="auth-floating-orb auth-orb-3" />
       <div className="auth-hero-grid" />
+      <div className="auth-hero-cyber-overlay" />
 
       <div className="auth-hero-content">
         {/* Staggered letter-by-letter brand reveal */}
@@ -319,7 +252,7 @@ const getRegNumberAndProgram = (emailStr) => {
   return null;
 };
 
-const Auth = ({ onLoginSuccess }) => {
+const Auth = ({ onLoginSuccess, theme }) => {
   const [authState, setAuthState] = useState(() => {
     return sessionStorage.getItem('authState') || 'login';
   });
@@ -1096,7 +1029,7 @@ const Auth = ({ onLoginSuccess }) => {
   return (
     <div className="auth-wrapper">
       {/* ── Left Hero Panel (Desktop Only — hidden via CSS on mobile) ── */}
-      <AnimatedHeroPanel />
+      <AnimatedHeroPanel theme={theme} />
 
       {/* ── Right Form Panel (With interactive spotlight background) ── */}
       <div 
