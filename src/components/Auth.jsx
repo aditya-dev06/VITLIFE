@@ -80,6 +80,134 @@ const LIGHT_HYPERSPEED_OPTIONS = {
    ═══════════════════════════════════════════════════════════════ */
 
 
+import * as THREE from 'three';
+
+/* ═══════════════════════════════════════════════════════════════
+   3D WEBGL INTERACTIVE SCENE — Glowing wireframe torus knot + particles
+   ═══════════════════════════════════════════════════════════════ */
+const ThreeDScene = ({ theme }) => {
+  const containerRef = useRef(null);
+  const mouseRef = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const scene = new THREE.Scene();
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
+    camera.position.z = 25;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    const group = new THREE.Group();
+    scene.add(group);
+
+    // Torus Knot Wireframe
+    const torusColor = theme === 'light' ? 0x2a1cb8 : 0x635bff;
+    const torusGeo = new THREE.TorusKnotGeometry(5.5, 1.8, 150, 16);
+    const torusMat = new THREE.MeshBasicMaterial({
+      color: torusColor,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.65
+    });
+    const torusMesh = new THREE.Mesh(torusGeo, torusMat);
+    group.add(torusMesh);
+
+    // Outer wireframe sphere
+    const sphereColor = theme === 'light' ? 0x0b7285 : 0x2be0f5;
+    const sphereGeo = new THREE.IcosahedronGeometry(9.5, 2);
+    const sphereMat = new THREE.MeshBasicMaterial({
+      color: sphereColor,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.2
+    });
+    const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
+    group.add(sphereMesh);
+
+    // Points / particles cloud
+    const particleCount = 180;
+    const particleGeo = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount * 3; i += 3) {
+      const r = 12 + Math.random() * 12;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos((Math.random() * 2) - 1);
+      positions[i] = r * Math.sin(phi) * Math.cos(theta);
+      positions[i+1] = r * Math.sin(phi) * Math.sin(theta);
+      positions[i+2] = r * Math.cos(phi);
+    }
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const particleMat = new THREE.PointsMaterial({
+      color: torusColor,
+      size: 0.15,
+      transparent: true,
+      opacity: 0.6
+    });
+    const particles = new THREE.Points(particleGeo, particleMat);
+    group.add(particles);
+
+    const handleMouseMove = (e) => {
+      const rect = container.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      mouseRef.current = { x, y };
+    };
+
+    const handleResize = () => {
+      if (!container) return;
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('resize', handleResize);
+
+    let reqId;
+    const animate = () => {
+      reqId = requestAnimationFrame(animate);
+
+      torusMesh.rotation.x += 0.003;
+      torusMesh.rotation.y += 0.005;
+      
+      sphereMesh.rotation.x -= 0.0015;
+      sphereMesh.rotation.y -= 0.0025;
+
+      particles.rotation.y += 0.0006;
+
+      const targetRX = mouseRef.current.y * 0.4;
+      const targetRY = mouseRef.current.x * 0.4;
+      group.rotation.x += (targetRX - group.rotation.x) * 0.05;
+      group.rotation.y += (targetRY - group.rotation.y) * 0.05;
+
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    return () => {
+      cancelAnimationFrame(reqId);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('resize', handleResize);
+      renderer.dispose();
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement);
+      }
+    };
+  }, [theme]);
+
+  return <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, zIndex: 2 }} />;
+};
+
 const AnimatedHeroPanel = ({ theme }) => {
   const isLightTheme = theme === 'light';
   const panelRef = useRef(null);
@@ -111,6 +239,9 @@ const AnimatedHeroPanel = ({ theme }) => {
     >
       {/* 3D WebGL Hyperspeed Background */}
       <Hyperspeed effectOptions={isLightTheme ? LIGHT_HYPERSPEED_OPTIONS : DARK_HYPERSPEED_OPTIONS} />
+      
+      {/* 3D Interactive Torus Scene */}
+      <ThreeDScene theme={theme} />
       
       <div className="auth-floating-orb auth-orb-1" />
       <div className="auth-floating-orb auth-orb-2" />
