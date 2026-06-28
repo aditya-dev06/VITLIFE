@@ -178,13 +178,7 @@ function getDaysRemaining(dateStr) {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
-function getCardOpacity(status) {
-  switch (status) {
-    case 'ended': return 0.4;
-    case 'reg_closed': return 0.55;
-    default: return 1;
-  }
-}
+
 
 function formatDate(dateStr) {
   if (!dateStr) return '';
@@ -590,7 +584,7 @@ function DashboardEventCardItem({
   const isAdmin = user && user.role === 'admin';
   const status = getEventStatus(event);
   const badge = getStatusBadge(status);
-  const opacity = getCardOpacity(status);
+  const opacity = 1; // Enforce full opacity in stack to prevent card overlap visibility
 
   const handleImageLoad = () => {
     setImageLoaded(true);
