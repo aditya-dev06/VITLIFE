@@ -107,6 +107,38 @@ const ThreeDScene = ({ theme, onHoverNode }) => {
       nodeMeshes.push(mesh);
     });
 
+    // 5. Deep Space Galaxy Background Stars (Fixed in background)
+    const starsCount = 1200;
+    const starsGeo = new THREE.BufferGeometry();
+    const starsPos = new Float32Array(starsCount * 3);
+    for (let i = 0; i < starsCount * 3; i += 3) {
+      starsPos[i] = (Math.random() - 0.5) * 160;
+      starsPos[i+1] = (Math.random() - 0.5) * 160;
+      starsPos[i+2] = (Math.random() - 0.5) * 160;
+    }
+    starsGeo.setAttribute('position', new THREE.BufferAttribute(starsPos, 3));
+    const starsMat = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 0.08,
+      transparent: true,
+      opacity: 0.5
+    });
+    const backgroundStars = new THREE.Points(starsGeo, starsMat);
+    scene.add(backgroundStars);
+
+    // 6. Orbiting Satellite Planets Setup
+    const satellite1 = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.7, 1),
+      new THREE.MeshBasicMaterial({ color: 0xff007f, wireframe: true, transparent: true, opacity: 0.7 })
+    );
+    group.add(satellite1);
+
+    const satellite2 = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(0.5),
+      new THREE.MeshBasicMaterial({ color: 0x9d4edd, wireframe: true, transparent: true, opacity: 0.6 })
+    );
+    group.add(satellite2);
+
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
@@ -168,6 +200,24 @@ const ThreeDScene = ({ theme, onHoverNode }) => {
       globeMesh.rotation.y += 0.001 * rotationSpeedFactor;
       outerMesh.rotation.y -= 0.0005 * rotationSpeedFactor;
       ringPoints.rotation.y += 0.0015 * rotationSpeedFactor;
+
+      // Orbit paths animation
+      const clockTime = Date.now();
+      
+      const angle1 = clockTime * 0.0008;
+      satellite1.position.x = Math.cos(angle1) * 10.5;
+      satellite1.position.z = Math.sin(angle1) * 10.5;
+      satellite1.position.y = Math.sin(angle1) * 10.5 * Math.sin(0.3);
+      satellite1.rotation.y += 0.01;
+
+      const angle2 = clockTime * 0.0005;
+      satellite2.position.x = Math.cos(angle2) * 14.5;
+      satellite2.position.z = Math.sin(angle2) * 14.5;
+      satellite2.position.y = Math.sin(angle2) * 14.5 * Math.sin(-0.4);
+      satellite2.rotation.x += 0.008;
+
+      // Background stars slow rotation for stellar parallax
+      backgroundStars.rotation.y += 0.0002;
 
       // Lerping rotation values
       dragRef.current.currentRotationX += (dragRef.current.targetRotationX - dragRef.current.currentRotationX) * 0.08;
