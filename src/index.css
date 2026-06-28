@@ -847,14 +847,20 @@ input, textarea, select {
 }
 
 /* Make cards in the swipe stack solid to prevent overlap visibility */
-.stacked-card .event-card {
+.stacked-card .event-card,
+.stacked-card .event-card:hover,
+.stacked-card .event-card:active {
   background: #141416 !important; /* Solid background matching dark theme */
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
 
-.light-theme .stacked-card .event-card {
+.light-theme .stacked-card .event-card,
+.light-theme .stacked-card .event-card:hover,
+.light-theme .stacked-card .event-card:active {
   background: #ffffff !important; /* Solid background matching light theme */
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 .app-container {
