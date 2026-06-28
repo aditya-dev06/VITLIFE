@@ -1216,6 +1216,13 @@ const verifyPassword = (password, salt, storedHash) => {
   return legacyComputed === storedHash;
 };
 
+const isStrongPassword = (password) => {
+  if (typeof password !== 'string') return false;
+  // Enforce strong password requirements: min 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special character
+  const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+  return regex.test(password);
+};
+
 // Custom Session Token generation and validation (with password hash segement for session revocation)
 const generateToken = async (email, passwordHash) => {
   const secret = await ensureJwtSecret();
@@ -1366,8 +1373,8 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Name, email, and password are required.' });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    if (!isStrongPassword(password)) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.' });
     }
 
     const lowerEmail = email.trim().toLowerCase();
@@ -1706,8 +1713,8 @@ app.post('/api/auth/reset-password', authLimiter, authRateLimiter(5, 15 * 60 * 1
       return res.status(400).json({ error: 'Email, reset code, and new password are required.' });
     }
 
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    if (!isStrongPassword(newPassword)) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.' });
     }
 
     const lowerEmail = email.trim().toLowerCase();

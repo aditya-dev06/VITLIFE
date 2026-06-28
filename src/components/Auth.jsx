@@ -8,6 +8,13 @@ const COURSES_LIST = [
   { code: 'Numerical Methods', name: 'Numerical Methods & Computational Math' }
 ];
 
+const isStrongPassword = (password) => {
+  if (typeof password !== 'string') return false;
+  // Enforce strong password requirements: min 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special character
+  const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+  return regex.test(password);
+};
+
 const getRegNumberAndProgram = (emailStr) => {
   const cleanEmail = emailStr.trim().toLowerCase();
   const regex = /^([a-zA-Z.-]+)\.([a-zA-Z0-9]+)@vitbhopal\.ac\.in$/;
@@ -193,7 +200,12 @@ const Auth = ({ onLoginSuccess }) => {
       return;
     }
 
-    if (password.length < 6) {
+    if (isSignUp && !isStrongPassword(password)) {
+      setError('Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.');
+      return;
+    }
+
+    if (!isSignUp && password.length < 6) {
       setError('Password must be at least 6 characters long.');
       return;
     }
@@ -355,8 +367,8 @@ const Auth = ({ onLoginSuccess }) => {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters long.');
+    if (!isStrongPassword(newPassword)) {
+      setError('Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.');
       return;
     }
 
@@ -522,11 +534,14 @@ const Auth = ({ onLoginSuccess }) => {
               <label>New Password</label>
               <input 
                 type="password" 
-                placeholder="New Password (min 6 characters)" 
+                placeholder="Min 8 chars, mixed case, number & symbol" 
                 value={newPassword} 
                 onChange={(e) => setNewPassword(e.target.value)} 
                 required 
               />
+              <small style={{ display: 'block', marginTop: '0.25rem', fontSize: '0.72rem', color: 'hsl(var(--text-muted))' }}>
+                Must be at least 8 characters, with 1 uppercase, 1 lowercase, 1 digit, and 1 symbol (@$!%*?&).
+              </small>
             </div>
 
             <div className="form-group">
@@ -644,11 +659,16 @@ const Auth = ({ onLoginSuccess }) => {
               </div>
               <input 
                 type="password" 
-                placeholder="••••••••" 
+                placeholder={isSignUp ? "Min 8 chars, mixed case, number & symbol" : "••••••••"} 
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)} 
                 required 
               />
+              {isSignUp && (
+                <small style={{ display: 'block', marginTop: '0.25rem', fontSize: '0.72rem', color: 'hsl(var(--text-muted))' }}>
+                  Must be at least 8 characters, with 1 uppercase, 1 lowercase, 1 digit, and 1 symbol (@$!%*?&).
+                </small>
+              )}
             </div>
 
             {isSignUp && (
