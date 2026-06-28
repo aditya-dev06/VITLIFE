@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useProfileSync } from './hooks/useTimetableSync';
 import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import TypewriterText from './components/TypewriterText';
 import Dock from './components/Dock';
 import { motion, AnimatePresence } from 'motion/react';
@@ -1308,6 +1309,7 @@ function App() {
         </div>
       )}
       <Analytics />
+      <SpeedInsights />
     </div>
   );
 }
