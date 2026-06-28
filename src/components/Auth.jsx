@@ -356,6 +356,7 @@ const Auth = ({ onLoginSuccess, theme }) => {
   const [authState, setAuthState] = useState(() => {
     return sessionStorage.getItem('authState') || 'login';
   });
+  const [signupStep, setSignupStep] = useState(1);
   const [name, setName] = useState('');
   const [email, setEmail] = useState(() => {
     return sessionStorage.getItem('authEmail') || '';
@@ -363,6 +364,8 @@ const Auth = ({ onLoginSuccess, theme }) => {
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+
   const [code, setCode] = useState('');
   const [isVitBhopal, setIsVitBhopal] = useState(true);
   const [selectedCourses, setSelectedCourses] = useState([]);
@@ -466,6 +469,28 @@ const Auth = ({ onLoginSuccess, theme }) => {
     setSuccessMessage('');
 
     const isSignUp = authState === 'signup';
+
+    // Multi-step signup interception
+    if (isSignUp && signupStep === 1) {
+      if (!name || !email || !password) {
+        setError('Please fill in all required fields.');
+        return;
+      }
+      if (!validateEmail(email)) {
+        if (isVitBhopal) {
+          setError('Email must follow the pattern: firstname.registrationnumber@vitbhopal.ac.in (e.g., aditya.22bce10001@vitbhopal.ac.in)');
+        } else {
+          setError('Please enter a valid email address.');
+        }
+        return;
+      }
+      if (!isStrongPassword(password)) {
+        setError('Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.');
+        return;
+      }
+      setSignupStep(2);
+      return;
+    }
 
     if (!email || !password || (isSignUp && !name)) {
       setError('Please fill in all required fields.');
@@ -879,200 +904,243 @@ const Auth = ({ onLoginSuccess, theme }) => {
             {error && <div className="auth-error-banner">⚠️ {error}</div>}
             {successMessage && <div className="auth-success-banner">✅ {successMessage}</div>}
 
-            {isSignUp && (
-              <div className="form-group">
-                <label>Full Name</label>
-                <input 
-                  type="text" 
-                  placeholder="Enter your name" 
-                  value={name} 
-                  onChange={(e) => setName(e.target.value)} 
-                  required 
-                />
-              </div>
-            )}
-
-            <div className="form-group">
-              <label>Email Address</label>
-              <input 
-                type="email" 
-                placeholder={isSignUp && isVitBhopal ? "firstname.regnumber@vitbhopal.ac.in" : "Enter your email"} 
-                value={email} 
-                onChange={(e) => setEmail(e.target.value)} 
-                required 
-              />
-            </div>
-
-            {isSignUp && isVitBhopal && email && (() => {
-              const parsed = getRegNumberAndProgram(email);
-              if (parsed) {
-                return (
-                  <div className="detected-program-banner" style={{
-                    fontSize: '0.8rem',
-                    padding: '0.6rem 0.8rem',
-                    background: 'rgba(6, 182, 212, 0.15)',
-                    color: 'hsl(var(--secondary))',
-                    border: '1px solid rgba(6, 182, 212, 0.3)',
-                    borderRadius: '6px',
-                    marginBottom: '1rem',
-                    lineHeight: '1.4'
-                  }}>
-                    ✅ <strong>Registration Number:</strong> {parsed.regNum} <br/>
-                    🎓 <strong>Detected Program:</strong> {parsed.program}
+            {isSignUp ? (
+              // ── SIGN UP CONDITIONAL STEPS ──
+              signupStep === 1 ? (
+                <>
+                  <div className="form-group">
+                    <label>Full Name</label>
+                    <input 
+                      type="text" 
+                      placeholder="Enter your name" 
+                      value={name} 
+                      onChange={(e) => setName(e.target.value)} 
+                      required 
+                    />
                   </div>
-                );
-              }
-              return null;
-            })()}
 
-            <div className="form-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label>Password</label>
-                {!isSignUp && (
-                  <button 
-                    type="button" 
-                    className="auth-link-btn" 
-                    style={{ fontSize: '0.75rem', fontWeight: 'normal', textDecoration: 'underline' }}
-                    onClick={() => {
-                      setAuthState('forgot');
-                      setError('');
-                      setSuccessMessage('');
-                    }}
-                  >
-                    Forgot Password?
+                  <div className="form-group">
+                    <label>Email Address</label>
+                    <input 
+                      type="email" 
+                      placeholder={isVitBhopal ? "firstname.regnumber@vitbhopal.ac.in" : "Enter your email"} 
+                      value={email} 
+                      onChange={(e) => setEmail(e.target.value)} 
+                      required 
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Password</label>
+                    <input 
+                      type="password" 
+                      placeholder="Min 8 chars, mixed case, number & symbol" 
+                      value={password} 
+                      onChange={(e) => setPassword(e.target.value)} 
+                      required 
+                    />
+                    <small style={{ display: 'block', marginTop: '0.25rem', fontSize: '0.72rem', color: 'hsl(var(--text-muted))' }}>
+                      Must be at least 8 characters, with 1 uppercase, 1 lowercase, 1 digit, and 1 symbol (@$!%*?&).
+                    </small>
+                  </div>
+
+                  <div className="form-group-checkbox">
+                    <input 
+                      type="checkbox" 
+                      id="vit-check" 
+                      checked={isVitBhopal} 
+                      onChange={(e) => {
+                        setIsVitBhopal(e.target.checked);
+                        setError('');
+                      }} 
+                    />
+                    <label htmlFor="vit-check">I am a student of VIT Bhopal</label>
+                  </div>
+
+                  <button type="submit" className="btn-primary auth-submit-btn" style={{ marginTop: '1rem' }}>
+                    Continue
                   </button>
-                )}
-              </div>
-              <input 
-                type="password" 
-                placeholder={isSignUp ? "Min 8 chars, mixed case, number & symbol" : "••••••••"} 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)} 
-                required 
-              />
-              {isSignUp && (
-                <small style={{ display: 'block', marginTop: '0.25rem', fontSize: '0.72rem', color: 'hsl(var(--text-muted))' }}>
-                  Must be at least 8 characters, with 1 uppercase, 1 lowercase, 1 digit, and 1 symbol (@$!%*?&).
-                </small>
-              )}
-            </div>
+                </>
+              ) : (
+                <>
+                  {isVitBhopal && email && (() => {
+                    const parsed = getRegNumberAndProgram(email);
+                    if (parsed) {
+                      return (
+                        <div className="detected-program-banner" style={{
+                          fontSize: '0.8rem',
+                          padding: '0.6rem 0.8rem',
+                          background: 'rgba(6, 182, 212, 0.15)',
+                          color: 'hsl(var(--secondary))',
+                          border: '1px solid rgba(6, 182, 212, 0.3)',
+                          borderRadius: '6px',
+                          marginBottom: '1rem',
+                          lineHeight: '1.4'
+                        }}>
+                          ✅ <strong>Registration Number:</strong> {parsed.regNum} <br/>
+                          🎓 <strong>Detected Program:</strong> {parsed.program}
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
 
-            {isSignUp && (
-              <>
-                <div className="form-group-checkbox">
-                  <input 
-                    type="checkbox" 
-                    id="vit-check" 
-                    checked={isVitBhopal} 
-                    onChange={(e) => {
-                      setIsVitBhopal(e.target.checked);
-                      setError('');
-                    }} 
-                  />
-                  <label htmlFor="vit-check">I am a student of VIT Bhopal</label>
-                </div>
-
-                <div className="form-group">
-                  <label>Current Status / Semester</label>
-                  <select 
-                    value={semester} 
-                    onChange={(e) => setSemester(e.target.value)} 
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      borderRadius: '8px',
-                      backgroundColor: 'hsla(var(--text-primary) / 0.05)',
-                      border: '1px solid hsla(var(--border-glass))',
-                      color: 'hsl(var(--text-primary))',
-                      outline: 'none'
-                    }}
-                  >
-                    {isVitBhopal ? (
-                      (() => {
-                        const parsed = getRegNumberAndProgram(email);
-                        const maxSem = (parsed && (parsed.isIntegrated || parsed.isBim)) ? 10 : 8;
-                        const options = [];
-                        for (let i = 1; i <= maxSem; i++) {
-                          options.push(
+                  <div className="form-group">
+                    <label>Current Status / Semester</label>
+                    <select 
+                      value={semester} 
+                      onChange={(e) => setSemester(e.target.value)} 
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        borderRadius: '8px',
+                        backgroundColor: 'hsla(var(--text-primary) / 0.05)',
+                        border: '1px solid hsla(var(--border-glass))',
+                        color: 'hsl(var(--text-primary))',
+                        outline: 'none'
+                      }}
+                    >
+                      {isVitBhopal ? (
+                        (() => {
+                          const parsed = getRegNumberAndProgram(email);
+                          const maxSem = (parsed && (parsed.isIntegrated || parsed.isBim)) ? 10 : 8;
+                          const options = [];
+                          for (let i = 1; i <= maxSem; i++) {
+                            options.push(
+                              <option key={i} value={i.toString()} style={{ backgroundColor: 'hsl(var(--bg-card))' }}>
+                                Semester {i}
+                              </option>
+                            );
+                          }
+                          return options;
+                        })()
+                      ) : (
+                        <>
+                          <option value="0" style={{ backgroundColor: 'hsl(var(--bg-card))' }}>Not a Student / Professional</option>
+                          {[1,2,3,4,5,6,7,8].map(i => (
                             <option key={i} value={i.toString()} style={{ backgroundColor: 'hsl(var(--bg-card))' }}>
                               Semester {i}
                             </option>
-                          );
-                        }
-                        return options;
-                      })()
-                    ) : (
-                      <>
-                        <option value="0" style={{ backgroundColor: 'hsl(var(--bg-card))' }}>Not a Student / Professional</option>
-                        {[1,2,3,4,5,6,7,8].map(i => (
-                          <option key={i} value={i.toString()} style={{ backgroundColor: 'hsl(var(--bg-card))' }}>
-                            Semester {i}
-                          </option>
+                          ))}
+                        </>
+                      )}
+                    </select>
+                  </div>
+
+                  {isVitBhopal && (
+                    <div className="course-customizer glass-panel">
+                      <div className="course-title">Select your active semester courses:</div>
+                      <div className="course-grid">
+                        {COURSES_LIST.map((course) => (
+                          <div key={course.code} className="course-checkbox-item">
+                            <input 
+                              type="checkbox" 
+                              id={`course-${course.code}`}
+                              checked={selectedCourses.includes(course.code)}
+                              onChange={() => handleCourseChange(course.code)}
+                            />
+                            <label htmlFor={`course-${course.code}`}>
+                              <strong>{course.code}</strong>: {course.name}
+                            </label>
+                          </div>
                         ))}
-                      </>
-                    )}
-                  </select>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="form-group-checkbox" style={{ marginTop: '1.25rem', alignItems: 'flex-start' }}>
+                    <input 
+                      type="checkbox" 
+                      id="consent-check" 
+                      checked={consentChecked} 
+                      onChange={(e) => setConsentChecked(e.target.checked)} 
+                      required
+                    />
+                    <label htmlFor="consent-check" style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', lineHeight: '1.4' }}>
+                      I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'hsl(var(--secondary))', textDecoration: 'underline' }}>Terms & Conditions</a> and consent to data sharing/processing as per the <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'hsl(var(--secondary))', textDecoration: 'underline' }}>Privacy Policy</a>.
+                    </label>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+                    <button 
+                      type="button" 
+                      className="btn-secondary" 
+                      style={{ flex: 1, padding: '1rem' }}
+                      onClick={() => setSignupStep(1)}
+                    >
+                      Back
+                    </button>
+                    <button 
+                      type="submit" 
+                      className="btn-primary auth-submit-btn" 
+                      style={{ flex: 2 }}
+                      disabled={loading}
+                    >
+                      {loading ? 'Processing...' : 'Register'}
+                    </button>
+                  </div>
+                </>
+              )
+            ) : (
+              // ── SIGN IN DEFAULT RENDER ──
+              <>
+                <div className="form-group">
+                  <label>Email Address</label>
+                  <input 
+                    type="email" 
+                    placeholder="Enter your email" 
+                    value={email} 
+                    onChange={(e) => setEmail(e.target.value)} 
+                    required 
+                  />
                 </div>
 
-                {isVitBhopal && (
-                  <div className="course-customizer glass-panel">
-                    <div className="course-title">Select your active semester courses:</div>
-                    <div className="course-grid">
-                      {COURSES_LIST.map((course) => (
-                        <div key={course.code} className="course-checkbox-item">
-                          <input 
-                            type="checkbox" 
-                            id={`course-${course.code}`}
-                            checked={selectedCourses.includes(course.code)}
-                            onChange={() => handleCourseChange(course.code)}
-                          />
-                          <label htmlFor={`course-${course.code}`}>
-                            <strong>{course.code}</strong>: {course.name}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
+                <div className="form-group">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label>Password</label>
+                    <button 
+                      type="button" 
+                      className="auth-link-btn" 
+                      style={{ fontSize: '0.75rem', fontWeight: 'normal', textDecoration: 'underline' }}
+                      onClick={() => {
+                        setAuthState('forgot');
+                        setError('');
+                        setSuccessMessage('');
+                      }}
+                    >
+                      Forgot Password?
+                    </button>
                   </div>
-                )}
+                  <input 
+                    type="password" 
+                    placeholder="••••••••" 
+                    value={password} 
+                    onChange={(e) => setPassword(e.target.value)} 
+                    required 
+                  />
+                </div>
+
+                <div style={{ marginTop: '1.25rem', borderTop: '1px dashed rgba(255,255,255,0.08)', paddingTop: '1.25rem' }}>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ width: '100%', padding: '0.6rem', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: 0.85 }}
+                    onClick={handleGuestContinue}
+                    disabled={loading}
+                  >
+                    👤 Continue as Guest
+                  </button>
+                  <p style={{ textAlign: 'center', fontSize: '0.7rem', color: 'hsl(var(--text-muted))', marginTop: '0.5rem', lineHeight: 1.4 }}>
+                    Browse without an account. Progress won’t sync to the cloud.
+                  </p>
+                </div>
+
+                <button type="submit" className="btn-primary auth-submit-btn" disabled={loading}>
+                  {loading ? 'Processing...' : 'Sign In'}
+                </button>
               </>
             )}
-
-            {isSignUp && (
-              <div className="form-group-checkbox" style={{ marginTop: '1.25rem', alignItems: 'flex-start' }}>
-                <input 
-                  type="checkbox" 
-                  id="consent-check" 
-                  checked={consentChecked} 
-                  onChange={(e) => setConsentChecked(e.target.checked)} 
-                  required
-                />
-                <label htmlFor="consent-check" style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', lineHeight: '1.4' }}>
-                  I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'hsl(var(--secondary))', textDecoration: 'underline' }}>Terms & Conditions</a> and consent to data sharing/processing as per the <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'hsl(var(--secondary))', textDecoration: 'underline' }}>Privacy Policy</a>.
-                </label>
-              </div>
-            )}
-
-            {!isSignUp && (
-              <div style={{ marginTop: '1.25rem', borderTop: '1px dashed rgba(255,255,255,0.08)', paddingTop: '1.25rem' }}>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  style={{ width: '100%', padding: '0.6rem', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: 0.85 }}
-                  onClick={handleGuestContinue}
-                  disabled={loading}
-                >
-                  👤 Continue as Guest
-                </button>
-                <p style={{ textAlign: 'center', fontSize: '0.7rem', color: 'hsl(var(--text-muted))', marginTop: '0.5rem', lineHeight: 1.4 }}>
-                  Browse without an account. Progress won’t sync to the cloud.
-                </p>
-              </div>
-            )}
-
-            <button type="submit" className="btn-primary auth-submit-btn" disabled={loading}>
-              {loading ? 'Processing...' : isSignUp ? 'Register Account' : 'Sign In'}
-            </button>
           </form>
         );
       }
@@ -1220,14 +1288,14 @@ const Auth = ({ onLoginSuccess, theme }) => {
                 />
                 <button 
                   className={`auth-tab ${authState === 'login' ? 'active' : ''}`}
-                  onClick={() => { setAuthState('login'); setError(''); setSuccessMessage(''); }}
+                  onClick={() => { setAuthState('login'); setSignupStep(1); setError(''); setSuccessMessage(''); }}
                   style={{ background: 'transparent', boxShadow: 'none' }}
                 >
                   Sign In
                 </button>
                 <button 
                   className={`auth-tab ${authState === 'signup' ? 'active' : ''}`}
-                  onClick={() => { setAuthState('signup'); setError(''); setSuccessMessage(''); }}
+                  onClick={() => { setAuthState('signup'); setSignupStep(1); setError(''); setSuccessMessage(''); }}
                   style={{ background: 'transparent', boxShadow: 'none' }}
                 >
                   Create Account
