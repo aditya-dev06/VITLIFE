@@ -3034,14 +3034,26 @@ input, textarea, select {
   transform-origin: left center;
 }
 
-.floating-field.active .floating-label {
+.floating-field.active .floating-label,
+.floating-input:not(:placeholder-shown) ~ .floating-label,
+.floating-input:-webkit-autofill ~ .floating-label {
   top: 0.35rem;
   transform: translateY(0) scale(0.74);
   color: rgba(255, 255, 255, 0.5);
 }
 
+:root.light-theme .floating-field.active .floating-label,
+:root.light-theme .floating-input:not(:placeholder-shown) ~ .floating-label,
+:root.light-theme .floating-input:-webkit-autofill ~ .floating-label {
+  color: rgba(30, 27, 75, 0.6);
+}
+
 .floating-field.focused .floating-label {
   color: #818cf8;
+}
+
+:root.light-theme .floating-field.focused .floating-label {
+  color: #4f46e5;
 }
 
 .floating-bar {
