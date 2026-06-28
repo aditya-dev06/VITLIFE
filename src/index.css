@@ -3294,131 +3294,80 @@ input, textarea, select {
     opacity: 0.25;
   }
 
-  /* 3D Depth Parallax App Preview Container */
-  .auth-hero-parallax-container {
-    position: absolute;
-    inset: 0;
-    z-index: 3;
-    pointer-events: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  /* Base Glassmorphic Preview Widget styling */
-  .auth-parallax-widget {
-    position: absolute;
-    width: 250px;
-    padding: 1.2rem;
-    background: hsla(240, 15%, 8%, 0.45);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 20px;
-    box-shadow: 
-      0 30px 60px -15px rgba(0, 0, 0, 0.6),
-      0 0 0 1px rgba(255, 255, 255, 0.04),
-      inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    pointer-events: auto; /* Allow individual card hover effects */
-    cursor: grab;
-    user-select: none;
-    transition: box-shadow 0.3s ease, border-color 0.3s ease;
-  }
-
-  .auth-parallax-widget:active {
-    cursor: grabbing;
-  }
-
-  .auth-parallax-widget:hover {
-    border-color: hsla(var(--primary) / 0.4);
-    box-shadow: 
-      0 35px 70px -10px rgba(0, 0, 0, 0.7),
-      0 0 25px hsla(var(--primary) / 0.15),
-      inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  }
-
-  /* Widget Header Styling */
-  .widget-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.8rem;
-  }
-
-  .widget-icon {
-    font-size: 1.1rem;
-  }
-
-  .widget-title {
-    font-family: var(--font-accent);
-    font-size: 0.72rem;
+  /* 3D Globe Interactive Node Tooltip */
+  .auth-globe-node-tooltip {
+    background: hsla(240, 15%, 8%, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 0.6rem 1rem;
+    font-size: 0.8rem;
     font-weight: 700;
-    color: hsl(var(--text-secondary));
+    font-family: var(--font-heading);
+    color: #fff;
+    box-shadow: 
+      0 15px 30px rgba(0, 0, 0, 0.5),
+      0 0 20px rgba(99, 91, 255, 0.25);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    white-space: nowrap;
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
 
-  .widget-badge {
-    margin-left: auto;
-    font-size: 0.6rem;
+  /* Horizontal Editorial Branding Font Layout */
+  .auth-hero-brand-new {
+    font-family: 'Inter', sans-serif;
+    font-size: 2.2rem;
+    letter-spacing: 0.35em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    margin-bottom: 0.7rem;
+    pointer-events: none;
+  }
+
+  .brand-bold {
     font-weight: 800;
-    padding: 0.15rem 0.4rem;
-    border-radius: 4px;
+    background: linear-gradient(135deg, #fff 30%, hsla(var(--primary) / 0.8));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
 
-  .widget-badge.neon-green {
-    background: rgba(34, 197, 94, 0.15);
-    color: rgb(74, 222, 128);
-    border: 1px solid rgba(34, 197, 94, 0.3);
+  .brand-divider {
+    margin: 0 1rem;
+    color: rgba(255, 255, 255, 0.15);
+    font-weight: 200;
   }
 
-  .widget-badge.neon-pink {
-    background: rgba(247, 84, 168, 0.15);
-    color: rgb(247, 84, 168);
-    border: 1px solid rgba(247, 84, 168, 0.3);
+  .brand-thin {
+    font-weight: 200;
+    color: rgba(255, 255, 255, 0.8);
+    text-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
   }
 
-  .widget-badge.neon-cyan {
-    background: rgba(6, 182, 212, 0.15);
-    color: hsl(var(--secondary));
-    border: 1px solid rgba(6, 182, 212, 0.3);
+  /* Tagline & Hint Cues styles */
+  .auth-hero-tagline-new {
+    font-size: 0.85rem;
+    font-weight: 400;
+    color: hsla(210, 20%, 98%, 0.5);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 2rem;
   }
 
-  /* Widget Body Content */
-  .widget-body h3 {
-    font-family: var(--font-heading);
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: hsl(var(--text-primary));
-    margin-bottom: 0.25rem;
-  }
-
-  .widget-body p {
-    font-size: 0.75rem;
-    color: hsl(var(--text-secondary));
-    margin-bottom: 0.4rem;
-  }
-
-  .widget-meta {
-    font-size: 0.68rem;
-    color: hsl(var(--text-muted));
-  }
-
-  /* Specific Widget Layout Coordinates */
-  .widget-timetable {
-    top: 18%;
-    left: 8%;
-  }
-
-  .widget-event {
-    bottom: 18%;
-    right: 8%;
-  }
-
-  .widget-opp {
-    bottom: 12%;
-    left: 12%;
-    width: 280px;
+  .auth-hero-hint-new {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: hsla(210, 20%, 98%, 0.25);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 0.4rem 1rem;
+    border-radius: 30px;
+    background: rgba(255, 255, 255, 0.01);
+    display: inline-block;
   }
 }
 

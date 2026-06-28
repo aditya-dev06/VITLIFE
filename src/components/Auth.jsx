@@ -13,7 +13,7 @@ import * as THREE from 'three';
 /* ═══════════════════════════════════════════════════════════════
    3D WEBGL INTERACTIVE GLOBE — Draggable wireframe planet with particle rings
    ═══════════════════════════════════════════════════════════════ */
-const ThreeDScene = ({ theme }) => {
+const ThreeDScene = ({ theme, onHoverNode }) => {
   const containerRef = useRef(null);
   const pointerRef = useRef({ x: 0, y: 0 });
   const dragRef = useRef({ isDragging: false, startX: 0, startY: 0, targetRotationX: 0.3, targetRotationY: 0.5, currentRotationX: 0.3, currentRotationY: 0.5 });
@@ -47,7 +47,7 @@ const ThreeDScene = ({ theme }) => {
       color: primaryColor,
       wireframe: true,
       transparent: true,
-      opacity: 0.35
+      opacity: 0.3
     });
     const globeMesh = new THREE.Mesh(globeGeo, globeMat);
     group.add(globeMesh);
@@ -58,7 +58,7 @@ const ThreeDScene = ({ theme }) => {
       color: secondaryColor,
       wireframe: true,
       transparent: true,
-      opacity: 0.15
+      opacity: 0.12
     });
     const outerMesh = new THREE.Mesh(outerGeo, outerMat);
     group.add(outerMesh);
@@ -71,7 +71,7 @@ const ThreeDScene = ({ theme }) => {
       const radius = 8.5 + Math.random() * 3.5;
       const angle = Math.random() * Math.PI * 2;
       ringPositions[i] = Math.cos(angle) * radius;
-      ringPositions[i+1] = (Math.random() - 0.5) * 0.4; // thin ring height
+      ringPositions[i+1] = (Math.random() - 0.5) * 0.4;
       ringPositions[i+2] = Math.sin(angle) * radius;
     }
     ringGeo.setAttribute('position', new THREE.BufferAttribute(ringPositions, 3));
@@ -84,6 +84,32 @@ const ThreeDScene = ({ theme }) => {
     const ringPoints = new THREE.Points(ringGeo, ringMat);
     group.add(ringPoints);
 
+    // 4. Interactive Portal Location Nodes
+    const nodesData = [
+      { id: 'events', label: '📅 Events Portal', pos: new THREE.Vector3(4.2, 3.2, 3.2) },
+      { id: 'timetable', label: '⏰ Timetable Sync', pos: new THREE.Vector3(-4.2, -2.2, 4.2) },
+      { id: 'opps', label: '🚀 Opportunities Hub', pos: new THREE.Vector3(2.2, -4.2, -3.2) },
+      { id: 'campus', label: '🏫 Campus Life Guide', pos: new THREE.Vector3(-3.2, 4.2, -3.2) }
+    ];
+
+    const nodeMeshes = [];
+    nodesData.forEach(data => {
+      const geo = new THREE.SphereGeometry(0.35, 16, 16);
+      const mat = new THREE.MeshBasicMaterial({
+        color: secondaryColor,
+        transparent: true,
+        opacity: 0.95
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.copy(data.pos);
+      mesh.userData = data;
+      group.add(mesh);
+      nodeMeshes.push(mesh);
+    });
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
     // Drag to spin logic
     const handleMouseDown = (e) => {
       dragRef.current.isDragging = true;
@@ -92,6 +118,10 @@ const ThreeDScene = ({ theme }) => {
     };
 
     const handleMouseMove = (e) => {
+      const rect = container.getBoundingClientRect();
+      const clientX = e.clientX - rect.left;
+      const clientY = e.clientY - rect.top;
+
       if (dragRef.current.isDragging) {
         const deltaX = e.clientX - dragRef.current.startX;
         const deltaY = e.clientY - dragRef.current.startY;
@@ -104,9 +134,11 @@ const ThreeDScene = ({ theme }) => {
       }
       
       // Calculate normalized mouse coordinates for light parallax
-      const rect = container.getBoundingClientRect();
-      pointerRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      pointerRef.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      pointerRef.current.x = (clientX / rect.width) * 2 - 1;
+      pointerRef.current.y = -(clientY / rect.height) * 2 + 1;
+
+      mouse.x = pointerRef.current.x;
+      mouse.y = pointerRef.current.y;
     };
 
     const handleMouseUp = () => {
@@ -148,6 +180,36 @@ const ThreeDScene = ({ theme }) => {
       group.position.x += (pointerRef.current.x * 0.5 - group.position.x) * 0.05;
       group.position.y += (pointerRef.current.y * 0.5 - group.position.y) * 0.05;
 
+      // Raycast intersections for nodes
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(nodeMeshes);
+
+      if (intersects.length > 0) {
+        const hitObject = intersects[0].object;
+        hitObject.scale.set(1.4, 1.4, 1.4);
+        hitObject.material.color.setHex(0xff007f); // highlight color
+
+        // Convert 3D position to 2D screen coordinate for tooltip
+        const tempV = new THREE.Vector3();
+        hitObject.getWorldPosition(tempV);
+        tempV.project(camera);
+
+        const screenX = ((tempV.x + 1) / 2) * width;
+        const screenY = (-(tempV.y - 1) / 2) * height;
+
+        onHoverNode({
+          label: hitObject.userData.label,
+          x: screenX,
+          y: screenY
+        });
+      } else {
+        nodeMeshes.forEach(mesh => {
+          mesh.scale.set(1, 1, 1);
+          mesh.material.color.setHex(secondaryColor);
+        });
+        onHoverNode(null);
+      }
+
       renderer.render(scene, camera);
     };
     animate();
@@ -163,16 +225,35 @@ const ThreeDScene = ({ theme }) => {
         container.removeChild(renderer.domElement);
       }
     };
-  }, [theme]);
+  }, [theme, onHoverNode]);
 
   return <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, zIndex: 2, cursor: 'grab' }} />;
 };
 
 const AnimatedHeroPanel = ({ theme }) => {
+  const [activeNode, setActiveNode] = useState(null);
+
   return (
     <div className="auth-hero-panel">
       {/* 3D Draggable Globe WebGL canvas */}
-      <ThreeDScene theme={theme} />
+      <ThreeDScene theme={theme} onHoverNode={setActiveNode} />
+      
+      {/* Dynamic Hover Tooltip on 3D Globe Nodes */}
+      {activeNode && (
+        <div 
+          className="auth-globe-node-tooltip"
+          style={{
+            position: 'absolute',
+            left: `${activeNode.x}px`,
+            top: `${activeNode.y - 45}px`,
+            transform: 'translateX(-50%)',
+            pointerEvents: 'none',
+            zIndex: 10
+          }}
+        >
+          {activeNode.label}
+        </div>
+      )}
       
       <div className="auth-floating-orb auth-orb-1" />
       <div className="auth-floating-orb auth-orb-2" />
@@ -181,53 +262,26 @@ const AnimatedHeroPanel = ({ theme }) => {
       <div className="auth-hero-cyber-overlay" />
 
       <div className="auth-hero-content" style={{ pointerEvents: 'none' }}>
-        {/* Staggered letter-by-letter brand reveal */}
-        <motion.div
-          className="auth-hero-brand"
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-        >
-          {'VIT'.split('').map((char, i) => (
-            <motion.span
-              key={`vit-${i}`}
-              initial={{ opacity: 0, y: 40, rotateX: -90 }}
-              animate={{ opacity: 1, y: 0, rotateX: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 + i * 0.08, ease: [0.16, 1, 0.3, 1] }}
-              style={{ display: 'inline-block' }}
-            >
-              {char}
-            </motion.span>
-          ))}
-          <motion.span
-            initial={{ opacity: 0, scale: 0.5, y: 30 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
-            style={{ display: 'block' }}
-          >
-            {'LIFE'.split('').map((char, i) => (
-              <motion.span
-                key={`life-${i}`}
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.6 + i * 0.06, ease: [0.16, 1, 0.3, 1] }}
-                style={{ display: 'inline-block' }}
-              >
-                {char}
-              </motion.span>
-            ))}
-          </motion.span>
-        </motion.div>
+        {/* Horizontal minimalist brand logo display */}
+        <div className="auth-hero-brand-new">
+          <span className="brand-bold">VIT</span>
+          <span className="brand-divider">|</span>
+          <span className="brand-thin">LIFE</span>
+        </div>
 
         {/* Tagline with line reveal */}
         <motion.p
-          className="auth-hero-tagline"
-          initial={{ opacity: 0, y: 20 }}
+          className="auth-hero-tagline-new"
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.8, ease: 'easeOut' }}
+          transition={{ duration: 0.7, delay: 0.2, ease: 'easeOut' }}
         >
           Your Campus. Your Journey. One Platform.
         </motion.p>
+        
+        <p className="auth-hero-hint-new">
+          Drag to rotate globe. Hover locations to explore.
+        </p>
       </div>
     </div>
   );
