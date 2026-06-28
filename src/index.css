@@ -772,6 +772,101 @@ input, textarea, select {
   user-select: none !important;
 }
 
+/* Tinder Swipe Onboarding Overlay for New Users */
+.swipe-onboarding-overlay {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  margin-left: -130px;
+  width: 260px;
+  height: 280px; /* Fits exactly on top of the stacked-card */
+  background: rgba(12, 12, 14, 0.94);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border-radius: var(--border-radius-premium, 16px);
+  z-index: 25; /* Renders strictly on top of stacked-card (z-index 1-3) */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-around;
+  padding: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.light-theme .swipe-onboarding-overlay {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.15);
+}
+
+.swipe-onboarding-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: center;
+  font-family: var(--font-accent, 'Inter', sans-serif);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  width: 100%;
+}
+
+.swipe-onboarding-arrow.left {
+  color: hsl(355, 75%, 60%);
+  animation: nudgeLeft 2s infinite ease-in-out;
+}
+
+.swipe-onboarding-arrow.right {
+  color: hsl(142, 72%, 40%);
+  animation: nudgeRight 2s infinite ease-in-out;
+}
+
+.light-theme .swipe-onboarding-arrow.left {
+  color: hsl(355, 80%, 45%);
+}
+
+.light-theme .swipe-onboarding-arrow.right {
+  color: hsl(142, 76%, 33%);
+}
+
+.swipe-onboarding-btn {
+  background: linear-gradient(135deg, #635bff, #06b6d4);
+  color: white !important;
+  border: none;
+  padding: 0.55rem 1.4rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(99, 91, 255, 0.3);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.swipe-onboarding-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(99, 91, 255, 0.45);
+}
+
+.swipe-onboarding-btn:active {
+  transform: scale(0.95);
+}
+
+@keyframes nudgeLeft {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-8px); }
+}
+
+@keyframes nudgeRight {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(8px); }
+}
+
 /* Individual card stacked layers */
 .stacked-card {
   position: absolute !important;

@@ -738,6 +738,14 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [swipeAction, setSwipeAction] = useState(null); // 'like' | 'skip' | null
   const [exitDirection, setExitDirection] = useState(null); // { x, y } when flying off
+  const [showSwipeOnboarding, setShowSwipeOnboarding] = useState(() => {
+    return !localStorage.getItem('ds_seen_swipe_onboarding');
+  });
+
+  const dismissSwipeOnboarding = () => {
+    localStorage.setItem('ds_seen_swipe_onboarding', 'true');
+    setShowSwipeOnboarding(false);
+  };
 
   const handleSwipe = (direction) => {
     if (exitDirection) return;
@@ -1407,6 +1415,27 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
               return (
                 <>
                   <div className="event-stack-container">
+                    {showSwipeOnboarding && (
+                      <div className="swipe-onboarding-overlay">
+                        <div className="swipe-onboarding-arrow left">
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+                          <span>Swipe Left to Skip</span>
+                        </div>
+                        
+                        <div className="swipe-onboarding-arrow right">
+                          <span>Swipe Right to Like</span>
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                        </div>
+                        
+                        <button 
+                          type="button" 
+                          className="swipe-onboarding-btn"
+                          onClick={dismissSwipeOnboarding}
+                        >
+                          Got it!
+                        </button>
+                      </div>
+                    )}
                     {visibleCards.reverse().map(({ event: eventItem, stackPos, key }) => {
                       const isTop = stackPos === 0;
                       const cardStyle = {};
