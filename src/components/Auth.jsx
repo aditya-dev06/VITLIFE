@@ -1,79 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import TypewriterText from './TypewriterText';
-import Hyperspeed from './Hyperspeed';
 
-const DARK_HYPERSPEED_OPTIONS = {
-  distortion: 'turbulentDistortion',
-  length: 400,
-  roadWidth: 10,
-  islandWidth: 2,
-  lanesPerRoad: 4,
-  fov: 90,
-  fovSpeedUp: 150,
-  speedUp: 2,
-  carLightsFade: 0.4,
-  totalSideLightSticks: 20,
-  lightPairsPerRoadWay: 40,
-  shoulderLinesWidthPercentage: 0.05,
-  brokenLinesWidthPercentage: 0.1,
-  brokenLinesLengthPercentage: 0.5,
-  lightStickWidth: [0.12, 0.5],
-  lightStickHeight: [1.3, 1.7],
-  movingAwaySpeed: [60, 80],
-  movingCloserSpeed: [-120, -160],
-  carLightsLength: [400 * 0.03, 400 * 0.2],
-  carLightsRadius: [0.05, 0.14],
-  carWidthPercentage: [0.3, 0.5],
-  carShiftX: [-0.8, 0.8],
-  carFloorSeparation: [0, 5],
-  colors: {
-    roadColor: 0x080808,
-    islandColor: 0x0a0a0a,
-    background: 0x000000,
-    shoulderLines: 0xffffff,
-    brokenLines: 0xffffff,
-    leftCars: [0xd856bf, 0x6750a2, 0xc247ac],
-    rightCars: [0x03b3c3, 0x0e5ea5, 0x324555],
-    sticks: 0x03b3c3
-  }
-};
-
-const LIGHT_HYPERSPEED_OPTIONS = {
-  distortion: 'turbulentDistortion',
-  length: 400,
-  roadWidth: 10,
-  islandWidth: 2,
-  lanesPerRoad: 4,
-  fov: 90,
-  fovSpeedUp: 150,
-  speedUp: 2,
-  carLightsFade: 0.4,
-  totalSideLightSticks: 20,
-  lightPairsPerRoadWay: 40,
-  shoulderLinesWidthPercentage: 0.05,
-  brokenLinesWidthPercentage: 0.1,
-  brokenLinesLengthPercentage: 0.5,
-  lightStickWidth: [0.12, 0.5],
-  lightStickHeight: [1.3, 1.7],
-  movingAwaySpeed: [60, 80],
-  movingCloserSpeed: [-120, -160],
-  carLightsLength: [400 * 0.03, 400 * 0.2],
-  carLightsRadius: [0.05, 0.14],
-  carWidthPercentage: [0.3, 0.5],
-  carShiftX: [-0.8, 0.8],
-  carFloorSeparation: [0, 5],
-  colors: {
-    roadColor: 0xebedf2,
-    islandColor: 0xdae2ed,
-    background: 0xd3dbe8,
-    shoulderLines: 0xffffff,
-    brokenLines: 0xffffff,
-    leftCars: [0x635bff, 0x9d4edd, 0xf754a8],
-    rightCars: [0x00f5d4, 0x2be0f5, 0x0ea5e9],
-    sticks: 0x2be0f5
-  }
-};
 
 /* ═══════════════════════════════════════════════════════════════
    ANIMATED HERO PANEL — Staggered reveals + floating feature cards
@@ -83,11 +11,12 @@ const LIGHT_HYPERSPEED_OPTIONS = {
 import * as THREE from 'three';
 
 /* ═══════════════════════════════════════════════════════════════
-   3D WEBGL INTERACTIVE SCENE — Glowing wireframe torus knot + particles
+   3D WEBGL INTERACTIVE GLOBE — Draggable wireframe planet with particle rings
    ═══════════════════════════════════════════════════════════════ */
 const ThreeDScene = ({ theme }) => {
   const containerRef = useRef(null);
-  const mouseRef = useRef({ x: 0, y: 0 });
+  const pointerRef = useRef({ x: 0, y: 0 });
+  const dragRef = useRef({ isDragging: false, startX: 0, startY: 0, targetRotationX: 0.3, targetRotationY: 0.5, currentRotationX: 0.3, currentRotationY: 0.5 });
 
   useEffect(() => {
     const container = containerRef.current;
@@ -98,7 +27,7 @@ const ThreeDScene = ({ theme }) => {
     const height = container.clientHeight;
 
     const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
-    camera.position.z = 25;
+    camera.position.z = 22;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height);
@@ -108,57 +37,80 @@ const ThreeDScene = ({ theme }) => {
     const group = new THREE.Group();
     scene.add(group);
 
-    // Torus Knot Wireframe
-    const torusColor = theme === 'light' ? 0x2a1cb8 : 0x635bff;
-    const torusGeo = new THREE.TorusKnotGeometry(5.5, 1.8, 150, 16);
-    const torusMat = new THREE.MeshBasicMaterial({
-      color: torusColor,
+    // Color definitions
+    const primaryColor = theme === 'light' ? 0x2a1cb8 : 0x635bff;
+    const secondaryColor = theme === 'light' ? 0x0b7285 : 0x2be0f5;
+
+    // 1. Core Globe (Wireframe Sphere)
+    const globeGeo = new THREE.SphereGeometry(6, 25, 25);
+    const globeMat = new THREE.MeshBasicMaterial({
+      color: primaryColor,
       wireframe: true,
       transparent: true,
-      opacity: 0.65
+      opacity: 0.35
     });
-    const torusMesh = new THREE.Mesh(torusGeo, torusMat);
-    group.add(torusMesh);
+    const globeMesh = new THREE.Mesh(globeGeo, globeMat);
+    group.add(globeMesh);
 
-    // Outer wireframe sphere
-    const sphereColor = theme === 'light' ? 0x0b7285 : 0x2be0f5;
-    const sphereGeo = new THREE.IcosahedronGeometry(9.5, 2);
-    const sphereMat = new THREE.MeshBasicMaterial({
-      color: sphereColor,
+    // 2. Outer Latitudes/Longitudes Rings (Slightly larger)
+    const outerGeo = new THREE.IcosahedronGeometry(6.2, 2);
+    const outerMat = new THREE.MeshBasicMaterial({
+      color: secondaryColor,
       wireframe: true,
       transparent: true,
-      opacity: 0.2
+      opacity: 0.15
     });
-    const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
-    group.add(sphereMesh);
+    const outerMesh = new THREE.Mesh(outerGeo, outerMat);
+    group.add(outerMesh);
 
-    // Points / particles cloud
-    const particleCount = 180;
-    const particleGeo = new THREE.BufferGeometry();
-    const positions = new Float32Array(particleCount * 3);
-    for (let i = 0; i < particleCount * 3; i += 3) {
-      const r = 12 + Math.random() * 12;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos((Math.random() * 2) - 1);
-      positions[i] = r * Math.sin(phi) * Math.cos(theta);
-      positions[i+1] = r * Math.sin(phi) * Math.sin(theta);
-      positions[i+2] = r * Math.cos(phi);
+    // 3. Saturn-like Particle Ring
+    const ringCount = 250;
+    const ringGeo = new THREE.BufferGeometry();
+    const ringPositions = new Float32Array(ringCount * 3);
+    for (let i = 0; i < ringCount * 3; i += 3) {
+      const radius = 8.5 + Math.random() * 3.5;
+      const angle = Math.random() * Math.PI * 2;
+      ringPositions[i] = Math.cos(angle) * radius;
+      ringPositions[i+1] = (Math.random() - 0.5) * 0.4; // thin ring height
+      ringPositions[i+2] = Math.sin(angle) * radius;
     }
-    particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const particleMat = new THREE.PointsMaterial({
-      color: torusColor,
-      size: 0.15,
+    ringGeo.setAttribute('position', new THREE.BufferAttribute(ringPositions, 3));
+    const ringMat = new THREE.PointsMaterial({
+      color: secondaryColor,
+      size: 0.12,
       transparent: true,
-      opacity: 0.6
+      opacity: 0.7
     });
-    const particles = new THREE.Points(particleGeo, particleMat);
-    group.add(particles);
+    const ringPoints = new THREE.Points(ringGeo, ringMat);
+    group.add(ringPoints);
+
+    // Drag to spin logic
+    const handleMouseDown = (e) => {
+      dragRef.current.isDragging = true;
+      dragRef.current.startX = e.clientX;
+      dragRef.current.startY = e.clientY;
+    };
 
     const handleMouseMove = (e) => {
+      if (dragRef.current.isDragging) {
+        const deltaX = e.clientX - dragRef.current.startX;
+        const deltaY = e.clientY - dragRef.current.startY;
+        
+        dragRef.current.targetRotationY += deltaX * 0.007;
+        dragRef.current.targetRotationX += deltaY * 0.007;
+        
+        dragRef.current.startX = e.clientX;
+        dragRef.current.startY = e.clientY;
+      }
+      
+      // Calculate normalized mouse coordinates for light parallax
       const rect = container.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      mouseRef.current = { x, y };
+      pointerRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      pointerRef.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    };
+
+    const handleMouseUp = () => {
+      dragRef.current.isDragging = false;
     };
 
     const handleResize = () => {
@@ -170,25 +122,31 @@ const ThreeDScene = ({ theme }) => {
       renderer.setSize(w, h);
     };
 
+    container.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
     window.addEventListener('resize', handleResize);
 
     let reqId;
     const animate = () => {
       reqId = requestAnimationFrame(animate);
 
-      torusMesh.rotation.x += 0.003;
-      torusMesh.rotation.y += 0.005;
+      // Idle rotations (slower if user is dragging)
+      const rotationSpeedFactor = dragRef.current.isDragging ? 0.1 : 1.0;
+      globeMesh.rotation.y += 0.001 * rotationSpeedFactor;
+      outerMesh.rotation.y -= 0.0005 * rotationSpeedFactor;
+      ringPoints.rotation.y += 0.0015 * rotationSpeedFactor;
+
+      // Lerping rotation values
+      dragRef.current.currentRotationX += (dragRef.current.targetRotationX - dragRef.current.currentRotationX) * 0.08;
+      dragRef.current.currentRotationY += (dragRef.current.targetRotationY - dragRef.current.currentRotationY) * 0.08;
       
-      sphereMesh.rotation.x -= 0.0015;
-      sphereMesh.rotation.y -= 0.0025;
+      group.rotation.x = dragRef.current.currentRotationX;
+      group.rotation.y = dragRef.current.currentRotationY;
 
-      particles.rotation.y += 0.0006;
-
-      const targetRX = mouseRef.current.y * 0.4;
-      const targetRY = mouseRef.current.x * 0.4;
-      group.rotation.x += (targetRX - group.rotation.x) * 0.05;
-      group.rotation.y += (targetRY - group.rotation.y) * 0.05;
+      // Subtle parallax response to mouse cursor coordinates
+      group.position.x += (pointerRef.current.x * 0.5 - group.position.x) * 0.05;
+      group.position.y += (pointerRef.current.y * 0.5 - group.position.y) * 0.05;
 
       renderer.render(scene, camera);
     };
@@ -196,7 +154,9 @@ const ThreeDScene = ({ theme }) => {
 
     return () => {
       cancelAnimationFrame(reqId);
+      container.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('resize', handleResize);
       renderer.dispose();
       if (container.contains(renderer.domElement)) {
@@ -205,42 +165,13 @@ const ThreeDScene = ({ theme }) => {
     };
   }, [theme]);
 
-  return <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, zIndex: 2 }} />;
+  return <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, zIndex: 2, cursor: 'grab' }} />;
 };
 
 const AnimatedHeroPanel = ({ theme }) => {
-  const isLightTheme = theme === 'light';
-  const panelRef = useRef(null);
-  
-  // Parallax positions
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-
-  const handleHeroMouseMove = (e) => {
-    if (panelRef.current && window.innerWidth >= 769) {
-      const rect = panelRef.current.getBoundingClientRect();
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
-      const x = e.clientX - rect.left - centerX;
-      const y = e.clientY - rect.top - centerY;
-      setMousePos({ x, y });
-    }
-  };
-
-  const handleHeroMouseLeave = () => {
-    setMousePos({ x: 0, y: 0 });
-  };
-
   return (
-    <div 
-      ref={panelRef}
-      className="auth-hero-panel"
-      onMouseMove={handleHeroMouseMove}
-      onMouseLeave={handleHeroMouseLeave}
-    >
-      {/* 3D WebGL Hyperspeed Background */}
-      <Hyperspeed effectOptions={isLightTheme ? LIGHT_HYPERSPEED_OPTIONS : DARK_HYPERSPEED_OPTIONS} />
-      
-      {/* 3D Interactive Torus Scene */}
+    <div className="auth-hero-panel">
+      {/* 3D Draggable Globe WebGL canvas */}
       <ThreeDScene theme={theme} />
       
       <div className="auth-floating-orb auth-orb-1" />
@@ -249,7 +180,7 @@ const AnimatedHeroPanel = ({ theme }) => {
       <div className="auth-hero-grid" />
       <div className="auth-hero-cyber-overlay" />
 
-      <div className="auth-hero-content">
+      <div className="auth-hero-content" style={{ pointerEvents: 'none' }}>
         {/* Staggered letter-by-letter brand reveal */}
         <motion.div
           className="auth-hero-brand"
@@ -297,85 +228,6 @@ const AnimatedHeroPanel = ({ theme }) => {
         >
           Your Campus. Your Journey. One Platform.
         </motion.p>
-      </div>
-
-      {/* ── 3D Depth Parallax App Dashboard Preview Widgets ── */}
-      <div className="auth-hero-parallax-container">
-        
-        {/* Widget 1: Next Class Timetable (Medium depth layer) */}
-        <motion.div
-          className="auth-parallax-widget widget-timetable"
-          style={{
-            x: mousePos.x * 0.04,
-            y: mousePos.y * 0.04,
-            rotateZ: -3
-          }}
-          initial={{ opacity: 0, x: -60, y: -20, rotateZ: -6 }}
-          animate={{ opacity: 1, x: 0, y: 0 }}
-          transition={{ duration: 1, delay: 1.0, type: 'spring', stiffness: 60 }}
-          whileHover={{ scale: 1.05, y: -5, transition: { duration: 0.2 } }}
-        >
-          <div className="widget-header">
-            <span className="widget-icon">⏰</span>
-            <span className="widget-title">Next Class</span>
-            <span className="widget-badge neon-green">ACTIVE</span>
-          </div>
-          <div className="widget-body">
-            <h3>CSE2002: Data Structures</h3>
-            <p>10:00 AM - 10:50 AM</p>
-            <div className="widget-meta">📍 Lab 302, Block A</div>
-          </div>
-        </motion.div>
-
-        {/* Widget 2: Event Alert (Deepest depth layer) */}
-        <motion.div
-          className="auth-parallax-widget widget-event"
-          style={{
-            x: mousePos.x * 0.06,
-            y: mousePos.y * 0.06,
-            rotateZ: 4
-          }}
-          initial={{ opacity: 0, x: 70, y: 40, rotateZ: 8 }}
-          animate={{ opacity: 1, x: 0, y: 0 }}
-          transition={{ duration: 1.2, delay: 1.2, type: 'spring', stiffness: 50 }}
-          whileHover={{ scale: 1.05, y: -5, transition: { duration: 0.2 } }}
-        >
-          <div className="widget-header">
-            <span className="widget-icon">🏆</span>
-            <span className="widget-title">Featured Hackathon</span>
-            <span className="widget-badge neon-pink">HOT</span>
-          </div>
-          <div className="widget-body">
-            <h3>VIT Hacks '26</h3>
-            <p>Starts in 2 hours</p>
-            <div className="widget-meta">💰 ₹50,000 Cash + 500 XP</div>
-          </div>
-        </motion.div>
-
-        {/* Widget 3: Opportunity Hub (Shallowest/closest layer) */}
-        <motion.div
-          className="auth-parallax-widget widget-opp"
-          style={{
-            x: mousePos.x * 0.02,
-            y: mousePos.y * 0.02,
-            rotateZ: -1
-          }}
-          initial={{ opacity: 0, y: 80, scale: 0.9 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 1.4, delay: 1.4, type: 'spring', stiffness: 70 }}
-          whileHover={{ scale: 1.05, y: -5, transition: { duration: 0.2 } }}
-        >
-          <div className="widget-header">
-            <span className="widget-icon">🚀</span>
-            <span className="widget-title">Top Match</span>
-            <span className="widget-badge neon-cyan">98% Match</span>
-          </div>
-          <div className="widget-body">
-            <h3>Google Devs India</h3>
-            <p>Frontend Developer Intern</p>
-          </div>
-        </motion.div>
-
       </div>
     </div>
   );
