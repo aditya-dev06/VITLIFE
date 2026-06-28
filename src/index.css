@@ -1,4 +1,4 @@
-/* Core Design System & Theme Settings */
+﻿/* Core Design System & Theme Settings */
 @import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=Sora:wght@300;400;500;600;700;800&display=swap');
 
 :root {
@@ -772,23 +772,24 @@ input, textarea, select {
   user-select: none !important;
 }
 
-/* Tinder Swipe Onboarding Overlay for New Users */
+/* ── Swipe Onboarding Overlay ── */
 .swipe-onboarding-overlay {
   position: absolute;
   top: 10px;
   left: 50%;
   margin-left: -130px;
   width: 260px;
-  height: 280px; /* Fits exactly on top of the stacked-card */
+  height: 280px;
   background: rgba(12, 12, 14, 0.94);
   backdrop-filter: blur(12px) saturate(180%);
   -webkit-backdrop-filter: blur(12px) saturate(180%);
   border-radius: var(--border-radius-premium, 16px);
-  z-index: 25; /* Renders strictly on top of stacked-card (z-index 1-3) */
+  z-index: 25;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-around;
+  justify-content: center;
+  gap: 1.2rem;
   padding: 1.5rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
@@ -801,45 +802,67 @@ input, textarea, select {
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.15);
 }
 
-.swipe-onboarding-arrow {
+
+/* Gesture Track */
+.swipe-onboarding-gesture-container {
+  position: relative;
+  width: 140px;
+  height: 56px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0.6rem;
-  text-align: center;
+}
+
+.swipe-track-line {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  right: 10px;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(99, 91, 255, 0.15), rgba(6, 182, 212, 0.7));
+  border-radius: 2px;
+  transform: translateY(-50%);
+}
+
+/* Animated Hand */
+.swipe-hand-icon {
+  position: absolute;
+  top: 50%;
+  left: 6px;
+  transform: translateY(-50%);
+  color: #06b6d4;
+  filter: drop-shadow(0 0 10px rgba(6, 182, 212, 0.55));
+  animation: slideRightGesture 2.4s infinite cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.light-theme .swipe-hand-icon {
+  color: #0891b2;
+  filter: drop-shadow(0 0 6px rgba(8, 145, 178, 0.35));
+}
+
+/* Instruction Text */
+.swipe-onboarding-text {
   font-family: var(--font-accent, 'Inter', sans-serif);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  width: 100%;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.85);
+  text-align: center;
+  animation: pulseText 2.4s infinite ease-in-out;
 }
 
-.swipe-onboarding-arrow.left {
-  color: hsl(355, 75%, 60%);
-  animation: nudgeLeft 2s infinite ease-in-out;
+.light-theme .swipe-onboarding-text {
+  color: #1e1b4b;
 }
 
-.swipe-onboarding-arrow.right {
-  color: hsl(142, 72%, 40%);
-  animation: nudgeRight 2s infinite ease-in-out;
-}
-
-.light-theme .swipe-onboarding-arrow.left {
-  color: hsl(355, 80%, 45%);
-}
-
-.light-theme .swipe-onboarding-arrow.right {
-  color: hsl(142, 76%, 33%);
-}
-
+/* Got it Button */
 .swipe-onboarding-btn {
   background: linear-gradient(135deg, #635bff, #06b6d4);
   color: white !important;
   border: none;
-  padding: 0.55rem 1.4rem;
+  padding: 0.5rem 1.4rem;
   border-radius: 20px;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -857,14 +880,29 @@ input, textarea, select {
   transform: scale(0.95);
 }
 
-@keyframes nudgeLeft {
-  0%, 100% { transform: translateX(0); }
-  50% { transform: translateX(-8px); }
+/* Hand slides right, fades in/out */
+@keyframes slideRightGesture {
+  0% {
+    transform: translateY(-50%) translateX(0) scale(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0) scale(0.92);
+  }
+  65% {
+    transform: translateY(-50%) translateX(96px) scale(0.92);
+    opacity: 1;
+  }
+  85%, 100% {
+    transform: translateY(-50%) translateX(96px) scale(1);
+    opacity: 0;
+  }
 }
 
-@keyframes nudgeRight {
-  0%, 100% { transform: translateX(0); }
-  50% { transform: translateX(8px); }
+@keyframes pulseText {
+  0%, 100% { opacity: 0.65; }
+  50% { opacity: 1; }
 }
 
 /* Individual card stacked layers */

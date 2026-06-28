@@ -1416,21 +1416,28 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
                 <>
                   <div className="event-stack-container">
                     {showSwipeOnboarding && (
-                      <div className="swipe-onboarding-overlay">
-                        <div className="swipe-onboarding-arrow left">
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
-                          <span>Swipe Left to Skip</span>
+                      <div className="swipe-onboarding-overlay" onClick={dismissSwipeOnboarding}>
+                        <div className="swipe-onboarding-gesture-container">
+                          <div className="swipe-hand-icon">
+                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5" />
+                              <path d="M14 10V5a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5" />
+                              <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+                              <path d="M18 11a2 2 0 0 1 2 2v3a4 4 0 0 1-4 4h-3a9 9 0 0 1-6-2.23" />
+                            </svg>
+                          </div>
+                          <div className="swipe-track-line" />
                         </div>
                         
-                        <div className="swipe-onboarding-arrow right">
-                          <span>Swipe Right to Like</span>
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-                        </div>
+                        <span className="swipe-onboarding-text">Swipe Right to View Next</span>
                         
                         <button 
                           type="button" 
                           className="swipe-onboarding-btn"
-                          onClick={dismissSwipeOnboarding}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            dismissSwipeOnboarding();
+                          }}
                         >
                           Got it!
                         </button>
