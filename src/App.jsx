@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useProfileSync } from './hooks/useTimetableSync';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -6,15 +6,15 @@ import TypewriterText from './components/TypewriterText';
 import Dock from './components/Dock';
 import { motion, AnimatePresence } from 'motion/react';
 
-import Dashboard from './components/Dashboard';
-import Roadmap from './components/Roadmap';
-import Opportunities from './components/Opportunities';
-import CampusLife from './components/CampusLife';
-import TimetablePage from './components/TimetablePage';
-import VITBhopalGuide from './components/VITBhopalGuide';
-import Auth from './components/Auth';
-import TermsAndConditions from './components/TermsAndConditions';
-import PrivacyPolicy from './components/PrivacyPolicy';
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const Roadmap = lazy(() => import('./components/Roadmap'));
+const Opportunities = lazy(() => import('./components/Opportunities'));
+const CampusLife = lazy(() => import('./components/CampusLife'));
+const TimetablePage = lazy(() => import('./components/TimetablePage'));
+const VITBhopalGuide = lazy(() => import('./components/VITBhopalGuide'));
+const Auth = lazy(() => import('./components/Auth'));
+const TermsAndConditions = lazy(() => import('./components/TermsAndConditions'));
+const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
 
 
 // Default Initial Skills Database
@@ -1012,24 +1012,24 @@ function App() {
           </nav>
         </header>
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}
-          >
-            <Suspense fallback={
-              <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', minHeight: '50vh' }}>
-                <h3>Loading...</h3>
-              </div>
-            }>
+        <Suspense fallback={
+          <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', minHeight: '50vh' }}>
+            <h3>Loading...</h3>
+          </div>
+        }>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+              style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}
+            >
               {renderActiveComponent()}
-            </Suspense>
-          </motion.div>
-        </AnimatePresence>
+            </motion.div>
+          </AnimatePresence>
+        </Suspense>
       </main>
       {showEditProfile && (
         <EditProfileModal
