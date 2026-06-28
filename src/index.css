@@ -3316,57 +3316,79 @@ input, textarea, select {
   }
 
   /* Horizontal Editorial Branding Font Layout */
+  /* Absolute-positioned header for clean 3D globe visualization */
+  .auth-hero-content {
+    position: absolute;
+    top: 4.5rem;
+    left: 4.5rem;
+    z-index: 5;
+    text-align: left;
+    max-width: 480px;
+    pointer-events: none;
+  }
+
+  /* Horizontal Editorial Branding Font Layout */
   .auth-hero-brand-new {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Space Grotesk', sans-serif;
     font-size: 2.2rem;
     letter-spacing: 0.35em;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     color: #fff;
-    margin-bottom: 0.7rem;
+    margin-bottom: 0.5rem;
     pointer-events: none;
   }
 
   .brand-bold {
-    font-weight: 800;
-    background: linear-gradient(135deg, #fff 30%, hsla(var(--primary) / 0.8));
+    font-weight: 700;
+    background: linear-gradient(135deg, #fff 40%, hsla(var(--primary) / 0.8));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
 
   .brand-divider {
-    margin: 0 1rem;
+    margin: 0 0.8rem;
     color: rgba(255, 255, 255, 0.15);
-    font-weight: 200;
+    font-weight: 300;
   }
 
   .brand-thin {
-    font-weight: 200;
+    font-weight: 300;
     color: rgba(255, 255, 255, 0.8);
     text-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
   }
 
   /* Tagline & Hint Cues styles */
   .auth-hero-tagline-new {
+    font-family: 'Space Grotesk', sans-serif;
     font-size: 0.85rem;
     font-weight: 400;
-    color: hsla(210, 20%, 98%, 0.5);
-    letter-spacing: 0.12em;
+    color: hsla(210, 20%, 98%, 0.45);
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    margin-bottom: 2rem;
+    margin: 0;
   }
 
   .auth-hero-hint-new {
+    position: absolute;
+    bottom: 4rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    font-family: 'Space Grotesk', sans-serif;
     font-size: 0.72rem;
-    font-weight: 600;
-    color: hsla(210, 20%, 98%, 0.25);
+    font-weight: 500;
+    color: hsla(210, 20%, 98%, 0.45);
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    padding: 0.4rem 1rem;
+    letter-spacing: 0.12em;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0.5rem 1.2rem;
     border-radius: 30px;
-    background: rgba(255, 255, 255, 0.01);
+    background: hsla(240, 15%, 8%, 0.5);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
     display: inline-block;
   }
 }

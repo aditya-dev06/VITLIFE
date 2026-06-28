@@ -328,11 +328,11 @@ const AnimatedHeroPanel = ({ theme }) => {
         >
           Your Campus. Your Journey. One Platform.
         </motion.p>
-        
-        <p className="auth-hero-hint-new">
-          Drag to rotate globe. Hover locations to explore.
-        </p>
       </div>
+
+      <p className="auth-hero-hint-new" style={{ pointerEvents: 'none' }}>
+        Drag to rotate globe. Hover locations to explore.
+      </p>
     </div>
   );
 };
