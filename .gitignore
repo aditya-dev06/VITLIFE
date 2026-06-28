@@ -34,7 +34,10 @@ server/data/users.json
 server/data/secret.key
 server/data/*.key
 server/data/admin_config.json
-server/uploads/
+server/uploads/*
+!server/uploads/.gitkeep
+!server/uploads/*.jpg
+!server/uploads/*.png
 server/data/activity_logs.json
 server/data/activity_logs*.json
 .env

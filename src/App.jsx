@@ -244,6 +244,7 @@ function App() {
   const [showMobileProfileSheet, setShowMobileProfileSheet] = useState(false);
   const [theme, setTheme] = useState(localStorage.getItem('ds_ai_theme') || 'dark');
   const [installPrompt, setInstallPrompt] = useState(null); // PWA install prompt
+  const [highlightedEventId, setHighlightedEventId] = useState(null);
   const lastScrollY = useRef(0);
 
   useEffect(() => {
@@ -622,6 +623,8 @@ function App() {
             events={events}
             fetchClubs={fetchClubs}
             fetchEvents={fetchEvents}
+            initialSelectedEventId={highlightedEventId}
+            clearInitialSelectedEvent={() => setHighlightedEventId(null)}
           />
         );
       default:
@@ -637,6 +640,10 @@ function App() {
             fetchEvents={fetchEvents}
             token={token}
             theme={theme}
+            onNavigateToEvent={(eventId) => {
+              setHighlightedEventId(eventId);
+              setActiveTab('campus');
+            }}
           />
         );
     }

@@ -426,7 +426,16 @@ function EventCardItem({
   );
 }
 
-export default function CampusLife({ user, token, clubs = [], events = [], fetchClubs, fetchEvents }) {
+export default function CampusLife({ 
+  user, 
+  token, 
+  clubs = [], 
+  events = [], 
+  fetchClubs, 
+  fetchEvents,
+  initialSelectedEventId,
+  clearInitialSelectedEvent
+}) {
   const isAdmin = user && user.role === 'admin';
   const isManager = user && (user.role === 'club_manager' || user.role === 'admin');
 
@@ -445,6 +454,22 @@ export default function CampusLife({ user, token, clubs = [], events = [], fetch
 
   const [selectedEventDetails, setSelectedEventDetails] = useState(null);
   const [selectedManagerClubId, setSelectedManagerClubId] = useState('');
+
+  // Auto-select event from dashboard redirection
+  useEffect(() => {
+    if (initialSelectedEventId && events.length > 0) {
+      const targetEvent = events.find(e => e.id === initialSelectedEventId);
+      if (targetEvent) {
+        setTimeout(() => {
+          setActiveSubTab('events');
+          setSelectedEventDetails(targetEvent);
+          if (clearInitialSelectedEvent) {
+            clearInitialSelectedEvent();
+          }
+        }, 0);
+      }
+    }
+  }, [initialSelectedEventId, events, clearInitialSelectedEvent]);
 
   // ─── Data Fetching ───────────────────────────────────────────────
   const fetchRecruitments = async () => {

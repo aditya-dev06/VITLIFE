@@ -732,10 +732,79 @@ function DashboardEventCardItem({
   );
 }
 
-const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, clubs = [], events = [], fetchEvents, token, theme }) => {
+const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, clubs = [], events = [], fetchEvents, token, theme, onNavigateToEvent }) => {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Tinder Stack State
+  const [currentStackIndex, setCurrentStackIndex] = useState(0);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [swipeAction, setSwipeAction] = useState(null); // 'like' | 'skip' | null
+  const [exitDirection, setExitDirection] = useState(null); // { x, y } when flying off
+
+  const handleSwipe = (direction) => {
+    if (exitDirection) return;
+    const dirX = direction === 'right' ? 450 : -450;
+    setExitDirection({ x: dirX, y: 0 });
+    setSwipeAction(direction);
+    setTimeout(() => {
+      setCurrentStackIndex(prev => prev + 1);
+      setExitDirection(null);
+      setSwipeAction(null);
+      setDragOffset({ x: 0, y: 0 });
+    }, 350);
+  };
+
+  const handlePointerDown = (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    if (e.target.closest('button') || e.target.closest('a')) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragStart({ x: e.clientX, y: e.clientY });
+    setIsDragging(true);
+    setDragOffset({ x: 0, y: 0 });
+    setSwipeAction(null);
+  };
+
+  const handlePointerMove = (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStart.x;
+    const dy = e.clientY - dragStart.y;
+    setDragOffset({ x: dx, y: dy });
+    if (dx > 40) {
+      setSwipeAction('like');
+    } else if (dx < -40) {
+      setSwipeAction('skip');
+    } else {
+      setSwipeAction(null);
+    }
+  };
+
+  const handlePointerUp = (e, eventItem) => {
+    if (!isDragging) return;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // Ignored: pointer capture release failed
+    }
+    setIsDragging(false);
+    const totalDist = Math.abs(dragOffset.x) + Math.abs(dragOffset.y);
+    if (dragOffset.x > 120) {
+      handleSwipe('right');
+    } else if (dragOffset.x < -120) {
+      handleSwipe('left');
+    } else {
+      setDragOffset({ x: 0, y: 0 });
+      setSwipeAction(null);
+      if (totalDist < 6) {
+        if (onNavigateToEvent) {
+          onNavigateToEvent(eventItem.id);
+        }
+      }
+    }
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -1318,28 +1387,86 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
               </button>
             </div>
 
-            {recommendedEvents.length > 0 ? (
-              <div className="event-scroll-container">
-                {recommendedEvents.slice(0, 8).map(event => (
-                  <div key={event.id}>
-                    <DashboardEventCardItem
-                      event={event}
-                      clubs={clubs}
-                      user={user}
-                      token={token}
-                      setSelectedEvent={setSelectedEvent}
-                      handleTogglePin={handleTogglePin}
-                      theme={theme}
-                    />
+            {(() => {
+              const N = recommendedEvents.length;
+              if (N === 0) {
+                return (
+                  <div style={{ display: 'flex', flexGrow: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', minHeight: '120px' }}>
+                    <span style={{ fontSize: '2rem' }}>📅</span>
+                    <p style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>No recommended events at this time.</p>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexGrow: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', minHeight: '120px' }}>
-                <span style={{ fontSize: '2rem' }}>📅</span>
-                <p style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>No recommended events at this time.</p>
-              </div>
-            )}
+                );
+              }
+
+              // Render up to 3 cards in the deck
+              const visibleCards = [];
+              const limit = Math.min(N, 3);
+              for (let i = 0; i < limit; i++) {
+                const idx = (currentStackIndex + i) % N;
+                visibleCards.push({
+                  event: recommendedEvents[idx],
+                  stackPos: i,
+                  key: `${recommendedEvents[idx].id}-${idx}`
+                });
+              }
+
+              return (
+                <>
+                  <div className="event-stack-container">
+                    {visibleCards.reverse().map(({ event: eventItem, stackPos, key }) => {
+                      const isTop = stackPos === 0;
+                      const cardStyle = {};
+                      
+                      if (isTop) {
+                        if (isDragging) {
+                          cardStyle.transform = `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0) rotate(${dragOffset.x * 0.08}deg)`;
+                        } else if (exitDirection) {
+                          cardStyle.transform = `translate3d(${exitDirection.x}px, ${exitDirection.y}px, 0) rotate(${exitDirection.x * 0.08}deg)`;
+                          cardStyle.opacity = 0;
+                          cardStyle.pointerEvents = 'none';
+                        }
+                      }
+
+                      return (
+                        <div
+                          key={key}
+                          className={`stacked-card pos-${stackPos} ${isTop && isDragging ? 'dragging' : ''}`}
+                          style={cardStyle}
+                          onPointerDown={isTop ? handlePointerDown : undefined}
+                          onPointerMove={isTop ? handlePointerMove : undefined}
+                          onPointerUp={isTop ? (e) => handlePointerUp(e, eventItem) : undefined}
+                          onPointerCancel={isTop ? (e) => handlePointerUp(e, eventItem) : undefined}
+                        >
+                          {/* Swipe Action Badges overlay strictly on top card */}
+                          {isTop && swipeAction && (
+                            <div 
+                              className={`swipe-badge badge-${swipeAction}`} 
+                              style={{ opacity: Math.min(1, Math.abs(dragOffset.x) / 50) }}
+                            >
+                              {swipeAction === 'like' ? 'Interested' : 'Skip'}
+                            </div>
+                          )}
+                          
+                          <DashboardEventCardItem
+                            event={eventItem}
+                            clubs={clubs}
+                            user={user}
+                            token={token}
+                            setSelectedEvent={() => {
+                              if (onNavigateToEvent) {
+                                onNavigateToEvent(eventItem.id);
+                              }
+                            }}
+                            handleTogglePin={handleTogglePin}
+                            theme={theme}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
           </div>
           
           {/* Active Opportunities Stats card takes 1 column in the second row */}
