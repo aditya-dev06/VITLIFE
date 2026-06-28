@@ -78,17 +78,37 @@ const LIGHT_HYPERSPEED_OPTIONS = {
 /* ═══════════════════════════════════════════════════════════════
    ANIMATED HERO PANEL — Staggered reveals + floating feature cards
    ═══════════════════════════════════════════════════════════════ */
-const HERO_FEATURES = [
-  { icon: '📅', label: 'Events', desc: 'Campus happenings' },
-  { icon: '🎯', label: 'Roadmap', desc: 'Skill progression' },
-  { icon: '🏫', label: 'Campus', desc: 'Student life' },
-  { icon: '⏰', label: 'Timetable', desc: 'Class schedules' },
-];
+
 
 const AnimatedHeroPanel = ({ theme }) => {
   const isLightTheme = theme === 'light';
+  const panelRef = useRef(null);
+  
+  // Parallax positions
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+  const handleHeroMouseMove = (e) => {
+    if (panelRef.current && window.innerWidth >= 769) {
+      const rect = panelRef.current.getBoundingClientRect();
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      const x = e.clientX - rect.left - centerX;
+      const y = e.clientY - rect.top - centerY;
+      setMousePos({ x, y });
+    }
+  };
+
+  const handleHeroMouseLeave = () => {
+    setMousePos({ x: 0, y: 0 });
+  };
+
   return (
-    <div className="auth-hero-panel">
+    <div 
+      ref={panelRef}
+      className="auth-hero-panel"
+      onMouseMove={handleHeroMouseMove}
+      onMouseLeave={handleHeroMouseLeave}
+    >
       {/* 3D WebGL Hyperspeed Background */}
       <Hyperspeed effectOptions={isLightTheme ? LIGHT_HYPERSPEED_OPTIONS : DARK_HYPERSPEED_OPTIONS} />
       
@@ -142,46 +162,89 @@ const AnimatedHeroPanel = ({ theme }) => {
           className="auth-hero-tagline"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 1.0, ease: 'easeOut' }}
+          transition={{ duration: 0.7, delay: 0.8, ease: 'easeOut' }}
         >
           Your Campus. Your Journey. One Platform.
         </motion.p>
+      </div>
 
-        {/* Description fade in */}
-        <motion.p
-          className="auth-hero-description"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1, delay: 1.3 }}
+      {/* ── 3D Depth Parallax App Dashboard Preview Widgets ── */}
+      <div className="auth-hero-parallax-container">
+        
+        {/* Widget 1: Next Class Timetable (Medium depth layer) */}
+        <motion.div
+          className="auth-parallax-widget widget-timetable"
+          style={{
+            x: mousePos.x * 0.04,
+            y: mousePos.y * 0.04,
+            rotateZ: -3
+          }}
+          initial={{ opacity: 0, x: -60, y: -20, rotateZ: -6 }}
+          animate={{ opacity: 1, x: 0, y: 0 }}
+          transition={{ duration: 1, delay: 1.0, type: 'spring', stiffness: 60 }}
+          whileHover={{ scale: 1.05, y: -5, transition: { duration: 0.2 } }}
         >
-          The centralized lifestyle & management portal built for VIT Bhopal students — events, timetables, opportunities, and more.
-        </motion.p>
+          <div className="widget-header">
+            <span className="widget-icon">⏰</span>
+            <span className="widget-title">Next Class</span>
+            <span className="widget-badge neon-green">ACTIVE</span>
+          </div>
+          <div className="widget-body">
+            <h3>CSE2002: Data Structures</h3>
+            <p>10:00 AM - 10:50 AM</p>
+            <div className="widget-meta">📍 Lab 302, Block A</div>
+          </div>
+        </motion.div>
 
-        {/* Feature cards with staggered float-in */}
-        <div className="auth-hero-features">
-          {HERO_FEATURES.map((feat, i) => (
-            <motion.div
-              key={feat.label}
-              className="auth-hero-feature"
-              initial={{ opacity: 0, y: 40, scale: 0.8 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{
-                duration: 0.5,
-                delay: 1.5 + i * 0.12,
-                ease: [0.16, 1, 0.3, 1],
-              }}
-              whileHover={{
-                y: -8,
-                scale: 1.08,
-                transition: { duration: 0.25 },
-              }}
-            >
-              <span className="auth-hero-feature-icon">{feat.icon}</span>
-              <span className="auth-hero-feature-label">{feat.label}</span>
-              <span className="auth-hero-feature-desc">{feat.desc}</span>
-            </motion.div>
-          ))}
-        </div>
+        {/* Widget 2: Event Alert (Deepest depth layer) */}
+        <motion.div
+          className="auth-parallax-widget widget-event"
+          style={{
+            x: mousePos.x * 0.06,
+            y: mousePos.y * 0.06,
+            rotateZ: 4
+          }}
+          initial={{ opacity: 0, x: 70, y: 40, rotateZ: 8 }}
+          animate={{ opacity: 1, x: 0, y: 0 }}
+          transition={{ duration: 1.2, delay: 1.2, type: 'spring', stiffness: 50 }}
+          whileHover={{ scale: 1.05, y: -5, transition: { duration: 0.2 } }}
+        >
+          <div className="widget-header">
+            <span className="widget-icon">🏆</span>
+            <span className="widget-title">Featured Hackathon</span>
+            <span className="widget-badge neon-pink">HOT</span>
+          </div>
+          <div className="widget-body">
+            <h3>VIT Hacks '26</h3>
+            <p>Starts in 2 hours</p>
+            <div className="widget-meta">💰 ₹50,000 Cash + 500 XP</div>
+          </div>
+        </motion.div>
+
+        {/* Widget 3: Opportunity Hub (Shallowest/closest layer) */}
+        <motion.div
+          className="auth-parallax-widget widget-opp"
+          style={{
+            x: mousePos.x * 0.02,
+            y: mousePos.y * 0.02,
+            rotateZ: -1
+          }}
+          initial={{ opacity: 0, y: 80, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 1.4, delay: 1.4, type: 'spring', stiffness: 70 }}
+          whileHover={{ scale: 1.05, y: -5, transition: { duration: 0.2 } }}
+        >
+          <div className="widget-header">
+            <span className="widget-icon">🚀</span>
+            <span className="widget-title">Top Match</span>
+            <span className="widget-badge neon-cyan">98% Match</span>
+          </div>
+          <div className="widget-body">
+            <h3>Google Devs India</h3>
+            <p>Frontend Developer Intern</p>
+          </div>
+        </motion.div>
+
       </div>
     </div>
   );
