@@ -1,0 +1,13 @@
+# VIT Life - College Lifestyle & Management Portal
+
+VIT Life is a centralized lifestyle and management portal designed specifically for students of VIT Bhopal. It integrates academic schedules, campus events, and career opportunities.
+
+## Primary Sections
+- [Dashboard](https://vitlife.vercel.app/): Access current updates, campus announcements, and check portal status.
+- [Campus Life](https://vitlife.vercel.app/): Explore upcoming student club activities, cultural festivals, and technical events.
+- [Opportunities Hub](https://vitlife.vercel.app/): Learn about upcoming tech internships, placements, and open-source programs.
+- [Academic Timetable](https://vitlife.vercel.app/): Tool for managing daily schedules and syncing student timetables.
+
+## Legal and Guidelines
+- [Terms and Conditions](https://vitlife.vercel.app/terms): Terms of usage guidelines for college students.
+- [Privacy Policy](https://vitlife.vercel.app/privacy): Student data privacy and protection statement.
