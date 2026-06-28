@@ -280,6 +280,7 @@ function App() {
       body.classList.remove('light-theme');
     }
     localStorage.setItem('theme', theme);
+    localStorage.setItem('ds_ai_theme', theme);
   }, [theme]);
 
   useEffect(() => {
@@ -691,7 +692,7 @@ function App() {
           <h2>Loading Secure Authentication...</h2>
         </div>
       }>
-        <Auth onLoginSuccess={handleLoginSuccess} theme={theme} />
+        <Auth onLoginSuccess={handleLoginSuccess} theme={theme} setTheme={setTheme} />
       </Suspense>
     );
   }

@@ -402,7 +402,7 @@ const getRegNumberAndProgram = (emailStr) => {
   return null;
 };
 
-const Auth = ({ onLoginSuccess, theme }) => {
+const Auth = ({ onLoginSuccess, theme, setTheme }) => {
   const [authState, setAuthState] = useState(() => {
     return sessionStorage.getItem('authState') || 'login';
   });
@@ -1259,6 +1259,37 @@ const Auth = ({ onLoginSuccess, theme }) => {
           '--spotlight-y': `${spotlightPos.y}px`
         }}
       >
+        {/* Floating Theme Toggle */}
+        {setTheme && (
+          <button 
+            type="button"
+            className="auth-theme-toggle-btn"
+            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+            style={{
+              position: 'absolute',
+              top: '2rem',
+              right: '2.5rem',
+              background: 'hsla(var(--text-primary) / 0.05)',
+              border: '1px solid hsla(var(--border-glass))',
+              color: 'hsl(var(--text-primary))',
+              padding: '0.6rem 1rem',
+              borderRadius: '20px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              fontSize: '0.8rem',
+              fontWeight: '600',
+              fontFamily: 'var(--font-accent)',
+              zIndex: 10,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+              transition: 'background-color 0.2s, transform 0.2s'
+            }}
+          >
+            {theme === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode'}
+          </button>
+        )}
+
         {/* Dynamic spot glow following cursor */}
         <div className="auth-spotlight-glow" />
 
