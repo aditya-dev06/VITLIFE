@@ -88,6 +88,14 @@ const authLimiter = rateLimit({
   message: { error: 'Too many authentication attempts. Please try again after 15 minutes.' }
 });
 
+const uploadsLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: isProd ? 120 : 5000, // Limit each IP to 120 image requests in prod, 5000 in dev
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many image requests, please try again later.' }
+});
+
 app.use('/api', apiLimiter);
 
 const DATA_DIR = path.join(__dirname, 'data');
@@ -122,6 +130,18 @@ const isAdminEmail = (email) => {
   if (cleanEmail === 'aditya.25mip10104@vitbhopal.ac.in') return true;
   if (cleanEmail === 'aditya.dev.jp@gmail.com') return true;
   return false;
+};
+
+const isSafeEmail = (email) => {
+  if (!email || typeof email !== 'string') return false;
+  const cleanEmail = email.toLowerCase().trim();
+  if (cleanEmail === '__proto__' || cleanEmail === 'constructor' || cleanEmail === 'prototype') {
+    return false;
+  }
+  if (cleanEmail.includes('__proto__') || cleanEmail.includes('constructor') || cleanEmail.includes('prototype')) {
+    return false;
+  }
+  return true;
 };
 
 // Ensure database directories exist
@@ -199,14 +219,19 @@ const cleanupExpiredEvents = async () => {
 
   // Helper to extract Cloudinary Public ID
   const getCloudinaryPublicId = (url) => {
-    if (!url || !url.includes('res.cloudinary.com')) return null;
+    if (!url) return null;
     try {
-      const parts = url.split(/\/image\/upload\/(?:v\d+\/)?/);
-      if (parts.length < 2) return null;
-      const pathAndExt = parts[1];
-      const lastDot = pathAndExt.lastIndexOf('.');
-      if (lastDot === -1) return pathAndExt;
-      return pathAndExt.substring(0, lastDot);
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        const parsed = new URL(url);
+        if (parsed.hostname !== 'res.cloudinary.com') return null;
+        const parts = parsed.pathname.split(/\/image\/upload\/(?:v\d+\/)?/);
+        if (parts.length < 2) return null;
+        const pathAndExt = parts[1];
+        const lastDot = pathAndExt.lastIndexOf('.');
+        if (lastDot === -1) return pathAndExt;
+        return pathAndExt.substring(0, lastDot);
+      }
+      return null;
     } catch (err) {
       return null;
     }
@@ -217,7 +242,15 @@ const cleanupExpiredEvents = async () => {
     if (!url) return;
     try {
       // 1. Cloudinary
-      if (url.includes('res.cloudinary.com') && isCloudinaryConfigured) {
+      let isCloudinary = false;
+      try {
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+          const parsed = new URL(url);
+          isCloudinary = parsed.hostname === 'res.cloudinary.com';
+        }
+      } catch (e) {}
+
+      if (isCloudinary && isCloudinaryConfigured) {
         const publicId = getCloudinaryPublicId(url);
         if (publicId) {
           await cloudinary.uploader.destroy(publicId);
@@ -878,23 +911,41 @@ const saveUsers = (users) => {
 const findUserByEmail = async (email) => {
   if (typeof email !== 'string') return null;
   const lowerEmail = email.toLowerCase().trim();
+  if (lowerEmail === '__proto__' || lowerEmail === 'constructor' || lowerEmail === 'prototype') {
+    return null;
+  }
   if (dbConnectingPromise) {
     await dbConnectingPromise;
   }
   if (db) {
     try {
-      return await db.collection('users').findOne({ email: lowerEmail });
+      const user = await db.collection('users').findOne({ email: lowerEmail });
+      if (user) {
+        if (user.email === '__proto__' || user.email === 'constructor' || user.email === 'prototype') {
+          return null;
+        }
+        return user;
+      }
     } catch (err) {
       console.error("MongoDB findUserByEmail error, falling back to file:", err);
     }
   }
   const users = loadUsers();
-  return users[lowerEmail] || null;
+  if (Object.prototype.hasOwnProperty.call(users, lowerEmail)) {
+    const user = users[lowerEmail];
+    if (user && user !== Object.prototype) {
+      return user;
+    }
+  }
+  return null;
 };
 
 const saveUser = async (email, userData) => {
   if (typeof email !== 'string') return;
   const lowerEmail = email.toLowerCase().trim();
+  if (lowerEmail === '__proto__' || lowerEmail === 'constructor' || lowerEmail === 'prototype') {
+    return;
+  }
   if (dbConnectingPromise) {
     await dbConnectingPromise;
   }
@@ -1579,6 +1630,10 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Name, email, and password are required.' });
     }
 
+    if (!isSafeEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email address.' });
+    }
+
     if (!isStrongPassword(password)) {
       return res.status(400).json({ error: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.' });
     }
@@ -1601,7 +1656,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
         program = parsed.program;
       }
     } else {
-      const generalRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const generalRegex = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
       if (!generalRegex.test(lowerEmail)) {
         return res.status(400).json({ error: 'Invalid email address format.' });
       }
@@ -1681,6 +1736,10 @@ app.post('/api/auth/verify', authLimiter, authRateLimiter(5, 15 * 60 * 1000), as
       return res.status(400).json({ error: 'Email and verification code are required.' });
     }
 
+    if (!isSafeEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email address.' });
+    }
+
     const lowerEmail = email.trim().toLowerCase();
     const user = await findUserByEmail(lowerEmail);
     if (!user) {
@@ -1727,6 +1786,10 @@ app.post('/api/auth/resend-code', authLimiter, authRateLimiter(5, 15 * 60 * 1000
     const { email } = req.body;
     if (!email) {
       return res.status(400).json({ error: 'Email is required.' });
+    }
+
+    if (!isSafeEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email address.' });
     }
 
     const lowerEmail = email.trim().toLowerCase();
@@ -1790,6 +1853,10 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required.' });
+    }
+
+    if (!isSafeEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email address.' });
     }
 
     const lowerEmail = email.trim().toLowerCase();
@@ -1859,6 +1926,10 @@ app.post('/api/auth/forgot-password', authLimiter, authRateLimiter(5, 15 * 60 * 
       return res.status(400).json({ error: 'Email is required.' });
     }
 
+    if (!isSafeEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email address.' });
+    }
+
     const lowerEmail = email.trim().toLowerCase();
     const user = await findUserByEmail(lowerEmail);
 
@@ -1917,6 +1988,10 @@ app.post('/api/auth/reset-password', authLimiter, authRateLimiter(5, 15 * 60 * 1
     const { email, code, newPassword } = req.body;
     if (!email || !code || !newPassword) {
       return res.status(400).json({ error: 'Email, reset code, and new password are required.' });
+    }
+
+    if (!isSafeEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email address.' });
     }
 
     if (!isStrongPassword(newPassword)) {
@@ -2697,6 +2772,10 @@ app.post('/api/admin/promote', authenticate, requireAdmin, async (req, res) => {
     if (!email || !role) {
       return res.status(400).json({ error: 'Email and role are required.' });
     }
+
+    if (!isSafeEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email address.' });
+    }
     if (role !== 'admin' && role !== 'club_manager') {
       return res.status(400).json({ error: 'Invalid role. Must be admin or club_manager.' });
     }
@@ -2743,6 +2822,10 @@ app.post('/api/admin/demote', authenticate, requireAdmin, async (req, res) => {
     if (!email) {
       return res.status(400).json({ error: 'Email is required.' });
     }
+
+    if (!isSafeEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email address.' });
+    }
     
     const targetUser = await findUserByEmail(email);
     if (!targetUser) {
@@ -2777,7 +2860,7 @@ app.use(express.static(frontendBuild, {
   etag: true
 }));
 // Serve uploaded files dynamically from MongoDB Atlas or local disk fallback
-app.get('/uploads/:filename', async (req, res) => {
+app.get('/uploads/:filename', uploadsLimiter, async (req, res) => {
   const { filename } = req.params;
   // Sanitize the filename to prevent path traversal
   const safeFilename = path.basename(filename);
