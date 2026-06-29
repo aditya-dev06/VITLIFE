@@ -738,17 +738,26 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [swipeAction, setSwipeAction] = useState(null); // 'like' | 'skip' | null
   const [exitDirection, setExitDirection] = useState(null); // { x, y } when flying off
-  const [showSwipeOnboarding, setShowSwipeOnboarding] = useState(() => {
-    return !localStorage.getItem('ds_seen_swipe_onboarding');
+  const [showSwipeHint, setShowSwipeHint] = useState(() => {
+    return !localStorage.getItem('ds_swipe_hint_seen');
   });
 
-  const dismissSwipeOnboarding = () => {
-    localStorage.setItem('ds_seen_swipe_onboarding', 'true');
-    setShowSwipeOnboarding(false);
-  };
+  // Auto-dismiss the hint after first swipe or after 6 seconds
+  useEffect(() => {
+    if (!showSwipeHint) return;
+    const timer = setTimeout(() => {
+      localStorage.setItem('ds_swipe_hint_seen', 'true');
+      setShowSwipeHint(false);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [showSwipeHint]);
 
   const handleSwipe = (direction) => {
     if (exitDirection) return;
+    if (showSwipeHint) {
+      localStorage.setItem('ds_swipe_hint_seen', 'true');
+      setShowSwipeHint(false);
+    }
     const dirX = direction === 'right' ? 450 : -450;
     setExitDirection({ x: dirX, y: 0 });
     setSwipeAction(direction);
@@ -1400,7 +1409,40 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
                 );
               }
 
-              // Render up to 3 cards in the deck
+              if (!isMobileDevice) {
+                return (
+                  <div 
+                    className="desktop-events-grid"
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                      gap: '1.25rem',
+                      width: '100%',
+                      marginTop: '0.5rem'
+                    }}
+                  >
+                    {recommendedEvents.slice(0, 3).map((eventItem) => (
+                      <div key={eventItem.id} className="desktop-event-card-wrapper" style={{ minWidth: 0 }}>
+                        <DashboardEventCardItem
+                          event={eventItem}
+                          clubs={clubs}
+                          user={user}
+                          token={token}
+                          setSelectedEvent={() => {
+                            if (onNavigateToEvent) {
+                              onNavigateToEvent(eventItem.id);
+                            }
+                          }}
+                          handleTogglePin={handleTogglePin}
+                          theme={theme}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+
+              // Render up to 3 cards in the deck for mobile
               const visibleCards = [];
               const limit = Math.min(N, 3);
               for (let i = 0; i < limit; i++) {
@@ -1415,32 +1457,13 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
               return (
                 <>
                   <div className="event-stack-container">
-                    {showSwipeOnboarding && (
-                      <div className="swipe-onboarding-overlay" onClick={dismissSwipeOnboarding}>
-                        <div className="swipe-onboarding-gesture-container">
-                          <div className="swipe-hand-icon">
-                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5" />
-                              <path d="M14 10V5a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5" />
-                              <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
-                              <path d="M18 11a2 2 0 0 1 2 2v3a4 4 0 0 1-4 4h-3a9 9 0 0 1-6-2.23" />
-                            </svg>
-                          </div>
-                          <div className="swipe-track-line" />
-                        </div>
-                        
-                        <span className="swipe-onboarding-text">Swipe Right to View Next</span>
-                        
-                        <button 
-                          type="button" 
-                          className="swipe-onboarding-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            dismissSwipeOnboarding();
-                          }}
-                        >
-                          Got it!
-                        </button>
+                    {showSwipeHint && (
+                      <div className="swipe-hint">
+                        <span className="swipe-hint-text">Swipe →</span>
+                        <svg className="swipe-hint-hand" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M5 12h14" />
+                          <path d="m12 5 7 7-7 7" />
+                        </svg>
                       </div>
                     )}
                     {visibleCards.reverse().map(({ event: eventItem, stackPos, key }) => {
