@@ -1,4 +1,4 @@
-﻿/* Core Design System & Theme Settings */
+/* Core Design System & Theme Settings */
 @import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=Sora:wght@300;400;500;600;700;800&display=swap');
 
 :root {
@@ -772,137 +772,67 @@ input, textarea, select {
   user-select: none !important;
 }
 
-/* ── Swipe Onboarding Overlay ── */
-.swipe-onboarding-overlay {
+/* ── Swipe Hint (non-blocking floating badge) ── */
+.swipe-hint {
   position: absolute;
-  top: 10px;
+  bottom: -36px;
   left: 50%;
-  margin-left: -130px;
-  width: 260px;
-  height: 280px;
-  background: rgba(12, 12, 14, 0.94);
-  backdrop-filter: blur(12px) saturate(180%);
-  -webkit-backdrop-filter: blur(12px) saturate(180%);
-  border-radius: var(--border-radius-premium, 16px);
-  z-index: 25;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.2rem;
-  padding: 1.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.light-theme .swipe-onboarding-overlay {
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.15);
-}
-
-
-/* Gesture Track */
-.swipe-onboarding-gesture-container {
-  position: relative;
-  width: 140px;
-  height: 56px;
+  transform: translateX(-50%);
+  z-index: 30;
   display: flex;
   align-items: center;
-}
-
-.swipe-track-line {
-  position: absolute;
-  top: 50%;
-  left: 10px;
-  right: 10px;
-  height: 3px;
-  background: linear-gradient(90deg, rgba(99, 91, 255, 0.15), rgba(6, 182, 212, 0.7));
-  border-radius: 2px;
-  transform: translateY(-50%);
-}
-
-/* Animated Hand */
-.swipe-hand-icon {
-  position: absolute;
-  top: 50%;
-  left: 6px;
-  transform: translateY(-50%);
-  color: #06b6d4;
-  filter: drop-shadow(0 0 10px rgba(6, 182, 212, 0.55));
-  animation: slideRightGesture 2.4s infinite cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.light-theme .swipe-hand-icon {
-  color: #0891b2;
-  filter: drop-shadow(0 0 6px rgba(8, 145, 178, 0.35));
-}
-
-/* Instruction Text */
-.swipe-onboarding-text {
-  font-family: var(--font-accent, 'Inter', sans-serif);
-  font-size: 0.82rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: rgba(255, 255, 255, 0.85);
-  text-align: center;
-  animation: pulseText 2.4s infinite ease-in-out;
-}
-
-.light-theme .swipe-onboarding-text {
-  color: #1e1b4b;
-}
-
-/* Got it Button */
-.swipe-onboarding-btn {
+  gap: 0.4rem;
+  padding: 0.35rem 0.9rem;
   background: linear-gradient(135deg, #635bff, #06b6d4);
-  color: white !important;
-  border: none;
-  padding: 0.5rem 1.4rem;
   border-radius: 20px;
-  font-size: 0.78rem;
+  box-shadow: 0 4px 16px rgba(99, 91, 255, 0.4);
+  animation: swipeHintEnter 0.4s ease-out both, swipeHintPulse 2s 0.4s infinite ease-in-out;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.swipe-hint-text {
+  font-family: var(--font-accent, 'Inter', sans-serif);
+  font-size: 0.72rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  cursor: pointer;
-  box-shadow: 0 4px 15px rgba(99, 91, 255, 0.3);
-  transition: transform 0.2s, box-shadow 0.2s;
+  letter-spacing: 0.06em;
+  color: #fff;
 }
 
-.swipe-onboarding-btn:hover {
-  transform: scale(1.05);
-  box-shadow: 0 6px 20px rgba(99, 91, 255, 0.45);
+.swipe-hint-hand {
+  color: #fff;
+  animation: swipeArrowSlide 1.5s 0.6s infinite ease-in-out;
 }
 
-.swipe-onboarding-btn:active {
-  transform: scale(0.95);
+.light-theme .swipe-hint {
+  background: linear-gradient(135deg, #4f46e5, #0891b2);
+  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.35);
 }
 
-/* Hand slides right, fades in/out */
-@keyframes slideRightGesture {
+@keyframes swipeHintEnter {
   0% {
-    transform: translateY(-50%) translateX(0) scale(1);
     opacity: 0;
+    transform: translateX(-50%) translateY(10px) scale(0.9);
   }
-  10% {
+  100% {
     opacity: 1;
-    transform: translateY(-50%) translateX(0) scale(0.92);
-  }
-  65% {
-    transform: translateY(-50%) translateX(96px) scale(0.92);
-    opacity: 1;
-  }
-  85%, 100% {
-    transform: translateY(-50%) translateX(96px) scale(1);
-    opacity: 0;
+    transform: translateX(-50%) translateY(0) scale(1);
   }
 }
 
-@keyframes pulseText {
-  0%, 100% { opacity: 0.65; }
-  50% { opacity: 1; }
+@keyframes swipeHintPulse {
+  0%, 100% {
+    box-shadow: 0 4px 16px rgba(99, 91, 255, 0.4);
+  }
+  50% {
+    box-shadow: 0 4px 24px rgba(99, 91, 255, 0.65);
+  }
+}
+
+@keyframes swipeArrowSlide {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(6px); }
 }
 
 /* Individual card stacked layers */
