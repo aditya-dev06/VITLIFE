@@ -27,6 +27,7 @@ The platform supports both **authenticated users** (VIT students and global user
 - Personalized welcome with live greeting
 - XP progress tracking across skill categories
 - Next class tracker (live countdown from timetable data)
+- **Live Mess Menu Tracker**: Dynamically proxies and caches (6-hour TTL) live menu data from `messmenu.me` for all 6 VIT Bhopal hostel messes, displaying main dishes.
 - Quick stats and action cards
 
 ### 📅 Timetable & Schedule
@@ -49,9 +50,10 @@ The platform supports both **authenticated users** (VIT students and global user
 
 ### 🎪 College Life
 - Club directory with manager info
-- Event calendar with pinning, categories, and poster galleries
+- Event calendar with categories, poster galleries, and RSVP links
+- **Event Impression & Trending System**: Tracks user impressions in MongoDB/JSON database; dynamically prioritizes admin-pinned events followed by most trending events (sorted by impressions) on the dashboard (capped at 3 responsive cards).
+- Option for pinning events is restricted strictly to administrators on both frontend and backend.
 - Club recruitment board
-- Event RSVP with registration links
 
 ### 🏫 VIT Bhopal Guide
 - Academic guidelines and resources

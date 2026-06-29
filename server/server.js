@@ -2100,6 +2100,144 @@ app.post('/api/user/profile', authenticate, async (req, res) => {
   }
 });
 
+// ================= MESS MENU PROXY (messmenu.me) =================
+
+// In-memory cache for mess menu data  { messId: { data, fetchedAt } }
+const messMenuCache = {};
+const MESS_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
+
+const VALID_MESS_IDS = [
+  'mayuri-boys', 'jmb-boys', 'crcl-boys', 'safal-boys', 'ab-girls', 'mayuri-girls'
+];
+
+const MESS_NAMES = {
+  'mayuri-boys': 'Mayuri Boys Mess',
+  'jmb-boys': 'JMB Boys Mess',
+  'crcl-boys': 'CRCL Mess',
+  'safal-boys': 'Safal Mess',
+  'ab-girls': 'AB Girls Mess',
+  'mayuri-girls': 'Mayuri Girls Mess'
+};
+
+const MEAL_KEYS = ['breakfast', 'lunch', 'snacks', 'dinner'];
+
+/**
+ * Fetch live mess menu from messmenu.me using their Next.js Server Action protocol.
+ * The action ID for getAggregatedHomeData was extracted from their client-side JS bundle.
+ */
+async function fetchMessMenuFromSource(messId) {
+  const actionId = '70c08e42ee3ced6e6ce7b926e908014a4c37561304';
+  const collegeId = 'vit-bhopal';
+
+  const response = await fetch('https://messmenu.me/vit-bhopal', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'text/x-component',
+      'Next-Action': actionId,
+      'Accept': 'text/x-component',
+      'Next-Router-State-Tree': JSON.stringify([
+        '',
+        { children: [['collegeSlug', 'vit-bhopal', 'd'], { children: ['__PAGE__', {}] }] },
+        null, null, true
+      ])
+    },
+    body: JSON.stringify([false, collegeId, messId])
+  });
+
+  if (!response.ok) {
+    throw new Error(`messmenu.me responded with status ${response.status}`);
+  }
+
+  const text = await response.text();
+
+  // Parse the RSC (React Server Component) response – data is on lines starting with "1:"
+  const lines = text.split('\n');
+  for (const line of lines) {
+    if (line.startsWith('1:')) {
+      const payload = JSON.parse(line.substring(2));
+      if (payload.menu && payload.menu.success && payload.menu.data) {
+        // payload.menu.data is an array of 7 days (Sun=0 … Sat=6)
+        // Each day is an array of 4 strings: [breakfast, lunch, snacks, dinner]
+        const rawDays = payload.menu.data;
+        const menu = {};
+        for (let dayIndex = 0; dayIndex < rawDays.length; dayIndex++) {
+          const dayArr = rawDays[dayIndex];
+          if (!dayArr) continue;
+          menu[dayIndex] = {};
+          for (let mealIdx = 0; mealIdx < MEAL_KEYS.length; mealIdx++) {
+            const rawItems = dayArr[mealIdx] || 'Menu not available';
+            // Clean up: remove leading * markers used by messmenu.me for highlighting
+            const cleaned = rawItems.replace(/\*/g, '').trim();
+            menu[dayIndex][MEAL_KEYS[mealIdx]] = cleaned;
+          }
+        }
+        return menu;
+      }
+    }
+  }
+
+  throw new Error('Could not parse menu data from messmenu.me response');
+}
+
+// GET /api/mess-menu/:messId  –  Public endpoint, no auth required
+app.get('/api/mess-menu/:messId', async (req, res) => {
+  const { messId } = req.params;
+
+  if (!VALID_MESS_IDS.includes(messId)) {
+    return res.status(400).json({
+      success: false,
+      error: `Invalid mess ID. Valid IDs: ${VALID_MESS_IDS.join(', ')}`
+    });
+  }
+
+  // Check cache
+  const cached = messMenuCache[messId];
+  if (cached && (Date.now() - cached.fetchedAt) < MESS_CACHE_TTL) {
+    return res.json({
+      success: true,
+      cached: true,
+      data: { name: MESS_NAMES[messId], menu: cached.data }
+    });
+  }
+
+  try {
+    const menu = await fetchMessMenuFromSource(messId);
+    // Store in cache
+    messMenuCache[messId] = { data: menu, fetchedAt: Date.now() };
+
+    res.json({
+      success: true,
+      cached: false,
+      data: { name: MESS_NAMES[messId], menu }
+    });
+  } catch (error) {
+    console.error(`[Mess Menu] Failed to fetch menu for ${messId}:`, error.message);
+
+    // If we have stale cache, serve it with a warning
+    if (cached) {
+      return res.json({
+        success: true,
+        cached: true,
+        stale: true,
+        data: { name: MESS_NAMES[messId], menu: cached.data }
+      });
+    }
+
+    res.status(502).json({
+      success: false,
+      error: 'Unable to fetch mess menu data. Please try again later.'
+    });
+  }
+});
+
+// GET /api/mess-menu  –  List all available messes
+app.get('/api/mess-menu', (req, res) => {
+  res.json({
+    success: true,
+    messes: VALID_MESS_IDS.map(id => ({ id, name: MESS_NAMES[id] }))
+  });
+});
+
 // ================= OPPORTUNITY & SCRAPER ROUTES =================
 
 // 1. GET Route: Fetch opportunities (with personalization based on active courses)
@@ -2587,6 +2725,35 @@ app.put('/api/events/:id/pin', authenticate, requireAdmin, async (req, res) => {
     res.json({ success: true, message: `Event ${pinned ? 'pinned' : 'unpinned'} successfully.` });
   } catch (error) {
     res.status(500).json({ error: 'Failed to pin event: ' + error.message });
+  }
+});
+
+// Track event impressions/views (trending calculation)
+app.post('/api/events/:id/impression', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Update in MongoDB
+    if (dbConnectingPromise) await dbConnectingPromise;
+    if (db) {
+      await db.collection('events').updateOne({ id: id }, { $inc: { impressions: 1 } });
+    }
+    
+    // Fallback to local file
+    if (fs.existsSync(EVENTS_FILE)) {
+      try {
+        const fileData = JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf-8'));
+        const idx = (fileData.events || []).findIndex(e => e.id === id);
+        if (idx !== -1) {
+          fileData.events[idx].impressions = (fileData.events[idx].impressions || 0) + 1;
+          fs.writeFileSync(EVENTS_FILE, JSON.stringify(fileData, null, 2), 'utf-8');
+        }
+      } catch (e) {}
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to record event impression: ' + error.message });
   }
 });
 

@@ -1656,7 +1656,8 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, on
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        }
+        },
+        body: JSON.stringify({ pinned: !event.pinned })
       });
       if (res.ok) {
         await fetchEvents();
