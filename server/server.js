@@ -6,7 +6,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
-import { MongoClient } from 'mongodb';
+import { MongoClient, ObjectId } from 'mongodb';
 import multer from 'multer';
 import nodemailer from 'nodemailer';
 import dns from 'dns';
@@ -108,6 +108,308 @@ const EVENTS_FILE = path.join(DATA_DIR, 'events.json');
 const RECRUITMENTS_FILE = path.join(DATA_DIR, 'recruitments.json');
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const ACTIVITY_LOGS_FILE = path.join(DATA_DIR, 'activity_logs.json');
+
+// Active Sessions Management
+const MAX_SESSIONS_PER_USER = 10;
+const inMemorySessions = new Map();
+
+// SSE active connections list
+let sseClients = [];
+
+const notifySessionRevoked = (tokenHash) => {
+  const client = sseClients.find(c => c.tokenHash === tokenHash);
+  if (client) {
+    try {
+      client.res.write(`data: ${JSON.stringify({
+        type: 'revoked',
+        message: 'Your session has been revoked from another device.'
+      })}\n\n`);
+      client.res.end();
+    } catch (err) {
+      console.error("Failed to notify client:", err.message);
+    }
+  }
+};
+
+const notifyAllOtherSessionsRevoked = (email, currentTokenHash) => {
+  const otherClients = sseClients.filter(c => c.email === email && c.tokenHash !== currentTokenHash);
+  for (const client of otherClients) {
+    try {
+      client.res.write(`data: ${JSON.stringify({
+        type: 'revoked',
+        message: 'Your session has been revoked because you logged out all other devices.'
+      })}\n\n`);
+      client.res.end();
+    } catch (err) {
+      console.error("Failed to notify client on bulk revocation:", err.message);
+    }
+  }
+};
+
+// Periodic cleanup of expired in-memory sessions
+setInterval(() => {
+  const now = Date.now();
+  for (const [hash, session] of inMemorySessions.entries()) {
+    if (now > new Date(session.expiresAt).getTime()) {
+      inMemorySessions.delete(hash);
+    }
+  }
+}, 30 * 60 * 1000); // 30 minutes
+
+const parseUserAgent = (uaString) => {
+  const ua = uaString || '';
+  let os = 'Unknown OS';
+  let browser = 'Unknown Browser';
+  let deviceType = 'Desktop';
+
+  if (/mobile|android|iphone|ipad|phone/i.test(ua)) {
+    deviceType = 'Mobile';
+    if (/ipad/i.test(ua)) {
+      deviceType = 'Tablet';
+    }
+  }
+
+  if (/windows/i.test(ua)) {
+    os = 'Windows';
+  } else if (/macintosh|mac os x/i.test(ua)) {
+    os = 'macOS';
+  } else if (/android/i.test(ua)) {
+    os = 'Android';
+  } else if (/iphone|ipad|ipod/i.test(ua)) {
+    os = 'iOS';
+  } else if (/linux/i.test(ua)) {
+    os = 'Linux';
+  }
+
+  if (/chrome|crios/i.test(ua) && !/edge|edg/i.test(ua) && !/opr/i.test(ua)) {
+    browser = 'Chrome';
+  } else if (/safari/i.test(ua) && !/chrome|crios/i.test(ua)) {
+    browser = 'Safari';
+  } else if (/firefox|fxios/i.test(ua)) {
+    browser = 'Firefox';
+  } else if (/edge|edg/i.test(ua)) {
+    browser = 'Edge';
+  } else if (/opr/i.test(ua)) {
+    browser = 'Opera';
+  }
+
+  return { deviceType, os, browser };
+};
+
+const getSessionHash = (token) => {
+  const parts = token.split('.');
+  const signature = parts[0];
+  return crypto.createHash('sha256').update(signature).digest('hex');
+};
+
+const createSession = async (email, token, req) => {
+  try {
+    if (dbConnectingPromise) await dbConnectingPromise;
+
+    const parts = token.split('.');
+    const signature = parts[0];
+    const expiresAtVal = parseInt(parts[2], 10);
+    const tokenHash = crypto.createHash('sha256').update(signature).digest('hex');
+
+    const ua = req.headers['user-agent'] || '';
+    const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
+    const { deviceType, os, browser } = parseUserAgent(ua);
+
+    const sessionDoc = {
+      email: email.toLowerCase().trim(),
+      tokenHash,
+      userAgent: ua,
+      ip,
+      deviceType,
+      os,
+      browser,
+      lastActive: new Date(),
+      createdAt: new Date(),
+      expiresAt: new Date(expiresAtVal)
+    };
+
+    if (db) {
+      try {
+        // Enforce FIFO Session Limit
+        const sessionCount = await db.collection('sessions').countDocuments({ email: sessionDoc.email });
+        if (sessionCount >= MAX_SESSIONS_PER_USER) {
+          const oldestSession = await db.collection('sessions')
+            .find({ email: sessionDoc.email })
+            .sort({ createdAt: 1 })
+            .limit(1)
+            .toArray();
+          if (oldestSession.length > 0) {
+            await db.collection('sessions').deleteOne({ _id: oldestSession[0]._id });
+            notifySessionRevoked(oldestSession[0].tokenHash);
+          }
+        }
+        await db.collection('sessions').insertOne(sessionDoc);
+        return;
+      } catch (err) {
+        console.error("MongoDB createSession error, falling back to memory:", err.message);
+      }
+    }
+
+    // Fallback to in-memory map
+    const userSessions = Array.from(inMemorySessions.values()).filter(s => s.email === sessionDoc.email);
+    if (userSessions.length >= MAX_SESSIONS_PER_USER) {
+      userSessions.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      const oldest = userSessions[0];
+      inMemorySessions.delete(oldest.tokenHash);
+      notifySessionRevoked(oldest.tokenHash);
+    }
+    inMemorySessions.set(tokenHash, sessionDoc);
+  } catch (err) {
+    console.error("Error creating session:", err.message);
+  }
+};
+
+const verifySession = async (token) => {
+  try {
+    if (dbConnectingPromise) await dbConnectingPromise;
+
+    const tokenHash = getSessionHash(token);
+
+    if (db) {
+      try {
+        const session = await db.collection('sessions').findOne({ tokenHash });
+        if (session) {
+          // Update lastActive asynchronously
+          db.collection('sessions').updateOne(
+            { _id: session._id },
+            { $set: { lastActive: new Date() } }
+          ).catch(err => console.error("Failed to update lastActive for session:", err.message));
+          return true;
+        }
+        return false;
+      } catch (err) {
+        console.error("MongoDB verifySession error, falling back to memory:", err.message);
+      }
+    }
+
+    const session = inMemorySessions.get(tokenHash);
+    if (session) {
+      session.lastActive = new Date();
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error("Error verifying session:", err.message);
+    return false;
+  }
+};
+
+const getUserSessions = async (email) => {
+  if (dbConnectingPromise) await dbConnectingPromise;
+  const lowerEmail = email.toLowerCase().trim();
+  if (db) {
+    try {
+      const list = await db.collection('sessions').find({ email: lowerEmail }).toArray();
+      return list.map(s => ({
+        id: s._id.toString(),
+        userAgent: s.userAgent,
+        deviceType: s.deviceType,
+        os: s.os,
+        browser: s.browser,
+        ip: s.ip,
+        lastActive: s.lastActive,
+        createdAt: s.createdAt,
+        tokenHash: s.tokenHash
+      }));
+    } catch (err) {
+      console.error("MongoDB getUserSessions error, falling back to memory:", err.message);
+    }
+  }
+
+  return Array.from(inMemorySessions.values())
+    .filter(s => s.email === lowerEmail)
+    .map(s => ({
+      id: s.tokenHash,
+      userAgent: s.userAgent,
+      deviceType: s.deviceType,
+      os: s.os,
+      browser: s.browser,
+      ip: s.ip,
+      lastActive: s.lastActive,
+      createdAt: s.createdAt,
+      tokenHash: s.tokenHash
+    }));
+};
+
+const revokeSession = async (sessionId, email) => {
+  if (dbConnectingPromise) await dbConnectingPromise;
+  const lowerEmail = email.toLowerCase().trim();
+  if (db) {
+    try {
+      let query = { email: lowerEmail };
+      try {
+        query._id = new ObjectId(sessionId);
+      } catch {
+        query._id = sessionId;
+      }
+      const res = await db.collection('sessions').deleteOne(query);
+      return res.deletedCount > 0;
+    } catch (err) {
+      console.error("MongoDB revokeSession error, falling back to memory:", err.message);
+    }
+  }
+
+  // Fallback in-memory map
+  const session = inMemorySessions.get(sessionId);
+  if (session && session.email === lowerEmail) {
+    inMemorySessions.delete(sessionId);
+    return true;
+  }
+  return false;
+};
+
+const revokeAllSessionsExcept = async (email, currentToken) => {
+  if (dbConnectingPromise) await dbConnectingPromise;
+  const lowerEmail = email.toLowerCase().trim();
+  const signature = currentToken.split('.')[0];
+  const currentTokenHash = crypto.createHash('sha256').update(signature).digest('hex');
+
+  if (db) {
+    try {
+      await db.collection('sessions').deleteMany({
+        email: lowerEmail,
+        tokenHash: { $ne: currentTokenHash }
+      });
+      return;
+    } catch (err) {
+      console.error("MongoDB revokeAllSessionsExcept error, falling back to memory:", err.message);
+    }
+  }
+
+  // Fallback in-memory map
+  for (const [key, session] of inMemorySessions.entries()) {
+    if (session.email === lowerEmail && session.tokenHash !== currentTokenHash) {
+      inMemorySessions.delete(key);
+    }
+  }
+};
+
+const deleteSession = async (token) => {
+  if (dbConnectingPromise) await dbConnectingPromise;
+  const signature = token.split('.')[0];
+  const tokenHash = crypto.createHash('sha256').update(signature).digest('hex');
+
+  if (db) {
+    try {
+      await db.collection('sessions').deleteOne({ tokenHash });
+      return;
+    } catch (err) {
+      console.error("MongoDB deleteSession error, falling back to memory:", err.message);
+    }
+  }
+
+  // Fallback in-memory map
+  for (const [key, session] of inMemorySessions.entries()) {
+    if (session.tokenHash === tokenHash) {
+      inMemorySessions.delete(key);
+    }
+  }
+};
 
 // Load Admin email dynamically from env or file config
 let ADMIN_EMAIL = process.env.ADMIN_EMAIL;
@@ -547,6 +849,12 @@ const ensureIndexes = async (database) => {
     await database.collection('activity_logs').createIndex({ email: 1 });
     await database.collection('rate_limits').createIndex({ key: 1 }, { unique: true });
     await database.collection('rate_limits').createIndex({ lastAttempt: 1 }, { expireAfterSeconds: 900 });
+    
+    // Active Sessions Indexes
+    await database.collection('sessions').createIndex({ tokenHash: 1 }, { unique: true });
+    await database.collection('sessions').createIndex({ email: 1 });
+    await database.collection('sessions').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL index automatically deletes expired sessions
+    
     console.log("✅ Database indexes verified/created successfully.");
   } catch (err) {
     console.error("❌ Failed to verify database indexes:", err.message);
@@ -1480,47 +1788,76 @@ const isStrongPassword = (password) => {
   return regex.test(password);
 };
 
-// Custom Session Token generation and validation (with password hash segement for session revocation)
+// Custom Session Token generation and validation (with password hash segment for session revocation)
 const generateToken = async (email, passwordHash) => {
   const secret = await ensureJwtSecret();
   const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
+  
+  // Create a high-entropy, secure hash piece of the password hash to prevent exposing the hash format/value
+  const hashPiece = crypto.createHash('sha256').update(passwordHash).digest('hex').substring(0, 16);
+  
   const hmac = crypto.createHmac('sha256', secret);
-  const hashPiece = passwordHash.substring(0, 10);
   hmac.update(`${email}:${expiresAt}:${hashPiece}`);
   const signature = hmac.digest('hex');
   const base64Email = Buffer.from(email).toString('base64');
-  return `${signature}.${base64Email}.${expiresAt}`;
+  
+  return `${signature}.${base64Email}.${expiresAt}.${hashPiece}`;
 };
 
 const verifyToken = async (token) => {
-  if (typeof token !== 'string') return null;
+  // Prevent DoS on massive input strings
+  if (typeof token !== 'string' || token.length > 500) return null;
+  
   try {
     const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const [signature, base64Email, expiresAtStr] = parts;
-    const email = Buffer.from(base64Email, 'base64').toString('utf-8');
+    if (parts.length !== 4) return null;
+    
+    const [signature, base64Email, expiresAtStr, hashPiece] = parts;
+    
+    // Strict input formatting validation
+    if (!/^[0-9a-fA-F]{64}$/.test(signature)) return null;
+    if (!/^[0-9]+$/.test(expiresAtStr)) return null;
+    if (!/^[0-9a-fA-F]{16}$/.test(hashPiece)) return null;
+    
     const expiresAt = parseInt(expiresAtStr, 10);
-
-    if (Date.now() > expiresAt) return null;
-
-    const user = await findUserByEmail(email);
-    if (!user) return null;
-
+    if (Number.isNaN(expiresAt) || Date.now() > expiresAt) return null;
+    
+    const email = Buffer.from(base64Email, 'base64').toString('utf-8');
+    
+    // Verify signature FIRST (Fast-path rejection without querying database or files)
     const secret = await ensureJwtSecret();
     const hmac = crypto.createHmac('sha256', secret);
-    const hashPiece = user.passwordHash.substring(0, 10);
     hmac.update(`${email}:${expiresAt}:${hashPiece}`);
     const expectedSignature = hmac.digest('hex');
-
+    
     const sigBuffer = Buffer.from(signature, 'hex');
     const expBuffer = Buffer.from(expectedSignature, 'hex');
-    if (sigBuffer.length === expBuffer.length && crypto.timingSafeEqual(sigBuffer, expBuffer)) {
-      return user;
+    
+    // Constant-time check to prevent signature-forgery timing attacks
+    if (!crypto.timingSafeEqual(sigBuffer, expBuffer)) {
+      return null;
     }
+    
+    // Verify active session exists in DB/memory cache
+    const isSessionValid = await verifySession(token);
+    if (!isSessionValid) {
+      return null;
+    }
+    
+    // Token signature is authentic (issued by us). Now fetch the user.
+    const user = await findUserByEmail(email);
+    if (!user || !user.passwordHash) return null;
+    
+    // Verify password hash matches token's hashPiece to enforce session revocation on password change
+    const currentHashPiece = crypto.createHash('sha256').update(user.passwordHash).digest('hex').substring(0, 16);
+    if (hashPiece !== currentHashPiece) {
+      return null; // Password changed, session is invalid
+    }
+    
+    return user;
   } catch (e) {
     return null;
   }
-  return null;
 };
 
 // Express Authenticated Route Middleware
@@ -1765,6 +2102,7 @@ app.post('/api/auth/verify', authLimiter, authRateLimiter(5, 15 * 60 * 1000), as
     await logActivity(lowerEmail, 'email_verified', req);
 
     const token = await generateToken(lowerEmail, user.passwordHash);
+    await createSession(lowerEmail, token, req);
 
     const userProfile = { ...user };
     delete userProfile.passwordHash;
@@ -1903,6 +2241,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     await logActivity(lowerEmail, 'login', req);
 
     const token = await generateToken(lowerEmail, user.passwordHash);
+    await createSession(lowerEmail, token, req);
 
     const userProfile = { ...user };
     delete userProfile.passwordHash;
@@ -1911,6 +2250,174 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     res.json({ token, user: userProfile });
   } catch (error) {
     res.status(500).json({ error: 'Server authentication error: ' + error.message });
+  }
+});
+
+// Real-time session event stream (Server-Sent Events)
+app.get('/api/user/sessions/events', async (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+
+  const token = req.query.token;
+  if (!token) {
+    res.write(`data: ${JSON.stringify({ type: 'error', message: 'Missing token' })}\n\n`);
+    res.end();
+    return;
+  }
+
+  let decoded;
+  try {
+    decoded = await verifyToken(token);
+    if (!decoded) {
+      res.write(`data: ${JSON.stringify({ type: 'error', message: 'Invalid token' })}\n\n`);
+      res.end();
+      return;
+    }
+  } catch (err) {
+    res.write(`data: ${JSON.stringify({ type: 'error', message: 'Invalid token signature' })}\n\n`);
+    res.end();
+    return;
+  }
+
+  const email = decoded.email.toLowerCase().trim();
+  const signature = token.split('.')[0];
+  const tokenHash = crypto.createHash('sha256').update(signature).digest('hex');
+
+  // Keep connection alive with heartbeat ping
+  const pingInterval = setInterval(() => {
+    res.write(`data: ${JSON.stringify({ type: 'ping' })}\n\n`);
+  }, 30000);
+
+  const clientInfo = {
+    email,
+    tokenHash,
+    res,
+    pingInterval
+  };
+
+  sseClients.push(clientInfo);
+
+  req.on('close', () => {
+    clearInterval(pingInterval);
+    sseClients = sseClients.filter(c => c !== clientInfo);
+  });
+});
+
+// Get all active sessions for the logged-in user
+app.get('/api/user/sessions', authenticate, async (req, res) => {
+  try {
+    const email = req.user.email.toLowerCase();
+    const sessions = await getUserSessions(email);
+    
+    // Hash the signature part of current token from request to identify the current session
+    const authHeader = req.headers.authorization;
+    let currentSessionId = null;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const currentToken = authHeader.substring(7);
+      const signature = currentToken.split('.')[0];
+      const currentTokenHash = crypto.createHash('sha256').update(signature).digest('hex');
+      const currentSession = sessions.find(s => s.tokenHash === currentTokenHash);
+      if (currentSession) {
+        currentSessionId = currentSession._id || currentSession.id;
+      }
+    }
+    
+    // Map sessions to exclude sensitive tokenHash and convert MongoDB object IDs to strings
+    const safeSessions = sessions.map(s => {
+      const sId = s._id ? s._id.toString() : s.id;
+      return {
+        id: sId,
+        userAgent: s.userAgent || 'Unknown Device',
+        ipAddress: s.ip || 'Unknown IP',
+        location: s.location || 'Unknown Location',
+        createdAt: s.createdAt,
+        lastActiveAt: s.lastActive || s.lastActiveAt,
+        isCurrent: sId === (currentSessionId ? currentSessionId.toString() : null)
+      };
+    });
+    
+    res.json({ sessions: safeSessions });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch sessions: ' + error.message });
+  }
+});
+
+// Revoke a specific session
+app.delete('/api/user/sessions/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const email = req.user.email.toLowerCase();
+    
+    // Fetch target session details before deleting it, so we get its tokenHash
+    let targetSession = null;
+    if (db) {
+      let query = { email };
+      try {
+        query._id = new ObjectId(id);
+      } catch {
+        query._id = id;
+      }
+      targetSession = await db.collection('sessions').findOne(query);
+    } else {
+      targetSession = inMemorySessions.get(id);
+    }
+
+    const revoked = await revokeSession(id, email);
+    if (!revoked) {
+      return res.status(404).json({ error: 'Session not found or unauthorized.' });
+    }
+
+    if (targetSession && targetSession.tokenHash) {
+      notifySessionRevoked(targetSession.tokenHash);
+    }
+    
+    res.json({ success: true, message: 'Session revoked successfully.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to revoke session: ' + error.message });
+  }
+});
+
+// Revoke all sessions except current
+app.post('/api/user/sessions/revoke-others', authenticate, async (req, res) => {
+  try {
+    const email = req.user.email.toLowerCase();
+    const authHeader = req.headers.authorization;
+    let currentToken = null;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      currentToken = authHeader.substring(7);
+    }
+    
+    if (!currentToken) {
+      return res.status(401).json({ error: 'Unauthorized.' });
+    }
+    
+    const signature = currentToken.split('.')[0];
+    const currentTokenHash = crypto.createHash('sha256').update(signature).digest('hex');
+
+    await revokeAllSessionsExcept(email, currentToken);
+
+    notifyAllOtherSessionsRevoked(email, currentTokenHash);
+
+    res.json({ success: true, message: 'All other sessions revoked successfully.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to revoke other sessions: ' + error.message });
+  }
+});
+
+// Backend Logout Endpoint to revoke the current session
+app.post('/api/auth/logout', authenticate, async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      await deleteSession(token);
+    }
+    res.json({ success: true, message: 'Logged out successfully.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to logout: ' + error.message });
   }
 });
 
@@ -2544,7 +3051,6 @@ app.get('/api/clubs/:id/managers', async (req, res) => {
 // --- EVENTS ---
 app.get('/api/events', async (req, res) => {
   try {
-    await deleteExpiredEvents();
     const category = req.query.category || null;
     const events = await getEvents(category);
     res.json({ events });

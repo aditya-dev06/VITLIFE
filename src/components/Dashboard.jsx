@@ -919,8 +919,8 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
     const currentMinutes = hours * 60 + minutes;
     const currentDay = currentTime.getDay(); // 0-6
 
-    let mealType = 'breakfast';
-    let label = 'Breakfast';
+    let mealType;
+    let label;
     let isTomorrow = false;
     let targetDay = currentDay;
     let isServingNow = false;
@@ -1563,19 +1563,16 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
       
       // Admin pinned events get highest priority
       if (event.pinned) {
-        score += 1000000;
+        score += 10000;
       }
-
-      // Most trending events (by user impressions/views) get second highest priority
-      score += (event.impressions || 0) * 1000;
 
       // Personalization boosts
       if (user && event.createdBy === user.email) {
-        score += 200;
+        score += 400;
       }
 
       if (user && user.clubId && event.clubId === user.clubId) {
-        score += 150;
+        score += 500;
       }
 
       const category = (event.category || '').toLowerCase();
@@ -1590,22 +1587,25 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
 
       if (hasCseAiDs || hasDsaDbms) {
         if (category === 'tech') {
-          score += 10;
+          score += 300;
         } else if (category === 'robotics') {
-          score += 8;
+          score += 200;
         }
       }
 
       studentCourses.forEach(course => {
         tags.forEach(tag => {
           if (course.includes(tag) || tag.includes(course)) {
-            score += 5;
+            score += 50;
           }
         });
         if (course.includes(category) || category.includes(course)) {
-          score += 5;
+          score += 50;
         }
       });
+
+      // Popularity (impressions) acts as a secondary tie-breaker
+      score += (event.impressions || 0) * 2;
 
       return { event, score };
     });

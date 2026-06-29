@@ -3836,7 +3836,7 @@ input, textarea, select {
   .main-content {
     margin-left: 0 !important;
     padding-top: calc(96px + env(safe-area-inset-top, 0px)) !important; /* Clears fixed top-bar header with notch safety */
-    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 16px) + 16px) !important;
+    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 16px) + 40px) !important;
     padding-left: 14px !important;
     padding-right: 14px !important;
     width: 100%;

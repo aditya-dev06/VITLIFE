@@ -90,7 +90,8 @@ export function useProfileSync(token) {
     if (userObj && setUser) {
       const updatedUser = { ...userObj, ...updatePayload };
       setUser(updatedUser);
-      localStorage.setItem('ds_ai_user', JSON.stringify(updatedUser));
+      const storageKey = userObj.isGuest ? 'ds_guest_user' : 'ds_ai_user';
+      localStorage.setItem(storageKey, JSON.stringify(updatedUser));
     }
 
     if (!token) return;

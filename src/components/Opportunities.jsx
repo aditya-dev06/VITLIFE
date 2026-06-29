@@ -1,5 +1,14 @@
 import { useState } from 'react';
 
+const sanitizeUrl = (url) => {
+  if (!url) return '#';
+  const trimmed = url.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return '#';
+};
+
 const Opportunities = ({ initialOpportunities = [], lastUpdated }) => {
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -102,7 +111,7 @@ const Opportunities = ({ initialOpportunities = [], lastUpdated }) => {
                   📅 {opp.deadline}
                 </span>
                 <a 
-                  href={opp.link} 
+                  href={sanitizeUrl(opp.link)} 
                   target="_blank" 
                   rel="noopener noreferrer" 
                   className="btn-secondary"

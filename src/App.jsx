@@ -16,6 +16,29 @@ const Auth = lazy(() => import('./components/Auth'));
 const TermsAndConditions = lazy(() => import('./components/TermsAndConditions'));
 const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
 
+// Global fetch interceptor to catch 401/403 responses and trigger logouts (HMR-safe)
+if (!window.fetch.__isWrapped) {
+  const originalFetch = window.fetch;
+  window.fetch = async function (...args) {
+    const response = await originalFetch(...args);
+    if (response.status === 401 || response.status === 403) {
+      const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
+      const isPublicRoute = url && (
+        url.includes('/api/auth/login') ||
+        url.includes('/api/auth/verify') ||
+        url.includes('/api/auth/resend-code') ||
+        url.includes('/api/auth/forgot-password') ||
+        url.includes('/api/auth/reset-password') ||
+        url.includes('/api/health/smtp')
+      );
+      if (!isPublicRoute) {
+        window.dispatchEvent(new CustomEvent('session-expired'));
+      }
+    }
+    return response;
+  };
+  window.fetch.__isWrapped = true;
+}
 
 // Default Initial Skills Database
 const INITIAL_SKILLS = [
@@ -365,6 +388,12 @@ function App() {
   };
 
   const handleLogout = useCallback(() => {
+    if (token) {
+      fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      }).catch(err => console.error("Logout session revocation failed:", err));
+    }
     localStorage.removeItem('ds_ai_token');
     localStorage.removeItem('ds_ai_user');
     localStorage.removeItem('ds_guest_user');  // also clear guest session
@@ -374,17 +403,31 @@ function App() {
     setXpPoints(0);
     setActiveTab('dashboard');
     setMobileMenuOpen(false);
-  }, []);
+    setShowEditProfile(false);
+    setShowMobileProfileSheet(false);
+  }, [token]);
+
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      console.log("[PWA] Session expired event received. Logging out...");
+      handleLogout();
+    };
+    window.addEventListener('session-expired', handleSessionExpired);
+    return () => window.removeEventListener('session-expired', handleSessionExpired);
+  }, [handleLogout]);
 
   const fetchUserProfile = useCallback(async () => {
     try {
       setLoading(true);
+      console.log("[PWA] Fetching user profile. Token is:", token ? `${token.substring(0, 10)}...` : null);
       const res = await fetch('/api/user/profile', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      console.log("[PWA] Fetch user profile response status:", res.status);
       if (res.ok) {
         const profile = await res.json();
         setUser(profile);
+        localStorage.setItem('ds_ai_user', JSON.stringify(profile));
         setXpPoints(profile.xpPoints || 0);
 
         // Map skills with their progress stored on server
@@ -393,9 +436,22 @@ function App() {
           status: profile.skillsProgress?.[skill.id] || 'To Do'
         }));
         setSkills(mappedSkills);
-      } else {
-        // Token invalid/expired
+      } else if (res.status === 401 || res.status === 403) {
+        // Token invalid/expired - log out
         handleLogout();
+      } else {
+        // Temporary server/network error - try fallback to cached profile
+        const cachedUser = localStorage.getItem('ds_ai_user');
+        if (cachedUser) {
+          const profile = JSON.parse(cachedUser);
+          setUser(profile);
+          setXpPoints(profile.xpPoints || 0);
+          const mappedSkills = INITIAL_SKILLS.map(skill => ({
+            ...skill,
+            status: profile.skillsProgress?.[skill.id] || 'To Do'
+          }));
+          setSkills(mappedSkills);
+        }
       }
     } catch (err) {
       console.error("Failed to load user profile: ", err);
@@ -934,7 +990,17 @@ function App() {
                   className="top-bar-mobile-theme-btn pwa-install-btn-mobile"
                   onClick={handleInstallApp}
                   title="Install App"
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.72rem', fontWeight: 700, color: 'hsl(var(--primary))' }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    color: 'hsl(var(--primary))',
+                    width: 'auto',
+                    borderRadius: '20px',
+                    padding: '0 0.75rem'
+                  }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -1034,6 +1100,8 @@ function App() {
       {showEditProfile && (
         <EditProfileModal
           user={user}
+          token={token}
+          handleLogout={handleLogout}
           onClose={() => setShowEditProfile(false)}
           onSave={handleUpdateProfile}
         />
@@ -1315,10 +1383,88 @@ function App() {
   );
 }
 
-function EditProfileModal({ user, onClose, onSave }) {
+function EditProfileModal({ user, token, handleLogout, onClose, onSave }) {
   const [name, setName] = useState(user?.name || '');
   const [semester, setSemester] = useState(user?.semester || 1);
   const [loading, setLoading] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState('');
+
+  const fetchSessions = useCallback(async () => {
+    await Promise.resolve();
+    try {
+      setSessionsLoading(true);
+      setSessionsError('');
+      const res = await fetch('/api/user/sessions', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSessions(data.sessions || []);
+      } else {
+        const errData = await res.json();
+        setSessionsError(errData.error || 'Failed to load sessions.');
+      }
+    } catch {
+      setSessionsError('Failed to fetch active sessions.');
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, [token]);
+
+  // Fetch active sessions if not guest
+  useEffect(() => {
+    if (token && !user?.isGuest) {
+      Promise.resolve().then(() => {
+        fetchSessions();
+      });
+    }
+  }, [token, user, fetchSessions]);
+
+  const handleRevokeSession = async (sessionId, isCurrent) => {
+    if (isCurrent) {
+      if (!confirm('Logging out from the current device. Proceed?')) return;
+      handleLogout();
+      onClose();
+      return;
+    }
+    
+    if (!confirm('Are you sure you want to revoke this session?')) return;
+
+    try {
+      const res = await fetch(`/api/user/sessions/${sessionId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setSessions(prev => prev.filter(s => s.id !== sessionId));
+      } else {
+        const errData = await res.json();
+        alert('Failed to revoke session: ' + errData.error);
+      }
+    } catch (err) {
+      alert('Error revoking session: ' + err.message);
+    }
+  };
+
+  const handleRevokeOthers = async () => {
+    if (!confirm('Are you sure you want to log out all other devices?')) return;
+    try {
+      const res = await fetch('/api/user/sessions/revoke-others', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setSessions(prev => prev.filter(s => s.isCurrent));
+      } else {
+        const errData = await res.json();
+        alert('Failed to revoke other sessions: ' + errData.error);
+      }
+    } catch (err) {
+      alert('Error revoking other sessions: ' + err.message);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1328,9 +1474,57 @@ function EditProfileModal({ user, onClose, onSave }) {
     setLoading(false);
   };
 
+  const getDeviceIconAndName = (userAgent) => {
+    const ua = userAgent.toLowerCase();
+    let os = 'Unknown Device';
+    let icon = '💻';
+    
+    if (ua.includes('windows')) {
+      os = 'Windows';
+      icon = '🪟';
+    } else if (ua.includes('macintosh') || ua.includes('mac os')) {
+      os = 'macOS';
+      icon = '🍎';
+    } else if (ua.includes('android')) {
+      os = 'Android';
+      icon = '🤖';
+    } else if (ua.includes('iphone') || ua.includes('ipad')) {
+      os = 'iOS';
+      icon = '📱';
+    } else if (ua.includes('linux')) {
+      os = 'Linux';
+      icon = '🐧';
+    }
+    
+    let browser = '';
+    if (ua.includes('chrome') || ua.includes('chromium')) {
+      browser = 'Chrome';
+    } else if (ua.includes('safari') && !ua.includes('chrome')) {
+      browser = 'Safari';
+    } else if (ua.includes('firefox')) {
+      browser = 'Firefox';
+    } else if (ua.includes('edge') || ua.includes('edg')) {
+      browser = 'Edge';
+    } else if (ua.includes('opr') || ua.includes('opera')) {
+      browser = 'Opera';
+    }
+    
+    return { os, browser, icon };
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return 'N/A';
+    }
+  };
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 9999 }}>
+      <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0 }}>
             ✏️ Edit Profile
@@ -1341,7 +1535,7 @@ function EditProfileModal({ user, onClose, onSave }) {
           }}>✕</button>
         </div>
 
-        <form onSubmit={handleSubmit} className="modal-form">
+        <form onSubmit={handleSubmit} className="modal-form" style={{ marginBottom: token && !user?.isGuest ? '2rem' : 0 }}>
           <div className="form-group">
             <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'hsl(var(--text-secondary))', marginBottom: '0.4rem', display: 'block' }}>Name</label>
             <input 
@@ -1366,15 +1560,128 @@ function EditProfileModal({ user, onClose, onSave }) {
             </select>
           </div>
 
-          <div className="modal-actions" style={{ marginTop: '1rem' }}>
-            <button type="submit" className="btn-submit" disabled={loading}>
+          <div className="modal-actions" style={{ marginTop: '1.5rem' }}>
+            <button type="submit" className="btn-submit" disabled={loading} style={{ padding: '0.6rem 1.2rem', fontWeight: 600 }}>
               {loading ? 'Saving...' : 'Save Changes'}
             </button>
-            <button type="button" className="btn-cancel" onClick={onClose} disabled={loading}>
+            <button type="button" className="btn-cancel" onClick={onClose} disabled={loading} style={{ padding: '0.6rem 1.2rem' }}>
               Cancel
             </button>
           </div>
         </form>
+
+        {token && !user?.isGuest && (
+          <div style={{ borderTop: '1px solid hsl(var(--border) / 0.5)', paddingTop: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'hsl(var(--text-primary))', margin: 0 }}>
+                🔒 Active Login Sessions
+              </h3>
+              {sessions.length > 1 && (
+                <button 
+                  onClick={handleRevokeOthers}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'hsl(var(--destructive))',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    transition: 'background 0.2s',
+                  }}
+                  onMouseOver={(e) => e.target.style.background = 'hsl(var(--destructive) / 0.1)'}
+                  onMouseOut={(e) => e.target.style.background = 'none'}
+                >
+                  Log Out Other Devices
+                </button>
+              )}
+            </div>
+
+            {sessionsLoading ? (
+              <div style={{ textAlign: 'center', color: 'hsl(var(--text-muted))', padding: '1rem', fontSize: '0.9rem' }}>
+                Loading active sessions...
+              </div>
+            ) : sessionsError ? (
+              <div style={{ color: 'hsl(var(--destructive))', fontSize: '0.85rem', padding: '0.5rem 0' }}>
+                ⚠️ {sessionsError}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '250px', overflowY: 'auto', paddingRight: '4px' }}>
+                {sessions.map(s => {
+                  const { os, browser, icon } = getDeviceIconAndName(s.userAgent);
+                  return (
+                    <div 
+                      key={s.id} 
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '0.75rem',
+                        borderRadius: '8px',
+                        background: 'hsl(var(--card))',
+                        border: s.isCurrent ? '1px solid hsl(var(--success) / 0.4)' : '1px solid hsl(var(--border) / 0.3)',
+                        boxShadow: s.isCurrent ? '0 0 12px hsl(var(--success) / 0.05)' : 'none',
+                        transition: 'transform 0.2s, border-color 0.2s',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>{icon}</span>
+                        <div>
+                          <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'hsl(var(--text-primary))', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            {os} {browser && <span style={{ color: 'hsl(var(--text-muted))', fontWeight: 400 }}>({browser})</span>}
+                            {s.isCurrent && (
+                              <span style={{
+                                fontSize: '0.7rem',
+                                padding: '1px 6px',
+                                borderRadius: '100px',
+                                background: 'hsl(var(--success) / 0.15)',
+                                color: 'hsl(var(--success))',
+                                fontWeight: 600,
+                              }}>
+                                Current Device
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', marginTop: '0.15rem' }}>
+                            IP: {s.ipAddress} • Active: {formatDate(s.lastActiveAt)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {!s.isCurrent && (
+                        <button
+                          onClick={() => handleRevokeSession(s.id, s.isCurrent)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'hsl(var(--text-muted))',
+                            cursor: 'pointer',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontSize: '0.8rem',
+                            fontWeight: 500,
+                            transition: 'color 0.2s, background-color 0.2s',
+                          }}
+                          onMouseOver={(e) => {
+                            e.target.style.color = 'hsl(var(--destructive))';
+                            e.target.style.background = 'hsl(var(--destructive) / 0.1)';
+                          }}
+                          onMouseOut={(e) => {
+                            e.target.style.color = 'hsl(var(--text-muted))';
+                            e.target.style.background = 'none';
+                          }}
+                        >
+                          Revoke
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

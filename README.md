@@ -63,7 +63,8 @@ The platform supports both **authenticated users** (VIT students and global user
 - Email + password registration with 6-digit email verification
 - Forgot password flow with email-based reset codes
 - Rate-limited and brute-force protected endpoints
-- **Guest mode**: Browse without an account — persistent UUID per browser, local-only data
+- **Active Login Sessions**: Users can view all active login sessions (OS, Browser, Device, IP, Last Active) from their profile and revoke individual or all other sessions in real-time.
+- Guest mode: Browse without an account — persistent UUID per browser, local-only data
 
 ### 📱 Progressive Web App (PWA)
 - Installable on mobile and desktop (Chrome, Edge, Samsung Browser)
@@ -233,8 +234,10 @@ Guest sessions are identified by a persistent UUID stored in `localStorage`. Eac
 
 ## Security
 
-- Passwords hashed with per-user dynamic salt (SHA-256)
-- JWT-based session tokens with configurable secret
+- Passwords hashed using standard Scrypt password-hashing algorithm for robust brute-force resistance
+- **Cryptographic Sessions**: Bulletproof session token format: `[signature].[base64Email].[expiresAt].[hashPiece]` where the HMAC signature is verified first in constant-time, preventing timing/DoS attacks before database lookups.
+- **Session Revocation**: Real-time session invalidation via Server-Sent Events (SSE) and immediate database checks.
+- Concurrent session limits (max 10, FIFO) to prevent session bloat.
 - Email verification required before account activation
 - Rate limiting on all auth endpoints (registration, login, verification, password reset)
 - Brute-force protection with progressive lockouts
