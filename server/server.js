@@ -795,138 +795,49 @@ const getHtmlEmailTemplate = (name, title, heading, bodyText, code, expiryText) 
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: #0b0f19;
-      color: #e2e8f0;
-      margin: 0;
-      padding: 0;
-      -webkit-font-smoothing: antialiased;
-    }
-    .wrapper {
-      width: 100%;
-      background-color: #0b0f19;
-      padding: 40px 20px;
-      box-sizing: border-box;
-    }
-    .container {
-      max-width: 560px;
-      margin: 0 auto;
-      background-color: #111827;
-      border: 1px solid #1f2937;
-      border-radius: 16px;
-      overflow: hidden;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-    }
-    .header {
-      background-color: #1e1b4b;
-      padding: 32px;
-      text-align: center;
-      border-bottom: 1px solid #1f2937;
-    }
-    .logo {
-      font-size: 24px;
-      font-weight: 800;
-      letter-spacing: -0.025em;
-      color: #ffffff;
-      text-decoration: none;
-    }
-    .logo span {
-      color: #6366f1;
-    }
-    .content {
-      padding: 40px 32px;
-    }
-    .greeting {
-      font-size: 20px;
-      font-weight: 700;
-      color: #ffffff;
-      margin-top: 0;
-      margin-bottom: 16px;
-      letter-spacing: -0.02em;
-    }
-    .text {
-      font-size: 15px;
-      line-height: 1.625;
-      color: #9ca3af;
-      margin-top: 0;
-      margin-bottom: 28px;
-    }
-    .code-container {
-      text-align: center;
-      background-color: #0b0f19;
-      border: 1px solid #374151;
-      border-radius: 12px;
-      padding: 24px;
-      margin-bottom: 28px;
-    }
-    .code-label {
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: #6366f1;
-      font-weight: 700;
-      margin-bottom: 8px;
-    }
-    .code-value {
-      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
-      font-size: 32px;
-      font-weight: 800;
-      letter-spacing: 0.25em;
-      color: #ffffff;
-      margin: 0;
-      padding-left: 0.25em;
-    }
-    .alert-box {
-      background-color: #1e1b4b;
-      border-left: 4px solid #6366f1;
-      padding: 16px;
-      border-radius: 0 8px 8px 0;
-      margin-bottom: 28px;
-    }
-    .alert-text {
-      font-size: 13px;
-      line-height: 1.5;
-      color: #a5b4fc;
-      margin: 0;
-    }
-    .footer {
-      padding: 32px;
-      background-color: #0b0f19;
-      border-top: 1px solid #1f2937;
-      text-align: center;
-    }
-    .footer-text {
-      font-size: 12px;
-      color: #4b5563;
-      line-height: 1.5;
-      margin: 0 0 8px 0;
-    }
-  </style>
 </head>
-<body>
-  <div class="wrapper">
-    <div class="container">
-      <div class="header">
-        <div class="logo">VIT<span>LIFE</span></div>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #ffffff; color: #111827; margin: 0; padding: 40px 20px; -webkit-font-smoothing: antialiased;">
+  <div style="max-width: 480px; margin: 0 auto; padding: 20px 0;">
+    <!-- Logo Header -->
+    <div style="font-size: 20px; font-weight: 800; letter-spacing: -0.03em; color: #111827; margin-bottom: 32px;">
+      VIT<span style="color: #4f46e5;">LIFE</span>
+    </div>
+    
+    <!-- Heading -->
+    <h2 style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #111827; margin: 0 0 16px 0;">
+      ${heading}
+    </h2>
+    
+    <!-- Body text -->
+    <p style="font-size: 15px; line-height: 1.6; color: #374151; margin: 0 0 28px 0;">
+      ${bodyText}
+    </p>
+    
+    <!-- Verification Code Block -->
+    <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 28px;">
+      <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #4f46e5; font-weight: 700; margin-bottom: 8px;">
+        Verification Code
       </div>
-      <div class="content">
-        <h1 class="greeting">${heading}</h1>
-        <p class="text">${bodyText}</p>
-        <div class="code-container">
-          <div class="code-label">Verification Code</div>
-          <div class="code-value">${code}</div>
-        </div>
-        <div class="alert-box">
-          <p class="alert-text"><strong>Security Reminder:</strong> ${expiryText} Never share this code with anyone. Our team will never ask for your code or password.</p>
-        </div>
-      </div>
-      <div class="footer">
-        <p class="footer-text">© ${new Date().getFullYear()} VIT Life. Built for VIT Bhopal Campus.</p>
-        <p class="footer-text">This is an automated security transmission. Please do not reply directly to this email.</p>
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 32px; font-weight: 800; letter-spacing: 0.25em; color: #111827; margin: 0; padding-left: 0.25em;">
+        ${code}
       </div>
     </div>
+    
+    <!-- Expiry / Security Note -->
+    <p style="font-size: 13px; line-height: 1.5; color: #6b7280; margin: 0 0 32px 0;">
+      <strong>Note:</strong> ${expiryText} Never share this code with anyone. Our support team will never ask for this code.
+    </p>
+    
+    <!-- Divider line -->
+    <hr style="border: 0; border-top: 1px solid #f3f4f6; margin: 0 0 24px 0;" />
+    
+    <!-- Footer -->
+    <p style="font-size: 12px; color: #9ca3af; margin: 0 0 6px 0; line-height: 1.4;">
+      © ${new Date().getFullYear()} VIT Life. Built for VIT Bhopal Campus.
+    </p>
+    <p style="font-size: 12px; color: #9ca3af; margin: 0; line-height: 1.4;">
+      This is an automated transmission. Please do not reply to this mailbox.
+    </p>
   </div>
 </body>
 </html>
