@@ -3366,8 +3366,8 @@ app.delete('/api/recruitments/:id', authenticate, async (req, res) => {
   }
 });
 
-// SMTP Health Check Endpoint (admin-only)
-app.get('/api/health/smtp', authenticate, async (req, res) => {
+// SMTP Health Check Endpoint
+app.get('/api/health/smtp', async (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   
   if (!smtpHealthy && transporter) {
@@ -3381,7 +3381,16 @@ app.get('/api/health/smtp', authenticate, async (req, res) => {
     }
   }
 
-  const isAdmin = isAdminEmail(req.user.email);
+  const authHeader = req.headers.authorization;
+  let isAdmin = false;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    const user = await verifyToken(token);
+    if (user && isAdminEmail(user.email)) {
+      isAdmin = true;
+    }
+  }
+
   res.json({
     smtpHealthy,
     smtpError: isAdmin ? smtpError : undefined,
