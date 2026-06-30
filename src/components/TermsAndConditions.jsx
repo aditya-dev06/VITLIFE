@@ -117,13 +117,16 @@ const TermsAndConditions = () => {
         {/* Section 4 */}
         <section style={{ marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.25rem', color: 'hsl(var(--secondary))', fontWeight: 700, marginBottom: '0.75rem' }}>
-            4. Limitation of Liability and Disclaimers
+            4. Intermediary Status, Disclaimers, and Limitation of Liability
           </h2>
-          <p style={{ lineHeight: 1.6, fontSize: '0.92rem' }}>
-            The Platform is provided on an "AS IS" and "AS AVAILABLE" basis without any express or implied warranties. VIT Life acts as an intermediary network for students and student-run clubs. We do not guarantee the completeness, accuracy, or safety of student-created events, roadmaps, external resources, or scraper-aggregated opportunities.
+          <p style={{ lineHeight: 1.6, fontSize: '0.92rem', marginBottom: '1rem' }}>
+            <strong>Intermediary Platform Status:</strong> The Platform operates as an intermediary under Section 79 of the <strong>Indian Information Technology Act, 2000</strong>. We act solely as a passive venue for students and student-run clubs to share information. We do not preview, pre-screen, moderate, verify, or endorse any user-uploaded content, club profiles, academic roadmaps, or event postings.
           </p>
-          <p style={{ lineHeight: 1.6, fontSize: '0.92rem', color: 'hsl(var(--text-muted))' }}>
-            Under no circumstances shall VIT Life, its developer team, or VIT Bhopal University be held liable for any direct, indirect, incidental, special, consequential, or punitive damages arising from your use of, or inability to use, the platform.
+          <p style={{ lineHeight: 1.6, fontSize: '0.92rem', marginBottom: '1rem' }}>
+            <strong>User Responsibility and Absolute Liability:</strong> Any user who hosts, uploads, modifies, publishes, transmits, or shares content on the Platform assumes <strong>sole, absolute, and 100% civil, criminal, and legal liability</strong> for such content. This includes, without limitation, any liability for intellectual property infringement, defamation, obscenity, inaccuracy, safety hazards of student events, or violations of University codes of conduct or local laws. The creators, developers, and administrators of the Platform are entirely immune from any claims arising from user-generated content.
+          </p>
+          <p style={{ lineHeight: 1.6, fontSize: '0.92rem', color: 'hsl(var(--text-muted))', margin: 0 }}>
+            Under no circumstances shall the Platform Creator, individual developers, team members, or VIT Bhopal University be held liable for any content posted by third parties, or for any direct, indirect, incidental, special, consequential, or punitive damages arising from your use of, or inability to use, the platform.
           </p>
         </section>
 

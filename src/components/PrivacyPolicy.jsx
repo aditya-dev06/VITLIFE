@@ -168,8 +168,8 @@ const PrivacyPolicy = () => {
             fontSize: '0.9rem',
             lineHeight: '1.6'
           }}>
-            <strong>Grievance Officer:</strong> Aditya Prakash<br />
-            <strong>Designation:</strong> Chief Legal Compliance Officer<br />
+            <strong>Grievance Desk:</strong> Platform Compliance Desk / Institutional Admin Desk<br />
+            <strong>Designation:</strong> Privacy & Compliance Desk<br />
             <strong>Email:</strong> <a href="mailto:aditya.dev.jp@gmail.com" style={{ color: 'hsl(var(--primary))' }}>aditya.dev.jp@gmail.com</a><br />
             <strong>Address:</strong> VIT Bhopal University, Kothri Kalan, Sehore, Madhya Pradesh - 466114, India.
           </div>
