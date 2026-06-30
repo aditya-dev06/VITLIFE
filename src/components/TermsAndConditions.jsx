@@ -156,7 +156,7 @@ const TermsAndConditions = () => {
             Legal Notice and Inquiries
           </h2>
           <p style={{ lineHeight: 1.6, fontSize: '0.88rem', color: 'hsl(var(--text-muted))', margin: 0 }}>
-            If you have questions regarding these Terms & Conditions, please contact the Compliance team at: <a href="mailto:aditya.dev.jp@gmail.com" style={{ color: 'hsl(var(--primary))', textDecoration: 'underline' }}>aditya.dev.jp@gmail.com</a>.
+            If you have questions regarding these Terms & Conditions, please contact the Compliance team at: <a href="mailto:vitlife.compliance@gmail.com" style={{ color: 'hsl(var(--primary))', textDecoration: 'underline' }}>vitlife.compliance@gmail.com</a>.
           </p>
         </section>
       </div>

@@ -851,7 +851,7 @@ const sendMailHelper = async (to, subject, text, html) => {
 
   try {
     await transporter.sendMail({
-      from: `"VIT Bhopal Opportunity Hub" <${smtpUser}>`,
+      from: `"VIT Life Support" <${smtpUser}>`,
       to,
       subject,
       text,
@@ -2199,7 +2199,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
       if (isDev) {
         console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
         console.log(`TO: ${lowerEmail}`);
-        console.log(`SUBJECT: VIT Bhopal Opportunity Hub - Email Verification Code`);
+        console.log(`SUBJECT: VIT Life - Email Verification Code`);
         console.log(`Your verification code is: ${rawCode}`);
         console.log(`================================================================`);
       }
@@ -2325,7 +2325,7 @@ app.post('/api/auth/resend-code', authLimiter, authRateLimiter(5, 15 * 60 * 1000
       if (isDev) {
         console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
         console.log(`TO: ${lowerEmail}`);
-        console.log(`SUBJECT: VIT Bhopal Opportunity Hub - Resend Verification Code`);
+        console.log(`SUBJECT: VIT Life - Resend Verification Code`);
         console.log(`Your verification code is: ${rawCode}`);
         console.log(`================================================================`);
       }
@@ -2641,7 +2641,7 @@ app.post('/api/auth/forgot-password', authLimiter, authRateLimiter(5, 15 * 60 * 
       if (isDev) {
         console.log(`================= DEVELOPER MODE MAIL FALLBACK =================`);
         console.log(`TO: ${lowerEmail}`);
-        console.log(`SUBJECT: VIT Bhopal Opportunity Hub - Password Reset Code`);
+        console.log(`SUBJECT: VIT Life - Password Reset Code`);
         console.log(`Your verification code is: ${rawCode}`);
         console.log(`================================================================`);
       }

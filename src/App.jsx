@@ -1154,7 +1154,7 @@ function App() {
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                ℹ️ About Opportunity Hub
+                ℹ️ About VIT Life
               </h2>
               <button onClick={() => setShowAboutUs(false)} style={{
                 background: 'transparent',
@@ -1168,7 +1168,7 @@ function App() {
             </div>
             <div style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.95rem', lineHeight: '1.6', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <p>
-                Welcome to <strong>Opportunity Hub</strong>, a premium, centralized ecosystem designed for student developers and tech enthusiasts. Our goal is to connect you with the latest events, hackathons, club recruitment, and skill roadmaps.
+                Welcome to <strong>VIT Life</strong>, a premium, centralized ecosystem designed for student developers and tech enthusiasts. Our goal is to connect you with the latest events, hackathons, club recruitment, and skill roadmaps.
               </p>
               <p>
                 Built by a dedicated team at the <strong>VIT Life Developer Network</strong>. We focus on modern interactions, premium aesthetics, and responsive performance.

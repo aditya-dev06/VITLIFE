@@ -170,7 +170,7 @@ const PrivacyPolicy = () => {
           }}>
             <strong>Grievance Desk:</strong> Platform Compliance Desk / Institutional Admin Desk<br />
             <strong>Designation:</strong> Privacy & Compliance Desk<br />
-            <strong>Email:</strong> <a href="mailto:aditya.dev.jp@gmail.com" style={{ color: 'hsl(var(--primary))' }}>aditya.dev.jp@gmail.com</a><br />
+            <strong>Email:</strong> <a href="mailto:vitlife.compliance@gmail.com" style={{ color: 'hsl(var(--primary))' }}>vitlife.compliance@gmail.com</a><br />
             <strong>Address:</strong> VIT Bhopal University, Kothri Kalan, Sehore, Madhya Pradesh - 466114, India.
           </div>
         </section>
