@@ -2117,6 +2117,141 @@ app.get('/api/db-status', authenticate, requireAdmin, (req, res) => {
 
 // ================= AUTH ROUTES =================
 
+app.get('/api/auth/config', (req, res) => {
+  res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
+});
+
+app.post('/api/auth/google', authLimiter, async (req, res) => {
+  try {
+    const { idToken } = req.body;
+    if (!idToken) {
+      return res.status(400).json({ error: 'Google ID token is required.' });
+    }
+
+    // Verify token with Google API directly via HTTPS
+    const googleClientId = process.env.GOOGLE_CLIENT_ID;
+    if (!googleClientId) {
+      return res.status(500).json({ error: 'Google Sign-In is not configured on the server.' });
+    }
+
+    const tokenVerificationUrl = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`;
+    const googleResponse = await fetch(tokenVerificationUrl);
+    if (!googleResponse.ok) {
+      return res.status(400).json({ error: 'Invalid Google ID token.' });
+    }
+
+    const payload = await googleResponse.json();
+    
+    // Aud check (verify the client ID matches ours exactly)
+    const aud = payload.aud;
+    if (aud !== googleClientId) {
+      return res.status(400).json({ error: 'Google ID token audience mismatch.' });
+    }
+
+    // Iss check
+    const iss = payload.iss;
+    if (iss !== 'accounts.google.com' && iss !== 'https://accounts.google.com') {
+      return res.status(400).json({ error: 'Google ID token issuer mismatch.' });
+    }
+
+    const { email, name, email_verified, picture } = payload;
+    if (!email) {
+      return res.status(400).json({ error: 'Email not provided by Google account.' });
+    }
+
+    // Confirm that Google has verified this email
+    if (email_verified !== 'true' && email_verified !== true) {
+      return res.status(400).json({ error: 'This Google account email is not verified.' });
+    }
+
+    const lowerEmail = email.trim().toLowerCase();
+    let user = await findUserByEmail(lowerEmail);
+
+    if (!user) {
+      // Auto-registration Path
+      let registrationNumber = '';
+      let program = 'Global Member';
+      let isVitBhopal = false;
+
+      // Detect and parse student registration profile
+      const vitRegex = /^[a-zA-Z.-]+\.[a-zA-Z0-9]+@vitbhopal\.ac\.in$/;
+      if (vitRegex.test(lowerEmail)) {
+        isVitBhopal = true;
+        const parsed = parseVitBhopalEmail(lowerEmail);
+        if (parsed) {
+          registrationNumber = parsed.registrationNumber;
+          program = parsed.program;
+        }
+      }
+
+      // Generate a secure unique placeholder passwordHash so that token signature verifyToken functions properly
+      const salt = generateSalt();
+      const oauthPassword = crypto.randomBytes(32).toString('hex');
+      const passwordHash = hashPassword(oauthPassword, salt);
+
+      user = {
+        name: name ? name.trim() : 'Google User',
+        email: lowerEmail,
+        isVitBhopal,
+        registrationNumber,
+        program,
+        semester: 1,
+        courses: [],
+        passwordHash, // Cryptographic mock hash to satisfy verifyToken structure contract
+        salt,
+        xpPoints: 0,
+        skillsProgress: {},
+        role: isAdminEmail(lowerEmail) ? 'admin' : 'student',
+        verified: true, // Auto-verified by Google
+        picture: picture || '',
+        createdAt: new Date().toISOString()
+      };
+
+      await saveUser(lowerEmail, user);
+      await logActivity(lowerEmail, 'google_register', req);
+    } else {
+      // Existing User Path
+      let updated = false;
+
+      // Self-heal unverified accounts
+      if (user.verified === false) {
+        user.verified = true;
+        delete user.verificationCode;
+        delete user.verificationExpires;
+        delete user.lastCodeSentAt;
+        updated = true;
+      }
+
+      // Check/Upgrade Admin Role strictly (never downgrade)
+      if (isAdminEmail(lowerEmail) && user.role !== 'admin') {
+        user.role = 'admin';
+        updated = true;
+      }
+
+      // Keep picture sync updated
+      if (picture && user.picture !== picture) {
+        user.picture = picture;
+        updated = true;
+      }
+
+      if (updated) {
+        await saveUser(lowerEmail, user);
+      }
+
+      await logActivity(lowerEmail, 'google_login', req);
+    }
+
+    // Generate Custom Session Token & Write Session Doc
+    const token = await generateToken(lowerEmail, user.passwordHash);
+    await createSession(lowerEmail, token, req);
+
+    res.json({ token, user: sanitizeUser(user) });
+  } catch (error) {
+    console.error('Google Auth Route Error:', error);
+    res.status(500).json({ error: 'Failed to authenticate via Google.' });
+  }
+});
+
 // 1. Register User (with email verification support & unverified recycling)
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
@@ -2231,7 +2366,12 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
       }
     }
 
-    res.json({ success: true, message: 'Verification code sent.', email: lowerEmail });
+    res.json({ 
+      success: true, 
+      message: 'Verification code sent.', 
+      email: lowerEmail,
+      ...((!transporter || !smtpHealthy || isDev) && { devCode: rawCode })
+    });
   } catch (error) {
     console.error('Server registration error:', error);
     res.status(500).json({ error: 'An unexpected server error occurred during registration.' });
@@ -2357,7 +2497,11 @@ app.post('/api/auth/resend-code', authLimiter, authRateLimiter(5, 15 * 60 * 1000
       }
     }
 
-    res.json({ success: true, message: 'New verification code sent.' });
+    res.json({ 
+      success: true, 
+      message: 'New verification code sent.',
+      ...((!transporter || !smtpHealthy || isDev) && { devCode: rawCode })
+    });
   } catch (error) {
     console.error('Failed to resend code:', error);
     res.status(500).json({ error: 'An unexpected server error occurred while sending verification code.' });
@@ -2673,7 +2817,10 @@ app.post('/api/auth/forgot-password', authLimiter, authRateLimiter(5, 15 * 60 * 
       }
     }
 
-    res.json(genericSuccessResponse);
+    res.json({
+      ...genericSuccessResponse,
+      ...((!transporter || !smtpHealthy || isDev) && { devCode: rawCode })
+    });
   } catch (error) {
     console.error('Server error:', error);
     res.status(500).json({ error: 'An unexpected server error occurred.' });

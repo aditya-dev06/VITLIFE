@@ -305,6 +305,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme }) => {
   const [cooldown, setCooldown] = useState(0);
   const [smtpDown, setSmtpDown] = useState(false);
   const [consentChecked, setConsentChecked] = useState(false);
+  const [devCode, setDevCode] = useState('');
 
   // ── Refs for animation & interaction ──
   const pageRef = useRef(null);
@@ -429,13 +430,13 @@ const Auth = ({ onLoginSuccess, theme, setTheme }) => {
     }
   };
 
-  const handleLoginSuccess = (token, user) => {
+  const handleLoginSuccess = useCallback((token, user) => {
     sessionStorage.removeItem('authEmail');
     sessionStorage.removeItem('authState');
     if (onLoginSuccess) {
       onLoginSuccess(token, user);
     }
-  };
+  }, [onLoginSuccess]);
 
   const handleGuestContinue = () => {
     let guestId = localStorage.getItem('ds_guest_id');
@@ -548,6 +549,11 @@ const Auth = ({ onLoginSuccess, theme, setTheme }) => {
           setAuthState('verify');
           setError('Email not verified. Please enter the verification code sent to your email.');
           setCooldown(60);
+          if (data.devCode) {
+            setDevCode(data.devCode);
+          } else {
+            setDevCode('');
+          }
           return;
         }
         throw new Error(data.error || 'Authentication failed.');
@@ -557,11 +563,17 @@ const Auth = ({ onLoginSuccess, theme, setTheme }) => {
         if (data.verified) {
           setAuthState('login');
           setSuccessMessage(data.message || 'Registration successful! Please sign in.');
+          setDevCode('');
         } else {
           setEmail(data.email || email);
           setAuthState('verify');
           setSuccessMessage(data.message || 'Verification code sent to your email.');
           setCooldown(60);
+          if (data.devCode) {
+            setDevCode(data.devCode);
+          } else {
+            setDevCode('');
+          }
         }
       } else {
         handleLoginSuccess(data.token, data.user);
@@ -622,6 +634,11 @@ const Auth = ({ onLoginSuccess, theme, setTheme }) => {
       }
 
       setSuccessMessage('A new verification code has been sent.');
+      if (data.devCode) {
+        setDevCode(data.devCode);
+      } else {
+        setDevCode('');
+      }
       setCooldown(60);
     } catch (err) {
       setError(err.message);
@@ -654,6 +671,11 @@ const Auth = ({ onLoginSuccess, theme, setTheme }) => {
       }
 
       setSuccessMessage(data.message || 'If an account exists, a reset code has been sent.');
+      if (data.devCode) {
+        setDevCode(data.devCode);
+      } else {
+        setDevCode('');
+      }
       setAuthState('reset');
       setCooldown(60);
     } catch (err) {
@@ -736,6 +758,77 @@ const Auth = ({ onLoginSuccess, theme, setTheme }) => {
   };
 
 
+  const handleGoogleLoginResponse = useCallback(async (googleResponse) => {
+    const idToken = googleResponse.credential;
+    setLoading(true);
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      const response = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Google authentication failed.');
+      }
+
+      handleLoginSuccess(data.token, data.user);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [handleLoginSuccess]);
+
+  // Google Sign-In Initialization
+  useEffect(() => {
+    if (!window.google) return;
+
+    fetch('/api/auth/config')
+      .then(res => res.json())
+      .then(data => {
+        if (data.googleClientId) {
+          window.google.accounts.id.initialize({
+            client_id: data.googleClientId,
+            callback: handleGoogleLoginResponse,
+            auto_select: false,
+            cancel_on_tap_outside: true
+          });
+
+          // Render Google buttons dynamically if elements are present in the DOM
+          const loginBtn = document.getElementById('google-signin-login');
+          if (loginBtn) {
+            window.google.accounts.id.renderButton(loginBtn, {
+              theme: 'outline',
+              size: 'large',
+              width: '100%',
+              text: 'signin_with',
+              shape: 'rectangular',
+              logo_alignment: 'left'
+            });
+          }
+
+          const signupBtn = document.getElementById('google-signin-signup');
+          if (signupBtn) {
+            window.google.accounts.id.renderButton(signupBtn, {
+              theme: 'outline',
+              size: 'large',
+              width: '100%',
+              text: 'signup_with',
+              shape: 'rectangular',
+              logo_alignment: 'left'
+            });
+          }
+        }
+      })
+      .catch(err => console.error('Failed to load Google Auth configuration:', err));
+  }, [authState, signupStep, handleGoogleLoginResponse]);
+
+
   /* ═══════════════════════════════════════════════════════════════
      FORM RENDERER — Premium UI with floating labels & animations
      ═══════════════════════════════════════════════════════════════ */
@@ -746,6 +839,12 @@ const Auth = ({ onLoginSuccess, theme, setTheme }) => {
           <form onSubmit={handleVerifySubmit} className="aurora-form">
             {error && <div className="aurora-error-banner"><span>⚠️</span> {error}</div>}
             {successMessage && <div className="aurora-success-banner"><span>✅</span> {successMessage}</div>}
+            {devCode && (
+              <div className="aurora-success-banner" style={{ border: '1px solid hsla(var(--primary) / 0.3)', background: 'hsla(var(--primary) / 0.08)', color: 'hsl(var(--primary))' }}>
+                <span>🔧</span>
+                <span><strong>[Development Mode]</strong> Since SMTP is down or unconfigured, use this code: <strong>{devCode}</strong></span>
+              </div>
+            )}
 
             <FloatingInput
               id="verify-code"
@@ -806,6 +905,12 @@ const Auth = ({ onLoginSuccess, theme, setTheme }) => {
           <form onSubmit={handleResetPasswordSubmit} className="aurora-form">
             {error && <div className="aurora-error-banner"><span>⚠️</span> {error}</div>}
             {successMessage && <div className="aurora-success-banner"><span>✅</span> {successMessage}</div>}
+            {devCode && (
+              <div className="aurora-success-banner" style={{ border: '1px solid hsla(var(--primary) / 0.3)', background: 'hsla(var(--primary) / 0.08)', color: 'hsl(var(--primary))' }}>
+                <span>🔧</span>
+                <span><strong>[Development Mode]</strong> Since SMTP is down or unconfigured, use this code: <strong>{devCode}</strong></span>
+              </div>
+            )}
 
             <FloatingInput
               id="reset-code"
@@ -865,6 +970,10 @@ const Auth = ({ onLoginSuccess, theme, setTheme }) => {
                     Continue
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                   </button>
+
+                  <div className="aurora-divider" style={{ margin: '0.75rem 0' }}><span>or</span></div>
+                  
+                  <div id="google-signin-signup" style={{ width: '100%', minHeight: '40px', display: 'flex', justifyContent: 'center' }} />
                 </>
               ) : (
                 <>
@@ -982,6 +1091,8 @@ const Auth = ({ onLoginSuccess, theme, setTheme }) => {
                 </button>
 
                 <div className="aurora-divider"><span>or</span></div>
+
+                <div id="google-signin-login" style={{ width: '100%', minHeight: '40px', display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }} />
 
                 <button type="button" className="aurora-guest-btn" onClick={handleGuestContinue} disabled={loading}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
