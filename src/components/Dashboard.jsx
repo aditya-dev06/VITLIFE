@@ -325,19 +325,76 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, th
 
   const eventClub = clubs.find(c => c.id === event.clubId);
   const clubName = eventClub ? eventClub.name : event.clubName || 'Unknown Club';
+  const status = getEventStatus(event);
+  const badge = getStatusBadge(status);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '1.4rem', color: 'hsl(var(--text-primary))' }}>{event.title}</h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem', fontSize: '0.85rem', fontWeight: 600, color: `hsl(${catColor})` }}>
-              <ClubLogo club={eventClub} category={event.category} size={24} borderRadius="50%" />
-              <span>Hosted by {clubName}</span>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px', padding: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+          <div style={{ flexGrow: 1, paddingRight: '1rem' }}>
+            <h2 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: 'hsl(var(--text-primary))', lineHeight: 1.35, letterSpacing: '-0.02em' }}>{event.title}</h2>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', marginTop: '0.65rem' }}>
+              <ClubLogo club={eventClub} category={event.category} size={18} borderRadius="50%" />
+              <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'hsl(var(--text-secondary))' }}>{clubName}</span>
+              <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.15)' }} />
+              <span style={{
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.03em',
+                padding: '0.15rem 0.5rem',
+                borderRadius: '9999px',
+                background: status === 'reg_open' ? 'hsla(145, 65%, 52%, 0.08)' : 'hsla(355, 75%, 60%, 0.08)',
+                color: status === 'reg_open' ? 'hsl(145, 65%, 52%)' : 'hsl(355, 75%, 60%)',
+                border: status === 'reg_open' ? '1px solid hsla(145, 65%, 52%, 0.15)' : '1px solid hsla(355, 75%, 60%, 0.15)'
+              }}>
+                {badge.text}
+              </span>
+              <span style={{
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.03em',
+                padding: '0.15rem 0.5rem',
+                borderRadius: '9999px',
+                background: 'rgba(255, 255, 255, 0.03)',
+                color: `hsl(${catColor})`,
+                border: '1px solid rgba(255, 255, 255, 0.06)'
+              }}>
+                {event.category}
+              </span>
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'hsl(var(--text-muted))', fontSize: '1.25rem', cursor: 'pointer' }}>
+          <button 
+            onClick={onClose} 
+            style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.06)',
+              color: 'hsl(var(--text-secondary))',
+              width: '30px',
+              height: '30px',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              transition: 'all 0.2s ease',
+              padding: 0,
+              flexShrink: 0
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+              e.currentTarget.style.color = 'hsl(var(--text-primary))';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+              e.currentTarget.style.color = 'hsl(var(--text-secondary))';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.06)';
+            }}
+          >
             ✕
           </button>
         </div>
@@ -345,11 +402,11 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, th
         {activePoster && (
           <div style={{ 
             width: '100%', 
-            maxHeight: '400px', 
-            borderRadius: '8px', 
+            maxHeight: '320px', 
+            borderRadius: '12px', 
             overflow: 'hidden', 
             marginBottom: '1.25rem', 
-            border: '1px solid hsla(var(--border-glass))',
+            border: '1px solid rgba(255, 255, 255, 0.06)',
             background: 'rgba(0, 0, 0, 0.2)',
             display: 'flex',
             justifyContent: 'center',
@@ -360,7 +417,7 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, th
               alt={event.title} 
               style={{ 
                 maxWidth: '100%', 
-                maxHeight: '400px', 
+                maxHeight: '320px', 
                 objectFit: 'contain', 
                 display: 'block' 
               }} 
@@ -379,8 +436,8 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, th
                   border: activePoster === url ? '2px solid hsl(var(--primary))' : '2px solid transparent',
                   borderRadius: '6px',
                   overflow: 'hidden',
-                  width: '60px',
-                  height: '60px',
+                  width: '50px',
+                  height: '50px',
                   cursor: 'pointer',
                   background: 'transparent',
                   flexShrink: 0,
@@ -395,14 +452,14 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, th
 
         {event.schedulePosterUrl && (
           <div>
-            <h4 style={{ color: 'hsl(var(--text-primary))', marginBottom: '0.5rem', fontSize: '0.95rem' }}>📅 Event Schedule</h4>
+            <h4 style={{ color: 'hsl(var(--text-primary))', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 600 }}>📅 Event Schedule</h4>
             <div style={{ 
               width: '100%', 
-              maxHeight: '400px', 
-              borderRadius: '8px', 
+              maxHeight: '320px', 
+              borderRadius: '12px', 
               overflow: 'hidden', 
               marginBottom: '1.25rem', 
-              border: '1px solid hsla(var(--border-glass))',
+              border: '1px solid rgba(255, 255, 255, 0.06)',
               background: 'rgba(0, 0, 0, 0.2)',
               display: 'flex',
               justifyContent: 'center',
@@ -413,7 +470,7 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, th
                 alt="Event Schedule" 
                 style={{ 
                   maxWidth: '100%', 
-                  maxHeight: '400px', 
+                  maxHeight: '320px', 
                   objectFit: 'contain', 
                   display: 'block' 
                 }} 
@@ -424,117 +481,126 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, th
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <div>
-            <h4 style={{ color: 'hsl(var(--text-primary))', marginBottom: '0.5rem', fontSize: '0.95rem' }}>Event Description</h4>
-            <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.88rem', lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap' }}>
+            <h4 style={{ color: 'hsl(var(--text-primary))', marginBottom: '0.4rem', fontSize: '0.9rem', fontWeight: 600, letterSpacing: '-0.01em' }}>Description</h4>
+            <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.88rem', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap', opacity: 0.95 }}>
               {event.description}
             </p>
           </div>
 
-          {/* Status Banner */}
-          {(() => {
-            const status = getEventStatus(event);
-            const badge = getStatusBadge(status);
-            return (
-              <div className={`status-banner ${status.replace('_', '-')}`}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>{badge.text}</span>
-                {event.registrationDeadline && status === 'reg_open' && (
-                  <span style={{ fontSize: '0.78rem', color: 'hsl(var(--text-muted))', marginLeft: 'auto' }}>
-                    ⏳ Reg. closes {formatDateTime(event.registrationDeadline)}
-                  </span>
-                )}
-              </div>
-            );
-          })()}
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', background: 'rgba(255, 255, 255, 0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid hsla(var(--border-glass))' }}>
-            {event.eventStartDateTime ? (
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Event Start</div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>🚀 {formatDateTime(event.eventStartDateTime)}</div>
-              </div>
-            ) : event.date ? (
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Date</div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>📅 {formatDate(event.date)}</div>
-              </div>
-            ) : null}
-            {event.eventEndDateTime ? (
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Event End</div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>🏁 {formatDateTime(event.eventEndDateTime)}</div>
-              </div>
-            ) : event.time ? (
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Time</div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>🕐 {event.time}</div>
-              </div>
-            ) : null}
-            <div>
-              <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Venue</div>
-              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>📍 {event.venue || 'TBA'}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Category</div>
-              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: `hsl(${catColor})`, textTransform: 'capitalize' }}>
-                {getCategoryIcon(event.category)} {event.category}
-              </div>
-            </div>
+          {/* Timeline Section */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem',
+            background: 'rgba(255, 255, 255, 0.01)',
+            border: '1px solid rgba(255, 255, 255, 0.04)',
+            borderRadius: '12px',
+            padding: '1.25rem'
+          }}>
+            {/* Line 1: Registration Deadline */}
             {event.registrationDeadline && (
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Registration Deadline</div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: getEventStatus(event) === 'reg_open' ? 'hsl(140, 60%, 50%)' : 'hsl(0, 60%, 55%)' }}>
-                  📝 {formatDateTime(event.registrationDeadline)}
+              <div style={{ display: 'flex', gap: '0.85rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: status === 'reg_open' ? 'hsl(145, 65%, 52%)' : 'hsl(355, 75%, 60%)', marginTop: '6px' }} />
+                  <div style={{ width: '2px', flexGrow: 1, background: 'rgba(255,255,255,0.06)', minHeight: '16px' }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Registration Deadline</div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'hsl(var(--text-primary))', marginTop: '0.1rem' }}>
+                    📅 {formatDateTime(event.registrationDeadline)}
+                  </div>
                 </div>
               </div>
             )}
-            <div>
-              <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Price</div>
-              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>
-                {event.price && event.price !== '0' && event.price.toLowerCase() !== 'free' ? `💰 ₹${event.price}` : '🆓 Free'}
+
+            {/* Line 2: Event Start */}
+            {(event.eventStartDateTime || event.date) && (
+              <div style={{ display: 'flex', gap: '0.85rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'hsl(var(--primary))', marginTop: '6px' }} />
+                  {(event.eventEndDateTime || event.time) && <div style={{ width: '2px', flexGrow: 1, background: 'rgba(255,255,255,0.06)', minHeight: '16px' }} />}
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Event Start</div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'hsl(var(--text-primary))', marginTop: '0.1rem' }}>
+                    🚀 {event.eventStartDateTime ? formatDateTime(event.eventStartDateTime) : formatDate(event.date)}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Line 3: Event End */}
+            {(event.eventEndDateTime || event.time) && (
+              <div style={{ display: 'flex', gap: '0.85rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'hsl(var(--secondary))', marginTop: '6px' }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Event End</div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'hsl(var(--text-primary))', marginTop: '0.1rem' }}>
+                    🏁 {event.eventEndDateTime ? formatDateTime(event.eventEndDateTime) : event.time}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bento Details Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div style={{ background: 'rgba(255, 255, 255, 0.01)', border: '1px solid rgba(255, 255, 255, 0.04)', borderRadius: '12px', padding: '0.85rem 1rem' }}>
+              <div style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '0.2rem' }}>📍 Venue</div>
+              <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>{event.venue || 'TBA'}</div>
+            </div>
+            <div style={{ background: 'rgba(255, 255, 255, 0.01)', border: '1px solid rgba(255, 255, 255, 0.04)', borderRadius: '12px', padding: '0.85rem 1rem' }}>
+              <div style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '0.2rem' }}>🎟️ Entry Fee</div>
+              <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'hsl(var(--text-primary))' }}>
+                {event.price && event.price !== '0' && event.price.toLowerCase() !== 'free' ? `₹${event.price}` : 'Free'}
               </div>
             </div>
           </div>
 
-
           {event.tags && event.tags.length > 0 && (
             <div>
-              <h4 style={{ color: 'hsl(var(--text-primary))', marginBottom: '0.5rem', fontSize: '0.95rem' }}>Tags</h4>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
                 {event.tags.map((tag, i) => (
-                  <span key={i} className="opp-tag">{tag}</span>
+                  <span key={i} className="opp-tag" style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}>{tag}</span>
                 ))}
               </div>
             </div>
           )}
 
-          <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}>
-            📧 <strong>Created by:</strong> {event.createdBy}
+          <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.75rem' }}>
+            👤 <strong>Created by:</strong> {event.createdBy}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', borderTop: '1px solid hsla(var(--border-glass))', paddingTop: '1.25rem', marginTop: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '1.25rem', marginTop: '0.5rem' }}>
             <a
               className="btn-register"
               href={regUrl}
               target={event.registrationLink ? "_blank" : undefined}
               rel={event.registrationLink ? "noopener noreferrer" : undefined}
-              style={{ textDecoration: 'none', flexGrow: 1, textAlign: 'center', justifyContent: 'center' }}
+              style={{ textDecoration: 'none', flexGrow: 1, textAlign: 'center', justifyContent: 'center', padding: '0.7rem 1.25rem', borderRadius: '8px', fontSize: '0.85rem' }}
+              onClick={e => e.stopPropagation()}
             >
               {event.registrationLink ? '🔗 Register Now' : '✉️ Contact Host'}
             </a>
             
             {isAdmin && (
               <button
-                onClick={handleTogglePin}
+                onClick={(e) => { e.stopPropagation(); handleTogglePin(); }}
                 title={event.pinned ? "Unpin Event" : "Pin Event"}
-                className={`btn-cancel`}
                 style={{ 
-                  padding: '0.55rem 1rem', 
+                  padding: '0.7rem 1rem', 
                   fontSize: '0.8rem', 
-                  borderColor: event.pinned ? 'hsl(var(--primary))' : 'hsla(var(--border-glass))',
+                  background: 'transparent',
+                  border: `1px solid ${event.pinned ? 'hsl(var(--primary))' : 'rgba(255, 255, 255, 0.06)'}`,
+                  borderRadius: '8px',
                   color: event.pinned ? 'hsl(var(--primary))' : 'hsl(var(--text-secondary))',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.25rem'
+                  gap: '0.25rem',
+                  cursor: 'pointer',
+                  fontWeight: 600
                 }}
               >
                 {event.pinned ? '📍 Unpin' : '📌 Pin'}
@@ -543,19 +609,21 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, th
 
             {canDelete && (
               <button
-                onClick={handleDelete}
+                onClick={(e) => { e.stopPropagation(); handleDelete(); }}
                 title="Delete event"
                 style={{
-                  background: 'hsla(0, 80%, 55%, 0.15)',
-                  border: '1px solid hsla(0, 80%, 55%, 0.3)', 
+                  background: 'rgba(239, 68, 68, 0.06)',
+                  border: '1px solid rgba(239, 68, 68, 0.25)', 
                   borderRadius: '8px',
-                  padding: '0.55rem 1rem', 
+                  padding: '0.7rem 1rem', 
                   cursor: 'pointer', 
                   fontSize: '0.8rem',
-                  color: 'hsl(0, 80%, 65%)', 
+                  color: '#f87171', 
                   transition: 'all 0.2s ease',
                   fontWeight: 600
                 }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.06)'}
               >
                 🗑️ Delete
               </button>
@@ -565,7 +633,7 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, th
       </div>
     </div>
   );
-}
+};
 
 function DashboardEventCardItem({
   event,

@@ -49,5 +49,12 @@
 - [x] Update empty state helper text referencing the events tab
 - [x] Run production build and ESLint validation to verify changes
 
-
-
+## Phase 9: Cryptographic Token & Session Security Refactor
+- [x] Refactor token structure to `[signature].[base64Email].[expiresAt].[hashPiece]`
+- [x] Implement constant-time signature verification before any DB queries to prevent timing & DoS attacks
+- [x] Implement user password hash check (`hashPiece`) to force session revocation on password change
+- [x] Support FIFO session limits (max 10 sessions per user)
+- [x] Support MongoDB session index checks (TTL index on `expiresAt` and unique index on `tokenHash`)
+- [x] Fix guest profile updates storage key (`ds_guest_user` vs `ds_ai_user`) to prevent state desynchronization on reload
+- [x] Implement in-memory fallback for Vercel/serverless ephemeral disk
+- [x] Verify complete token migration, login/logout flow, and session revocation using test scripts
