@@ -679,19 +679,29 @@ function DashboardEventCardItem({
         position: 'relative',
         opacity: opacity,
         '--cat-color': catColor,
-        border: event.pinned ? '1px solid hsla(var(--primary) / 0.5)' : undefined,
-        boxShadow: event.pinned ? '0 0 15px hsla(var(--primary) / 0.15)' : undefined,
+        background: 'rgba(255, 255, 255, 0.01)',
+        border: event.pinned 
+          ? '1px solid hsla(var(--primary) / 0.35)' 
+          : '1px solid rgba(255, 255, 255, 0.05)',
+        boxShadow: event.pinned 
+          ? '0 8px 30px hsla(var(--primary) / 0.08)' 
+          : '0 4px 20px rgba(0, 0, 0, 0.15)',
+        borderRadius: '16px',
         width: '100%',
-        flexShrink: 1
+        flexShrink: 1,
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        overflow: 'hidden'
       }}
     >
       {event.pinned && (
         <div style={{
           position: 'absolute', top: '0.75rem', left: '0.75rem',
-          background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))',
-          color: 'white', fontSize: '0.65rem', fontWeight: 800,
-          padding: '0.25rem 0.5rem', borderRadius: '4px', zIndex: 5,
-          textTransform: 'uppercase', letterSpacing: '0.05em'
+          background: 'hsla(var(--primary) / 0.08)',
+          border: '1px solid hsla(var(--primary) / 0.25)',
+          color: 'hsl(var(--primary))', fontSize: '0.65rem', fontWeight: 800,
+          padding: '0.2rem 0.5rem', borderRadius: '6px', zIndex: 5,
+          textTransform: 'uppercase', letterSpacing: '0.05em',
+          backdropFilter: 'blur(8px)'
         }}>
           📌 Featured
         </div>
@@ -699,19 +709,26 @@ function DashboardEventCardItem({
 
       <div 
         className={`status-badge ${status.replace('_', '-')}`}
-        style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', zIndex: 5 }}
+        style={{ 
+          position: 'absolute', top: '0.75rem', right: '0.75rem', zIndex: 5,
+          background: status === 'reg_open' ? 'hsla(145, 65%, 52%, 0.08)' : 'hsla(355, 75%, 60%, 0.08)',
+          color: status === 'reg_open' ? 'hsl(145, 65%, 52%)' : 'hsl(355, 75%, 60%)',
+          border: status === 'reg_open' ? '1px solid hsla(145, 65%, 52%, 0.15)' : '1px solid hsla(355, 75%, 60%, 0.15)',
+          fontSize: '0.65rem', fontWeight: 800, padding: '0.2rem 0.5rem', borderRadius: '6px',
+          textTransform: 'uppercase', letterSpacing: '0.05em', backdropFilter: 'blur(8px)'
+        }}
       >
         {badge.text}
       </div>
 
       {event.posterUrl && (
         showBounce ? (
-          <div style={{ height: '130px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
+          <div style={{ height: '140px', width: '100%', overflow: 'hidden', borderBottom: '1px solid rgba(255, 255, 255, 0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)' }}>
             <BounceCards
               className="event-card-bounce"
               images={event.posterUrls}
               containerWidth="100%"
-              containerHeight={130}
+              containerHeight={140}
               animationDelay={0.3}
               animationStagger={0.05}
               easeType="elastic.out(1, 0.7)"
@@ -722,69 +739,85 @@ function DashboardEventCardItem({
             />
           </div>
         ) : (
-          <img
-            src={event.posterUrl}
-            alt={event.title}
-            onLoad={handleImageLoad}
-            loading="lazy"
-            style={{
-              width: '100%',
-              height: '130px',
-              objectFit: 'cover',
-              display: 'block',
-              borderBottom: '1px solid hsla(var(--border-glass))',
-              opacity: imageLoaded ? 1 : 0.3,
-              transition: 'opacity 0.3s ease',
-              margin: '0 auto'
-            }}
-            onError={(e) => { e.target.style.display = 'none'; }}
-          />
+          <div style={{ height: '140px', width: '100%', overflow: 'hidden', borderBottom: '1px solid rgba(255, 255, 255, 0.04)', background: 'rgba(0,0,0,0.3)', position: 'relative' }}>
+            <img
+              src={event.posterUrl}
+              alt={event.title}
+              onLoad={handleImageLoad}
+              loading="lazy"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+                opacity: imageLoaded ? 1 : 0.3,
+                transition: 'opacity 0.3s ease'
+              }}
+              onError={(e) => { e.target.style.display = 'none'; }}
+            />
+          </div>
         )
       )}
 
-      <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flexGrow: 1, gap: '0.5rem' }}>
+      <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flexGrow: 1, gap: '0.65rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
-          <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0, flex: 1 }}>
+          <h4 style={{ fontSize: '0.98rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0, flex: 1, lineHeight: 1.35, letterSpacing: '-0.01em' }}>
             {event.title}
           </h4>
           {daysLeft !== null && status !== 'ended' && (
-            <span className="countdown-badge">
+            <span style={{
+              fontSize: '0.65rem',
+              fontWeight: 700,
+              color: 'hsl(var(--accent))',
+              background: 'hsla(var(--accent) / 0.08)',
+              border: '1px solid hsla(var(--accent) / 0.15)',
+              padding: '0.15rem 0.4rem',
+              borderRadius: '4px',
+              whiteSpace: 'nowrap'
+            }}>
               ⏰ {daysLeft}d left
             </span>
           )}
         </div>
 
         <div style={{
-          display: 'flex', alignItems: 'center', gap: '0.5rem',
-          fontSize: '0.8rem', fontWeight: 600, color: `hsl(${catColor})`
+          display: 'flex', alignItems: 'center', gap: '0.45rem',
+          fontSize: '0.78rem', fontWeight: 600, color: `hsl(${catColor})`
         }}>
-          <ClubLogo club={eventClub} category={event.category} size={20} borderRadius="50%" />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{clubName}</span>
+          <ClubLogo club={eventClub} category={event.category} size={18} borderRadius="50%" />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.9 }}>{clubName}</span>
         </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>
-          {event.eventStartDateTime && <span>🚀 {formatDateTime(event.eventStartDateTime)}</span>}
-          {!event.eventStartDateTime && event.date && <span>📅 {formatDate(event.date)}</span>}
-          {event.venue && <span>📍 {event.venue}</span>}
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.4rem', fontSize: '0.72rem', color: 'hsl(var(--text-muted))' }}>
+          <span>📅 {event.eventStartDateTime ? formatDateTime(event.eventStartDateTime) : formatDate(event.date)}</span>
+          {event.venue && (
+            <>
+              <span style={{ opacity: 0.35 }}>•</span>
+              <span>📍 {event.venue}</span>
+            </>
+          )}
         </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.73rem', alignItems: 'center' }}>
-          {event.registrationDeadline && (
-            <span style={{ color: status === 'reg_closed' || status === 'ended' ? 'hsl(0, 60%, 55%)' : 'hsl(140, 60%, 50%)', fontWeight: 600 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', marginTop: '0.1rem', paddingTop: '0.65rem', borderTop: '1px solid rgba(255, 255, 255, 0.04)' }}>
+          {event.registrationDeadline ? (
+            <span style={{ color: status === 'reg_closed' || status === 'ended' ? 'hsl(355, 75%, 60%)' : 'hsl(145, 65%, 52%)', fontWeight: 600 }}>
               📝 Reg. {status === 'reg_closed' || status === 'ended' ? 'closed' : `till ${formatDateTime(event.registrationDeadline)}`}
             </span>
-          )}
-          {event.price ? (
-            <span style={{ fontWeight: 700, color: 'hsl(var(--accent))' }}>
-              💰 {event.price === '0' || event.price.toLowerCase() === 'free' ? 'Free' : `₹${event.price}`}
-            </span>
-          ) : (
-            <span style={{ fontWeight: 600, color: 'hsl(140, 60%, 50%)' }}>🆓 Free</span>
-          )}
+          ) : <span />}
+          <span style={{ 
+            fontWeight: 700, 
+            color: event.price && event.price !== '0' && event.price.toLowerCase() !== 'free' ? 'hsl(var(--accent))' : 'hsl(145, 65%, 52%)',
+            background: event.price && event.price !== '0' && event.price.toLowerCase() !== 'free' ? 'hsla(var(--accent) / 0.08)' : 'hsla(145, 65%, 52%, 0.08)',
+            border: event.price && event.price !== '0' && event.price.toLowerCase() !== 'free' ? '1px solid hsla(var(--accent) / 0.15)' : '1px solid hsla(145, 65%, 52%, 0.15)',
+            padding: '0.15rem 0.4rem',
+            borderRadius: '4px'
+          }}>
+            {event.price && event.price !== '0' && event.price.toLowerCase() !== 'free' ? `₹${event.price}` : 'Free'}
+          </span>
         </div>
 
         {isAdmin && (
-          <div style={{ marginTop: 'auto', paddingTop: '0.75rem', display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ marginTop: '0.25rem', paddingTop: '0.5rem', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid rgba(255, 255, 255, 0.04)' }}>
             <button
               onClick={(e) => handleTogglePin(event, e)}
               className="btn-promote"
