@@ -84,6 +84,17 @@ function getEventStatus(event) {
   return 'upcoming';
 }
 
+function isEventTooOld(event) {
+  const status = getEventStatus(event);
+  if (status !== 'ended') return false;
+  const end = event.eventEndDateTime ? new Date(event.eventEndDateTime) : null;
+  const start = event.eventStartDateTime ? new Date(event.eventStartDateTime) : (event.date ? new Date(event.date) : null);
+  const eventTime = end || start;
+  if (!eventTime) return false;
+  const threeDaysInMs = 3 * 24 * 60 * 60 * 1000;
+  return (new Date().getTime() - eventTime.getTime()) > threeDaysInMs;
+}
+
 function getStatusBadge(status) {
   switch (status) {
     case 'reg_open': return { text: '🟢 Registration Open', color: '140, 70%, 45%', bg: '140, 70%, 45%' };
@@ -945,9 +956,10 @@ export default function CampusLife({
   }, [clubs, selectedCategory]);
 
   const filteredEvents = useMemo(() => {
+    const activeEvents = events.filter(e => !isEventTooOld(e));
     return selectedCategory === 'all'
-      ? events
-      : events.filter(e => e.category === selectedCategory);
+      ? activeEvents
+      : activeEvents.filter(e => e.category === selectedCategory);
   }, [events, selectedCategory]);
 
   const sortedEvents = useMemo(() => {
