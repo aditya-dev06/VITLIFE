@@ -3513,6 +3513,51 @@ app.get('/api/health/smtp', async (req, res) => {
   });
 });
 
+// Database Health Check Endpoint
+app.get('/api/health/db', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  
+  if (!db && MONGODB_URI) {
+    try {
+      console.log('🔄 Attempting to dynamically reconnect to MongoDB Atlas...');
+      if (!client) {
+        client = new MongoClient(MONGODB_URI, {
+          connectTimeoutMS: 3000,
+          serverSelectionTimeoutMS: 3000
+        });
+      }
+      await client.connect();
+      db = client.db();
+      dbConnectionStatus = "Connected";
+      dbConnectionError = null;
+      console.log('✅ Dynamic MongoDB reconnection successful.');
+      await ensureIndexes(db);
+    } catch (err) {
+      dbConnectionStatus = "Failed";
+      dbConnectionError = err.message || String(err);
+      console.error('❌ Dynamic MongoDB reconnection failed:', err.message);
+    }
+  }
+
+  const authHeader = req.headers.authorization;
+  let isAdmin = false;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    const user = await verifyToken(token);
+    if (user && isAdminEmail(user.email)) {
+      isAdmin = true;
+    }
+  }
+
+  res.json({
+    connected: !!db,
+    status: dbConnectionStatus,
+    error: isAdmin ? dbConnectionError : undefined,
+    uriConfigured: isAdmin ? !!MONGODB_URI : undefined,
+    uriObfuscated: (isAdmin && MONGODB_URI) ? MONGODB_URI.replace(/:([^@]+)@/, ':****@') : undefined
+  });
+});
+
 
 // --- FILE UPLOAD ---
 app.post('/api/upload', authenticate, requireClubManager, (req, res) => {
