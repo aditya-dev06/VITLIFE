@@ -1344,6 +1344,32 @@ const findUserByEmail = async (email) => {
   return null;
 };
 
+const getAdminEmails = async () => {
+  const adminSet = new Set();
+  if (dbConnectingPromise) await dbConnectingPromise;
+  if (db) {
+    try {
+      const admins = await db.collection('users').find({ role: 'admin' }, { projection: { email: 1 } }).toArray();
+      for (const u of admins) {
+        if (u.email) adminSet.add(u.email.toLowerCase().trim());
+      }
+      return adminSet;
+    } catch (err) {
+      console.error("MongoDB getAdminEmails error, falling back to file:", err);
+    }
+  }
+  try {
+    const users = loadUsers();
+    for (const email of Object.keys(users)) {
+      const user = users[email];
+      if (user && user.role === 'admin') {
+        adminSet.add(email.toLowerCase().trim());
+      }
+    }
+  } catch (e) {}
+  return adminSet;
+};
+
 const saveUser = async (email, userData) => {
   if (typeof email !== 'string') return;
   const lowerEmail = email.toLowerCase().trim();
@@ -3225,7 +3251,17 @@ app.get('/api/events', async (req, res) => {
     // Automatically unpin ended events
     await autoUnpinEndedEvents(events);
     
-    res.json({ events });
+    // Mask admin emails in createdBy
+    const adminEmails = await getAdminEmails();
+    const processedEvents = events.map(event => {
+      const creatorEmail = (event.createdBy || '').toLowerCase().trim();
+      if (adminEmails.has(creatorEmail) || creatorEmail === 'admin') {
+        return { ...event, createdBy: 'Admin' };
+      }
+      return event;
+    });
+    
+    res.json({ events: processedEvents });
   } catch (error) {
     console.error('Failed to fetch events:', error);
     res.status(500).json({ error: 'An unexpected server error occurred while fetching events.' });
@@ -3285,7 +3321,12 @@ app.post('/api/events', authenticate, requireClubManager, async (req, res) => {
     };
     await saveEvent(eventData);
     await logActivity(req.user.email, `create_event: ${eventData.id}`, req);
-    res.json({ success: true, event: eventData });
+    
+    const processedEvent = {
+      ...eventData,
+      createdBy: req.user.role === 'admin' ? 'Admin' : eventData.createdBy
+    };
+    res.json({ success: true, event: processedEvent });
   } catch (error) {
     console.error('Failed to create event:', error);
     res.status(500).json({ error: 'An unexpected server error occurred while creating event.' });
@@ -3385,7 +3426,14 @@ app.put('/api/events/:id', authenticate, async (req, res) => {
     await updateEvent(id, updatedData);
     await logActivity(req.user.email, `edit_event: ${id}`, req);
 
-    res.json({ success: true, event: { ...event, ...updatedData } });
+    const adminEmails = await getAdminEmails();
+    const eventToSend = { ...event, ...updatedData };
+    const creatorEmail = (eventToSend.createdBy || '').toLowerCase().trim();
+    if (adminEmails.has(creatorEmail) || creatorEmail === 'admin') {
+      eventToSend.createdBy = 'Admin';
+    }
+
+    res.json({ success: true, event: eventToSend });
   } catch (error) {
     console.error('Failed to update event:', error);
     res.status(500).json({ error: 'An unexpected server error occurred while updating event.' });
