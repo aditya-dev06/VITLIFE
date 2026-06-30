@@ -1351,6 +1351,27 @@ function App() {
                 ✏️ Edit Profile Name/Sem
               </button>
               <button 
+                onClick={() => { setShowEditProfile(true); setShowMobileProfileSheet(false); }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  width: '100%',
+                  padding: '0.85rem 1rem',
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.04)',
+                  borderRadius: '10px',
+                  color: 'hsl(var(--text-primary))',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.2s ease'
+                }}
+              >
+                🔒 Manage Active Sessions
+              </button>
+              <button 
                 onClick={() => { setShowAboutUs(true); setShowMobileProfileSheet(false); }}
                 style={{
                   display: 'flex',

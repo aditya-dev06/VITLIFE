@@ -977,22 +977,12 @@ if (MONGODB_URI) {
   console.log("Connecting to MongoDB Atlas...");
   dbConnectionStatus = "Connecting";
   client = new MongoClient(MONGODB_URI, {
-    connectTimeoutMS: 3000,
-    serverSelectionTimeoutMS: 3000
-  });
-  let connectionTimeout;
-  const timeoutPromise = new Promise(resolve => {
-    connectionTimeout = setTimeout(() => {
-      if (!db) {
-        console.warn("⚠️ MongoDB connection attempt is taking too long (>4s). Proceeding with local fallbacks...");
-      }
-      resolve();
-    }, 4000);
+    connectTimeoutMS: 5000,
+    serverSelectionTimeoutMS: 5000
   });
 
-  const actualConnectPromise = client.connect()
+  dbConnectingPromise = client.connect()
     .then(async c => {
-      clearTimeout(connectionTimeout);
       db = c.db();
       dbConnectionStatus = "Connected";
       dbConnectionError = null;
@@ -1000,16 +990,10 @@ if (MONGODB_URI) {
       ensureIndexes(db).catch(err => console.error("Index creation error:", err.message));
     })
     .catch(err => {
-      clearTimeout(connectionTimeout);
       dbConnectionStatus = "Failed";
       dbConnectionError = err.message || String(err);
       console.error("Failed to connect to MongoDB Atlas, falling back to local files:", err);
     });
-
-  dbConnectingPromise = Promise.race([
-    actualConnectPromise,
-    timeoutPromise
-  ]);
 } else {
   dbConnectionStatus = "Local Fallback Mode (No MONGODB_URI)";
   console.log("No MONGODB_URI set, running in local fallback file mode.");
@@ -3522,20 +3506,27 @@ app.get('/api/health/db', async (req, res) => {
       console.log('🔄 Attempting to dynamically reconnect to MongoDB Atlas...');
       if (!client) {
         client = new MongoClient(MONGODB_URI, {
-          connectTimeoutMS: 3000,
-          serverSelectionTimeoutMS: 3000
+          connectTimeoutMS: 5000,
+          serverSelectionTimeoutMS: 5000
         });
       }
-      await client.connect();
-      db = client.db();
-      dbConnectionStatus = "Connected";
-      dbConnectionError = null;
-      console.log('✅ Dynamic MongoDB reconnection successful.');
-      await ensureIndexes(db);
+      dbConnectingPromise = client.connect()
+        .then(async c => {
+          db = c.db();
+          dbConnectionStatus = "Connected";
+          dbConnectionError = null;
+          console.log('✅ Dynamic MongoDB reconnection successful.');
+          await ensureIndexes(db);
+        })
+        .catch(err => {
+          dbConnectionStatus = "Failed";
+          dbConnectionError = err.message || String(err);
+          console.error('❌ Dynamic MongoDB reconnection failed:', err.message);
+        });
+      await dbConnectingPromise;
     } catch (err) {
       dbConnectionStatus = "Failed";
       dbConnectionError = err.message || String(err);
-      console.error('❌ Dynamic MongoDB reconnection failed:', err.message);
     }
   }
 
