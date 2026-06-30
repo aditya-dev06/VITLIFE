@@ -1553,6 +1553,47 @@ const deleteClub = async (clubId) => {
 };
 
 
+// Auto-unpin helper for ended events
+const autoUnpinEndedEvents = async (eventsList) => {
+  if (!Array.isArray(eventsList)) return;
+  const now = Date.now();
+  const endedPinnedEventIds = [];
+
+  for (const event of eventsList) {
+    if (event.pinned) {
+      let eventEndTime = null;
+      if (event.eventEndDateTime) {
+        eventEndTime = new Date(event.eventEndDateTime).getTime();
+      } else if (event.eventStartDateTime) {
+        eventEndTime = new Date(event.eventStartDateTime).getTime();
+      } else if (event.date) {
+        eventEndTime = new Date(event.date).getTime();
+      }
+
+      if (eventEndTime && now > eventEndTime) {
+        endedPinnedEventIds.push(event.id);
+      }
+    }
+  }
+
+  if (endedPinnedEventIds.length > 0) {
+    console.log(`📌 Unpinning ${endedPinnedEventIds.length} ended events:`, endedPinnedEventIds);
+    for (const id of endedPinnedEventIds) {
+      try {
+        await updateEvent(id, { pinned: false });
+      } catch (err) {
+        console.error(`Failed to automatically unpin event ${id}:`, err.message);
+      }
+    }
+    // Update local representation in current request
+    for (const event of eventsList) {
+      if (endedPinnedEventIds.includes(event.id)) {
+        event.pinned = false;
+      }
+    }
+  }
+};
+
 // ========== EVENTS HELPERS ==========
 const getEvents = async (categoryFilter) => {
   if (dbConnectingPromise) await dbConnectingPromise;
@@ -3180,6 +3221,10 @@ app.get('/api/events', async (req, res) => {
   try {
     const category = req.query.category || null;
     const events = await getEvents(category);
+    
+    // Automatically unpin ended events
+    await autoUnpinEndedEvents(events);
+    
     res.json({ events });
   } catch (error) {
     console.error('Failed to fetch events:', error);
