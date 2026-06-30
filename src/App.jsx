@@ -396,7 +396,14 @@ function App() {
     }
     localStorage.removeItem('ds_ai_token');
     localStorage.removeItem('ds_ai_user');
-    localStorage.removeItem('ds_guest_user');  // also clear guest session
+    localStorage.removeItem('ds_guest_user');
+    localStorage.removeItem('profile_pending_sync');
+    localStorage.removeItem('ds_selected_mess');
+    localStorage.removeItem('ds_swipe_hint_seen');
+    // Purge service worker API cache to prevent stale sensitive data
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: 'PURGE_API_CACHE' });
+    }
     setToken(null);
     setUser(null);
     setSkills(INITIAL_SKILLS);
@@ -409,21 +416,57 @@ function App() {
 
   useEffect(() => {
     const handleSessionExpired = () => {
-      console.log("[PWA] Session expired event received. Logging out...");
       handleLogout();
     };
     window.addEventListener('session-expired', handleSessionExpired);
     return () => window.removeEventListener('session-expired', handleSessionExpired);
   }, [handleLogout]);
 
+  // Periodically verify session validity to log out revoked sessions
+  useEffect(() => {
+    if (!token || user?.isGuest) return;
+
+    const checkSession = async () => {
+      try {
+        const res = await fetch('/api/user/profile', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.status === 401 || res.status === 403) {
+          handleLogout();
+        }
+      } catch (err) {
+        console.error("[PWA] Session validation request failed:", err);
+      }
+    };
+
+    // Check when user switches back to the tab
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkSession();
+      }
+    };
+
+    // Check when window gets focus
+    window.addEventListener('focus', checkSession);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Heartbeat check every 60 seconds
+    const interval = setInterval(checkSession, 60000);
+
+    return () => {
+      window.removeEventListener('focus', checkSession);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
+  }, [token, user?.isGuest, handleLogout]);
+
+
   const fetchUserProfile = useCallback(async () => {
     try {
       setLoading(true);
-      console.log("[PWA] Fetching user profile. Token is:", token ? `${token.substring(0, 10)}...` : null);
       const res = await fetch('/api/user/profile', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      console.log("[PWA] Fetch user profile response status:", res.status);
       if (res.ok) {
         const profile = await res.json();
         setUser(profile);

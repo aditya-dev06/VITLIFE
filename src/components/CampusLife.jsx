@@ -107,11 +107,21 @@ const STATUS_SORT_ORDER = { reg_open: 0, ongoing: 1, upcoming: 2, reg_closed: 3,
 const ensureAbsoluteUrl = (urlStr) => {
   if (!urlStr) return '';
   const trimmed = urlStr.trim();
+  // Block dangerous protocols
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('vbscript:')) {
+    return '';
+  }
+  // Handle protocol-relative URLs (//evil.com)
+  if (trimmed.startsWith('//')) {
+    return `https:${trimmed}`;
+  }
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('/uploads/')) {
     return trimmed;
   }
   return `https://${trimmed}`;
 };
+
 
 function ClubLogo({ club, category, size = 24, borderRadius = '50%' }) {
   const [error, setError] = useState(false);

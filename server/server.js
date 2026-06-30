@@ -44,7 +44,34 @@ const PORT = process.env.PORT || 5000;
 app.set('trust proxy', 1);
 
 app.use(compression());
-app.use(cors());
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.length > 0 && ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    try {
+      const parsed = new URL(origin);
+      if (['localhost', '127.0.0.1', '::1'].includes(parsed.hostname)) return callback(null, true);
+    } catch {}
+    return callback(new Error('CORS blocked for this origin'));
+  },
+  credentials: true
+}));
+
+// Security helper: strips all sensitive fields from user objects before API responses
+function sanitizeUser(userObj) {
+  const safe = { ...userObj };
+  delete safe.passwordHash;
+  delete safe.salt;
+  delete safe.verificationCode;
+  delete safe.verificationExpires;
+  delete safe.lastCodeSentAt;
+  delete safe.resetCode;
+  delete safe.resetExpires;
+  delete safe.lastResetSentAt;
+  return safe;
+}
+
 app.use(express.json());
 
 app.use((req, res, next) => {
@@ -2061,7 +2088,8 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 
     res.json({ success: true, message: 'Verification code sent.', email: lowerEmail });
   } catch (error) {
-    res.status(500).json({ error: 'Server registration error: ' + error.message });
+    console.error('Server registration error:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred during registration.' });
   }
 });
 
@@ -2104,13 +2132,10 @@ app.post('/api/auth/verify', authLimiter, authRateLimiter(5, 15 * 60 * 1000), as
     const token = await generateToken(lowerEmail, user.passwordHash);
     await createSession(lowerEmail, token, req);
 
-    const userProfile = { ...user };
-    delete userProfile.passwordHash;
-    delete userProfile.salt;
-
-    res.json({ token, user: userProfile });
+    res.json({ token, user: sanitizeUser(user) });
   } catch (error) {
-    res.status(500).json({ error: 'Verification failed: ' + error.message });
+    console.error('Verification failed:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred.' });
   }
 });
 
@@ -2180,7 +2205,8 @@ app.post('/api/auth/resend-code', authLimiter, authRateLimiter(5, 15 * 60 * 1000
 
     res.json({ success: true, message: 'New verification code sent.' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to resend code: ' + error.message });
+    console.error('Failed to resend code:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while sending verification code.' });
   }
 });
 
@@ -2243,13 +2269,10 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     const token = await generateToken(lowerEmail, user.passwordHash);
     await createSession(lowerEmail, token, req);
 
-    const userProfile = { ...user };
-    delete userProfile.passwordHash;
-    delete userProfile.salt;
-
-    res.json({ token, user: userProfile });
+    res.json({ token, user: sanitizeUser(user) });
   } catch (error) {
-    res.status(500).json({ error: 'Server authentication error: ' + error.message });
+    console.error('Server authentication error:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred.' });
   }
 });
 
@@ -2341,7 +2364,8 @@ app.get('/api/user/sessions', authenticate, async (req, res) => {
     
     res.json({ sessions: safeSessions });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch sessions: ' + error.message });
+    console.error('Failed to fetch sessions:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while fetching sessions.' });
   }
 });
 
@@ -2376,7 +2400,8 @@ app.delete('/api/user/sessions/:id', authenticate, async (req, res) => {
     
     res.json({ success: true, message: 'Session revoked successfully.' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to revoke session: ' + error.message });
+    console.error('Failed to revoke session:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while revoking session.' });
   }
 });
 
@@ -2403,7 +2428,8 @@ app.post('/api/user/sessions/revoke-others', authenticate, async (req, res) => {
 
     res.json({ success: true, message: 'All other sessions revoked successfully.' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to revoke other sessions: ' + error.message });
+    console.error('Failed to revoke other sessions:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while revoking other sessions.' });
   }
 });
 
@@ -2417,7 +2443,8 @@ app.post('/api/auth/logout', authenticate, async (req, res) => {
     }
     res.json({ success: true, message: 'Logged out successfully.' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to logout: ' + error.message });
+    console.error('Failed to logout:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while logging out.' });
   }
 });
 
@@ -2485,7 +2512,8 @@ app.post('/api/auth/forgot-password', authLimiter, authRateLimiter(5, 15 * 60 * 
 
     res.json(genericSuccessResponse);
   } catch (error) {
-    res.status(500).json({ error: 'Server error: ' + error.message });
+    console.error('Server error:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred.' });
   }
 });
 
@@ -2508,7 +2536,7 @@ app.post('/api/auth/reset-password', authLimiter, authRateLimiter(5, 15 * 60 * 1
     const lowerEmail = email.trim().toLowerCase();
     const user = await findUserByEmail(lowerEmail);
     if (!user) {
-      return res.status(404).json({ error: 'User not found.' });
+      return res.status(400).json({ error: 'Invalid or expired reset code.' });
     }
 
     if (!user.resetCode || !user.resetExpires) {
@@ -2539,7 +2567,8 @@ app.post('/api/auth/reset-password', authLimiter, authRateLimiter(5, 15 * 60 * 1
     await saveUser(lowerEmail, user);
     res.json({ success: true, message: 'Password reset successful. You can now sign in with your new password.' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to reset password: ' + error.message });
+    console.error('Failed to reset password:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while resetting password.' });
   }
 });
 
@@ -2557,9 +2586,7 @@ app.get('/api/user/profile', authenticate, async (req, res) => {
       }
     }
   }
-  delete userProfile.passwordHash;
-  delete userProfile.salt;
-  res.json(userProfile);
+  res.json(sanitizeUser(userProfile));
 });
 
 // 4. Update User Profile Progress / Stats
@@ -2597,13 +2624,10 @@ app.post('/api/user/profile', authenticate, async (req, res) => {
     await saveUser(req.user.email, user);
     await logActivity(req.user.email, 'update_profile', req);
 
-    const userProfile = { ...user };
-    delete userProfile.passwordHash;
-    delete userProfile.salt;
-
-    res.json(userProfile);
+    res.json(sanitizeUser(user));
   } catch (error) {
-    res.status(500).json({ error: 'Server profile update error: ' + error.message });
+    console.error('Server profile update error:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred.' });
   }
 });
 
@@ -2799,7 +2823,8 @@ app.get('/api/opportunities', async (req, res) => {
       opportunities: opps
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to read database: " + error.message });
+    console.error('Failed to read database:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred.' });
   }
 });
 
@@ -2881,7 +2906,8 @@ app.get('/api/clubs', async (req, res) => {
     const clubs = await getClubs();
     res.json({ clubs });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch clubs: ' + error.message });
+    console.error('Failed to fetch clubs:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while fetching clubs.' });
   }
 });
 
@@ -2898,7 +2924,8 @@ app.get('/api/clubs/:id', async (req, res) => {
       recruitments: recruitments.filter(r => r.clubId === club.id)
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch club: ' + error.message });
+    console.error('Failed to fetch club:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while fetching club.' });
   }
 });
 
@@ -2953,7 +2980,8 @@ app.put('/api/clubs/:id', authenticate, requireClubManager, async (req, res) => 
 
     res.json({ success: true, message: 'Club updated successfully.', club });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to update club: ' + error.message });
+    console.error('Failed to update club:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while updating club.' });
   }
 });
 
@@ -2998,7 +3026,8 @@ app.post('/api/clubs', authenticate, requireAdmin, async (req, res) => {
 
     res.json({ success: true, message: 'Club created successfully.', club: newClub });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to create club: ' + error.message });
+    console.error('Failed to create club:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while creating club.' });
   }
 });
 
@@ -3015,7 +3044,8 @@ app.delete('/api/clubs/:id', authenticate, requireAdmin, async (req, res) => {
     await logActivity(req.user.email, `delete_club: ${id}`, req);
     res.json({ success: true, message: 'Club deleted successfully.' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to delete club: ' + error.message });
+    console.error('Failed to delete club:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while deleting club.' });
   }
 });
 
@@ -3043,7 +3073,8 @@ app.get('/api/clubs/:id/managers', async (req, res) => {
     }
     res.json({ managers });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch club managers: ' + error.message });
+    console.error('Failed to fetch club managers:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while fetching club managers.' });
   }
 });
 
@@ -3055,7 +3086,8 @@ app.get('/api/events', async (req, res) => {
     const events = await getEvents(category);
     res.json({ events });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch events: ' + error.message });
+    console.error('Failed to fetch events:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while fetching events.' });
   }
 });
 
@@ -3114,7 +3146,8 @@ app.post('/api/events', authenticate, requireClubManager, async (req, res) => {
     await logActivity(req.user.email, `create_event: ${eventData.id}`, req);
     res.json({ success: true, event: eventData });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to create event: ' + error.message });
+    console.error('Failed to create event:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while creating event.' });
   }
 });
 
@@ -3137,7 +3170,8 @@ app.delete('/api/events/:id', authenticate, async (req, res) => {
     await logActivity(req.user.email, `delete_event: ${req.params.id}`, req);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to delete event: ' + error.message });
+    console.error('Failed to delete event:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while deleting event.' });
   }
 });
 
@@ -3212,7 +3246,8 @@ app.put('/api/events/:id', authenticate, async (req, res) => {
 
     res.json({ success: true, event: { ...event, ...updatedData } });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to update event: ' + error.message });
+    console.error('Failed to update event:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while updating event.' });
   }
 });
 
@@ -3230,12 +3265,14 @@ app.put('/api/events/:id/pin', authenticate, requireAdmin, async (req, res) => {
     await logActivity(req.user.email, `${pinned ? 'pin_event' : 'unpin_event'}: ${id}`, req);
     res.json({ success: true, message: `Event ${pinned ? 'pinned' : 'unpinned'} successfully.` });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to pin event: ' + error.message });
+    console.error('Failed to pin event:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while pinning event.' });
   }
 });
 
 // Track event impressions/views (trending calculation)
-app.post('/api/events/:id/impression', async (req, res) => {
+const impressionLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { error: 'Too many requests.' } });
+app.post('/api/events/:id/impression', impressionLimiter, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -3243,9 +3280,10 @@ app.post('/api/events/:id/impression', async (req, res) => {
     if (dbConnectingPromise) await dbConnectingPromise;
     if (db) {
       await db.collection('events').updateOne({ id: id }, { $inc: { impressions: 1 } });
+      return res.json({ success: true });
     }
     
-    // Fallback to local file
+    // Fallback to local file only if MongoDB is not available
     if (fs.existsSync(EVENTS_FILE)) {
       try {
         const fileData = JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf-8'));
@@ -3259,7 +3297,8 @@ app.post('/api/events/:id/impression', async (req, res) => {
     
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to record event impression: ' + error.message });
+    console.error('Failed to record event impression:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred.' });
   }
 });
 
@@ -3269,7 +3308,8 @@ app.get('/api/recruitments', async (req, res) => {
     const recruitments = await getRecruitments();
     res.json({ recruitments });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch recruitments: ' + error.message });
+    console.error('Failed to fetch recruitments:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while fetching recruitments.' });
   }
 });
 
@@ -3301,7 +3341,8 @@ app.post('/api/recruitments', authenticate, requireClubManager, async (req, res)
     await logActivity(req.user.email, `create_recruitment: ${recData.id}`, req);
     res.json({ success: true, recruitment: recData });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to create recruitment: ' + error.message });
+    console.error('Failed to create recruitment:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while creating recruitment.' });
   }
 });
 
@@ -3320,12 +3361,13 @@ app.delete('/api/recruitments/:id', authenticate, async (req, res) => {
     await logActivity(req.user.email, `delete_recruitment: ${req.params.id}`, req);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to delete recruitment: ' + error.message });
+    console.error('Failed to delete recruitment:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while deleting recruitment.' });
   }
 });
 
-// SMTP Health Check Endpoint
-app.get('/api/health/smtp', async (req, res) => {
+// SMTP Health Check Endpoint (admin-only)
+app.get('/api/health/smtp', authenticate, async (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   
   if (!smtpHealthy && transporter) {
@@ -3339,13 +3381,14 @@ app.get('/api/health/smtp', async (req, res) => {
     }
   }
 
+  const isAdmin = isAdminEmail(req.user.email);
   res.json({
     smtpHealthy,
-    smtpError,
-    smtpHost: process.env.SMTP_HOST || null,
-    smtpPort: process.env.SMTP_PORT || null,
-    smtpUser: process.env.SMTP_USER || null,
-    hasPass: !!process.env.SMTP_PASS
+    smtpError: isAdmin ? smtpError : undefined,
+    smtpHost: isAdmin ? (process.env.SMTP_HOST || null) : undefined,
+    smtpPort: isAdmin ? (process.env.SMTP_PORT || null) : undefined,
+    smtpUser: isAdmin ? (process.env.SMTP_USER || null) : undefined,
+    hasPass: isAdmin ? !!process.env.SMTP_PASS : undefined
   });
 });
 
@@ -3435,7 +3478,8 @@ app.get('/api/admin/users', authenticate, requireAdmin, async (req, res) => {
     
     res.json({ users: usersWithFlag });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch users: ' + error.message });
+    console.error('Failed to fetch users:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while fetching users.' });
   }
 });
 
@@ -3485,7 +3529,8 @@ app.post('/api/admin/promote', authenticate, requireAdmin, async (req, res) => {
     await logActivity(req.user.email, `promote_user: ${email} to ${role}`, req);
     res.json({ success: true, message: `${targetUser.name} promoted to ${role === 'admin' ? 'Admin' : `Club Manager for ${clubId}`}` });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to promote user: ' + error.message });
+    console.error('Failed to promote user:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while promoting user.' });
   }
 });
 
@@ -3520,7 +3565,8 @@ app.post('/api/admin/demote', authenticate, requireAdmin, async (req, res) => {
     await logActivity(req.user.email, `demote_user: ${email}`, req);
     res.json({ success: true, message: `${targetUser.name} demoted to Student` });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to demote user: ' + error.message });
+    console.error('Failed to demote user:', error);
+    res.status(500).json({ error: 'An unexpected server error occurred while demoting user.' });
   }
 });
 
@@ -3674,13 +3720,13 @@ const scheduleDailyScraper = () => {
 };
 
 // --- CRON CLEANUP ENDPOINT ---
-app.get('/api/cron/cleanup', async (req, res) => {
+app.get('/api/cron/cleanup', authenticate, requireAdmin, async (req, res) => {
   try {
     await cleanupExpiredEvents();
     res.json({ success: true, message: 'Expired events and assets cleanup completed.' });
   } catch (err) {
-    console.error("Cron cleanup handler failed:", err);
-    res.status(500).json({ error: 'Cleanup failed: ' + err.message });
+    console.error('Cron cleanup handler failed:', err);
+    res.status(500).json({ error: 'Cleanup failed. Check server logs for details.' });
   }
 });
 

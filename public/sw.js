@@ -1,6 +1,16 @@
 const CACHE_NAME = 'cds-hub-static-cache-v3';
 const API_CACHE_NAME = 'cds-hub-api-cache-v3';
 
+// Sensitive API paths that must NEVER be cached
+const SENSITIVE_API_PATHS = [
+  '/api/user/',
+  '/api/auth/',
+  '/api/admin/',
+  '/api/health/',
+  '/api/db-status',
+  '/api/cron/'
+];
+
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -8,6 +18,15 @@ const STATIC_ASSETS = [
   '/icons.svg',
   '/manifest.json'
 ];
+
+// Listen for cache purge messages (e.g., on logout)
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'PURGE_API_CACHE') {
+    caches.delete(API_CACHE_NAME).then(() => {
+      console.log('[Service Worker] API cache purged on logout.');
+    });
+  }
+});
 
 // Install Event
 self.addEventListener('install', event => {
@@ -46,6 +65,12 @@ self.addEventListener('fetch', event => {
 
   // Handle Backend API JSON requests
   if (requestUrl.pathname.startsWith('/api/')) {
+    // Skip caching for sensitive API paths
+    const isSensitive = SENSITIVE_API_PATHS.some(p => requestUrl.pathname.startsWith(p));
+    if (isSensitive) {
+      return; // Let the browser handle it directly — no caching
+    }
+
     event.respondWith(
       fetch(event.request)
         .then(response => {
