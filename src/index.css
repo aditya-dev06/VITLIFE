@@ -1617,7 +1617,7 @@ input, textarea, select {
   border: 1px solid hsla(var(--border-glass));
   border-radius: 10px;
   padding: 0.5rem 1rem;
-  min-width: 300px;
+  min-width: 200px; /* Reduced from 300px to prevent viewport overflow on narrow phone screens */
   flex: 1;
 }
 
@@ -1648,6 +1648,8 @@ input, textarea, select {
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .opp-org {
@@ -1699,6 +1701,8 @@ input, textarea, select {
   margin-top: auto;
   padding-top: 1rem;
   border-top: 1px solid rgba(255,255,255,0.05);
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .opp-deadline {
@@ -4097,6 +4101,17 @@ input, textarea, select {
   .opp-grid {
     grid-template-columns: 1fr !important;
     gap: 12px !important;
+  }
+  .opp-card {
+    padding: 1rem !important;
+  }
+  .opp-card-header {
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+  }
+  .opp-meta {
+    flex-wrap: wrap !important;
+    gap: 0.75rem !important;
   }
 
   /* Mobile club card layout overrides */
