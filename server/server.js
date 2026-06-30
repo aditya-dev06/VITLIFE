@@ -45,17 +45,44 @@ app.set('trust proxy', 1);
 
 app.use(compression());
 const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin) return callback(null, true);
-    if (ALLOWED_ORIGINS.length > 0 && ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-    try {
-      const parsed = new URL(origin);
-      if (['localhost', '127.0.0.1', '::1'].includes(parsed.hostname)) return callback(null, true);
-    } catch {}
-    return callback(new Error('CORS blocked for this origin'));
-  },
-  credentials: true
+app.use(cors((req, callback) => {
+  const origin = req.header('Origin');
+  const corsOptions = { credentials: true };
+  
+  if (!origin) {
+    corsOptions.origin = true;
+    return callback(null, corsOptions);
+  }
+
+  // Allow same-origin requests dynamically by checking host header
+  const host = req.header('Host');
+  if (host) {
+    const hostWithProtocolHttp = `http://${host}`;
+    const hostWithProtocolHttps = `https://${host}`;
+    if (origin === hostWithProtocolHttp || origin === hostWithProtocolHttps) {
+      corsOptions.origin = true;
+      return callback(null, corsOptions);
+    }
+  }
+
+  // Check env-configured allowed origins
+  if (ALLOWED_ORIGINS.length > 0 && ALLOWED_ORIGINS.includes(origin)) {
+    corsOptions.origin = true;
+    return callback(null, corsOptions);
+  }
+
+  // Check localhost/dev origins
+  try {
+    const parsed = new URL(origin);
+    if (['localhost', '127.0.0.1', '::1'].includes(parsed.hostname)) {
+      corsOptions.origin = true;
+      return callback(null, corsOptions);
+    }
+  } catch {}
+
+  // Block other origins
+  corsOptions.origin = false;
+  return callback(new Error('CORS blocked for this origin'), corsOptions);
 }));
 
 // Security helper: strips all sensitive fields from user objects before API responses
