@@ -884,29 +884,38 @@ input, textarea, select {
 /* Tinder swipe badges */
 .swipe-badge {
   position: absolute;
-  top: 1.5rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  font-weight: 800;
+  top: 1.25rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 9999px; /* Pill shape */
+  font-size: 0.75rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.05em;
   z-index: 10;
   pointer-events: none;
   opacity: 0;
-  border: 2px solid currentColor;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .swipe-badge.badge-like {
-  left: 1.5rem;
-  color: hsl(140, 70%, 45%);
-  transform: rotate(-12deg);
+  left: 1.25rem;
+  color: #10b981; /* Emerald 500 */
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  transform: rotate(-4deg);
 }
 
 .swipe-badge.badge-skip {
-  right: 1.5rem;
-  color: hsl(355, 75%, 60%);
-  transform: rotate(12deg);
+  right: 1.25rem;
+  color: #ef4444; /* Red 500 */
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  transform: rotate(4deg);
 }
 
 /* Make cards in the swipe stack solid to prevent overlap visibility */

@@ -1759,6 +1759,9 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
                           onPointerMove={isTop ? handlePointerMove : undefined}
                           onPointerUp={isTop ? (e) => handlePointerUp(e, eventItem) : undefined}
                           onPointerCancel={isTop ? (e) => handlePointerUp(e, eventItem) : undefined}
+                          onTouchStart={(e) => e.stopPropagation()}
+                          onTouchMove={(e) => e.stopPropagation()}
+                          onTouchEnd={(e) => e.stopPropagation()}
                         >
                           {/* Swipe Action Badges overlay strictly on top card */}
                           {isTop && swipeAction && (
