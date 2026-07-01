@@ -3622,6 +3622,7 @@ app.post('/api/papers', optionalAuthenticate, async (req, res) => {
 
     const isAdmin = req.user && req.user.role === 'admin';
     const paperId = `paper_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const uploaderIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
 
     const newPaper = {
       courseCode: courseCode.trim().toUpperCase(),
@@ -3633,6 +3634,7 @@ app.post('/api/papers', optionalAuthenticate, async (req, res) => {
       url: fileUrl.trim(),
       examDate: examDate ? examDate.trim() : null,
       uploadedBy: req.user ? req.user.email : 'Community',
+      uploaderIp: uploaderIp,
       status: isAdmin ? 'approved' : 'pending',
       createdAt: new Date().toISOString()
     };

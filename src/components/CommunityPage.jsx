@@ -621,6 +621,11 @@ export default function CommunityPage({ user }) {
                         </p>
                         <p className="mod-uploader">
                           Uploaded by: {paper.uploadedBy}
+                          {paper.uploaderIp && (
+                            <span style={{ display: 'block', color: 'hsl(var(--danger))', fontSize: '0.75rem', marginTop: '0.15rem', fontWeight: 600 }}>
+                              📍 IP: {paper.uploaderIp}
+                            </span>
+                          )}
                           {paper.examDate && (
                             <span style={{ display: 'block', color: 'hsl(var(--primary))', fontSize: '0.75rem', marginTop: '0.15rem', fontWeight: 600 }}>
                               📅 Exam Date: {new Date(paper.examDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
