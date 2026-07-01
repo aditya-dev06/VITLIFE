@@ -59,6 +59,12 @@ The platform supports both **authenticated users** (VIT students and global user
 - Academic guidelines and resources
 - Campus-specific information for VIT Bhopal students
 
+### 📚 Community (PYQs & Resources)
+- Upload and share Previous Year Questions (PYQs) and study materials
+- **Guest Uploads Supported**: Guests can upload resources (marked as 'pending' for admin approval)
+- Cloudinary-backed direct PDF previews built-in
+- Auto-fill course titles based on course codes
+
 ### 🔐 Authentication
 - Email + password registration with 6-digit email verification
 - Forgot password flow with email-based reset codes
@@ -86,6 +92,7 @@ The platform supports both **authenticated users** (VIT students and global user
 | Frontend | React 19, Vite 8, Vanilla CSS |
 | Backend | Express 5, Node.js |
 | Database | MongoDB Atlas (with local JSON fallback) |
+| Cloud Storage | Cloudinary (Image & PDF uploads) |
 | Email | Nodemailer (SMTP / Gmail App Passwords) |
 | Animations | GSAP, Motion (Framer Motion), Three.js |
 | Deployment | Vercel (serverless functions + static build) |
@@ -201,6 +208,9 @@ npm start
 | `MONGODB_URI` | No | MongoDB Atlas connection string |
 | `JWT_SECRET` | No | JWT signing secret (auto-generated if not set) |
 | `RESEND_API_KEY` | No | Alternative to SMTP — Resend.com API key |
+| `CLOUDINARY_CLOUD_NAME` | No | Cloudinary cloud name for uploads |
+| `CLOUDINARY_API_KEY` | No | Cloudinary API key |
+| `CLOUDINARY_API_SECRET`| No | Cloudinary API secret |
 
 > **Note**: The app works without any environment variables in dev mode. Email verification codes are printed to the console, and data is stored in local JSON files.
 
