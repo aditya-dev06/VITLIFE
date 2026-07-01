@@ -3562,7 +3562,8 @@ app.post('/api/papers', optionalAuthenticate, async (req, res) => {
         const buffer = Buffer.from(matches[2], 'base64');
         if (isCloudinaryConfigured) {
           try {
-            const resType = fileExtension === '.pdf' ? 'raw' : 'auto';
+            // Revert back to 'auto' (image) to allow inline viewing, but requires Cloudinary settings change
+            const resType = 'auto';
             fileUrl = await uploadToCloudinary(buffer, 'vitlife_papers', resType);
           } catch (cloudinaryErr) {
             console.error('Cloudinary upload failed, falling back to local:', cloudinaryErr);
