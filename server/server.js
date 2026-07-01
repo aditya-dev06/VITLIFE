@@ -4718,6 +4718,52 @@ app.get('/api/cron/cleanup', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
+app.get('/api/test-cloudinary', async (req, res) => {
+  try {
+    const status = {
+      CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ? 'Configured (' + process.env.CLOUDINARY_CLOUD_NAME + ')' : 'Missing',
+      CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY ? 'Configured (len: ' + process.env.CLOUDINARY_API_KEY.length + ')' : 'Missing',
+      CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET ? 'Configured (len: ' + process.env.CLOUDINARY_API_SECRET.length + ')' : 'Missing',
+      isCloudinaryConfigured: !!isCloudinaryConfigured
+    };
+
+    if (!isCloudinaryConfigured) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cloudinary is not configured. Missing environment variables.',
+        status
+      });
+    }
+
+    // 1x1 transparent pixel PNG buffer
+    const testBuffer = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      'base64'
+    );
+
+    const testUrl = await uploadToCloudinary(testBuffer, 'vitlife_test');
+    res.json({
+      success: true,
+      message: 'Cloudinary test upload succeeded!',
+      url: testUrl,
+      status
+    });
+  } catch (error) {
+    console.error('Cloudinary self-test failed:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Cloudinary test upload failed: ' + error.message,
+      error: error,
+      status: {
+        CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ? 'Configured (' + process.env.CLOUDINARY_CLOUD_NAME + ')' : 'Missing',
+        CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY ? 'Configured' : 'Missing',
+        CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET ? 'Configured' : 'Missing',
+        isCloudinaryConfigured: !!isCloudinaryConfigured
+      }
+    });
+  }
+});
+
 if (!process.env.VERCEL) {
   scheduleDailyScraper();
 
