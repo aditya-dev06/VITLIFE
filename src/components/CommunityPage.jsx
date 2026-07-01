@@ -1037,7 +1037,7 @@ export default function CommunityPage({ user }) {
               ) : (
                 <iframe
                   title="Paper Preview"
-                  src={previewPaper.url.startsWith('/uploads/') ? previewPaper.url : `https://docs.google.com/gview?url=${encodeURIComponent(previewPaper.url)}&embedded=true`}
+                  src={previewPaper.url}
                   width="100%"
                   height="100%"
                   style={{ border: 'none' }}
