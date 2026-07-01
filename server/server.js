@@ -99,7 +99,13 @@ function sanitizeUser(userObj) {
   return safe;
 }
 
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
+
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
 
 app.use((req, res, next) => {
   let maskedAuth = 'None';
@@ -162,6 +168,7 @@ const EVENTS_FILE = path.join(DATA_DIR, 'events.json');
 const RECRUITMENTS_FILE = path.join(DATA_DIR, 'recruitments.json');
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const ACTIVITY_LOGS_FILE = path.join(DATA_DIR, 'activity_logs.json');
+const PAPERS_FILE = path.join(DATA_DIR, 'papers.json');
 
 // Active Sessions Management
 const MAX_SESSIONS_PER_USER = 10;
@@ -787,14 +794,30 @@ if (transporter) {
   console.warn('⚠️ Email service not configured. Registration and password reset will be unavailable.');
 }
 
+const escapeHtml = (unsafe) => {
+  if (typeof unsafe !== 'string') return '';
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
 const getHtmlEmailTemplate = (name, title, heading, bodyText, code, expiryText) => {
+  const safeTitle = escapeHtml(title);
+  const safeHeading = escapeHtml(heading);
+  const safeBodyText = escapeHtml(bodyText);
+  const safeCode = escapeHtml(code);
+  const safeExpiryText = escapeHtml(expiryText);
+
   return `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
+  <title>${safeTitle}</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #ffffff; color: #111827; margin: 0; padding: 40px 20px; -webkit-font-smoothing: antialiased;">
   <div style="max-width: 480px; margin: 0 auto; padding: 20px 0;">
@@ -805,12 +828,12 @@ const getHtmlEmailTemplate = (name, title, heading, bodyText, code, expiryText) 
     
     <!-- Heading -->
     <h2 style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #111827; margin: 0 0 16px 0;">
-      ${heading}
+      ${safeHeading}
     </h2>
     
     <!-- Body text -->
     <p style="font-size: 15px; line-height: 1.6; color: #374151; margin: 0 0 28px 0;">
-      ${bodyText}
+      ${safeBodyText}
     </p>
     
     <!-- Verification Code Block -->
@@ -819,13 +842,13 @@ const getHtmlEmailTemplate = (name, title, heading, bodyText, code, expiryText) 
         Verification Code
       </div>
       <div style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 32px; font-weight: 800; letter-spacing: 0.25em; color: #111827; margin: 0; padding-left: 0.25em;">
-        ${code}
+        ${safeCode}
       </div>
     </div>
     
     <!-- Expiry / Security Note -->
     <p style="font-size: 13px; line-height: 1.5; color: #6b7280; margin: 0 0 32px 0;">
-      <strong>Note:</strong> ${expiryText} Never share this code with anyone. Our support team will never ask for this code.
+      <strong>Note:</strong> ${safeExpiryText} Never share this code with anyone. Our support team will never ask for this code.
     </p>
     
     <!-- Divider line -->
@@ -936,6 +959,7 @@ const authRateLimiter = (limit = 5, windowMs = 15 * 60 * 1000) => {
 // MongoDB Database Client Connection Setup
 const MONGODB_URI = process.env.MONGODB_URI;
 let db = null;
+let lastPassVitianSyncTime = 0;
 let client = null;
 let dbConnectionError = null;
 let dbConnectionStatus = "Initializing";
@@ -988,6 +1012,20 @@ if (MONGODB_URI) {
       dbConnectionError = null;
       console.log("Successfully connected to MongoDB Database!");
       ensureIndexes(db).catch(err => console.error("Index creation error:", err.message));
+      
+      // Seed papers in MongoDB if empty
+      try {
+        const paperCount = await db.collection('papers').countDocuments();
+        if (paperCount === 0 && fs.existsSync(PAPERS_FILE)) {
+          const seeds = JSON.parse(fs.readFileSync(PAPERS_FILE, 'utf-8'));
+          if (seeds && seeds.length > 0) {
+            await db.collection('papers').insertMany(seeds);
+            console.log(`Seeded ${seeds.length} papers to MongoDB Atlas.`);
+          }
+        }
+      } catch (e) {
+        console.error("Error seeding papers to MongoDB:", e.message);
+      }
     })
     .catch(err => {
       dbConnectionStatus = "Failed";
@@ -1457,6 +1495,212 @@ const getOpportunities = async () => {
     };
   } catch (e) {
     return { lastUpdated: '', opportunities: [] };
+  }
+};
+
+const getPapers = async () => {
+  if (dbConnectingPromise) {
+    await dbConnectingPromise;
+  }
+  if (db) {
+    try {
+      const papers = await db.collection('papers').find().toArray();
+      return papers || [];
+    } catch (err) {
+      console.error("MongoDB getPapers error, falling back to file:", err);
+    }
+  }
+  if (!fs.existsSync(PAPERS_FILE)) {
+    fs.writeFileSync(PAPERS_FILE, JSON.stringify([], null, 2), 'utf-8');
+  }
+  try {
+    return JSON.parse(fs.readFileSync(PAPERS_FILE, 'utf-8')) || [];
+  } catch (e) {
+    return [];
+  }
+};
+
+const savePaper = async (id, paperObj) => {
+  if (dbConnectingPromise) {
+    await dbConnectingPromise;
+  }
+  if (db) {
+    try {
+      await db.collection('papers').replaceOne({ _id: id }, { _id: id, ...paperObj }, { upsert: true });
+      return;
+    } catch (err) {
+      console.error("MongoDB savePaper error, falling back to file:", err);
+    }
+  }
+  let list = [];
+  if (fs.existsSync(PAPERS_FILE)) {
+    try {
+      list = JSON.parse(fs.readFileSync(PAPERS_FILE, 'utf-8')) || [];
+    } catch (e) {}
+  }
+  const index = list.findIndex(p => p._id === id);
+  if (index !== -1) {
+    list[index] = { _id: id, ...paperObj };
+  } else {
+    list.push({ _id: id, ...paperObj });
+  }
+  fs.writeFileSync(PAPERS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+};
+
+const deletePaper = async (id) => {
+  if (dbConnectingPromise) {
+    await dbConnectingPromise;
+  }
+  if (db) {
+    try {
+      await db.collection('papers').deleteOne({ _id: id });
+      return;
+    } catch (err) {
+      console.error("MongoDB deletePaper error, falling back to file:", err);
+    }
+  }
+  if (fs.existsSync(PAPERS_FILE)) {
+    try {
+      let list = JSON.parse(fs.readFileSync(PAPERS_FILE, 'utf-8')) || [];
+      list = list.filter(p => p._id !== id);
+      fs.writeFileSync(PAPERS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+    } catch (e) {}
+  }
+};
+
+const syncPassVitianPapers = async () => {
+  lastPassVitianSyncTime = Date.now();
+  try {
+    console.log('[Sync] Starting papers sync...');
+    
+    // Clean up any old PassVitian references from database to ensure no info leaks
+    if (db) {
+      try {
+        await db.collection('papers').deleteMany({
+          $or: [
+            { _id: /^pv_/ },
+            { uploadedBy: 'PassVitian' }
+          ]
+        });
+      } catch (err) {
+        console.error('[Sync] Error cleaning old papers from DB:', err.message);
+      }
+    }
+    
+    // Clean up local papers.json as well
+    if (fs.existsSync(PAPERS_FILE)) {
+      try {
+        let list = JSON.parse(fs.readFileSync(PAPERS_FILE, 'utf-8')) || [];
+        const cleanList = list.filter(p => !p._id.startsWith('pv_') && p.uploadedBy !== 'PassVitian');
+        if (cleanList.length !== list.length) {
+          fs.writeFileSync(PAPERS_FILE, JSON.stringify(cleanList, null, 2), 'utf-8');
+        }
+      } catch (e) {}
+    }
+
+    const response = await fetch('https://passvitian.in/api/list-papers');
+    if (!response.ok) {
+      throw new Error(`Failed to fetch papers: ${response.statusText}`);
+    }
+    const data = await response.json();
+    const fetchedPapers = data.papers || [];
+    console.log(`[Sync] Fetched ${fetchedPapers.length} papers.`);
+
+    const existingPapers = await getPapers();
+    const existingUrls = new Set(
+      existingPapers.map(p => (p.url || '').trim().toLowerCase()).filter(Boolean)
+    );
+
+    let savedCount = 0;
+    for (const paper of fetchedPapers) {
+      const paperUrl = (paper.secure_url || paper.url || '').trim();
+      if (!paperUrl) {
+        continue;
+      }
+
+      // Check if paper already exists by URL/secure_url to prevent duplicates
+      if (existingUrls.has(paperUrl.toLowerCase())) {
+        continue;
+      }
+
+      // Map subjectCode to courseCode
+      const courseCode = (paper.subjectCode || '').trim().toUpperCase();
+      if (!courseCode) continue;
+
+      // Map subjectName to courseTitle
+      const courseTitle = (paper.subjectName || '').trim() || courseCode;
+
+      // Infer department from the prefix of subjectCode
+      let department = 'CSE';
+      if (courseCode.startsWith('MAT3002') || courseCode.startsWith('MAT2003')) {
+        department = 'DSA';
+      } else if (courseCode.startsWith('CSE') || courseCode.startsWith('CSD')) {
+        department = 'CSE';
+      } else if (courseCode.startsWith('ECE')) {
+        department = 'ECE';
+      } else if (courseCode.startsWith('EEE')) {
+        department = 'EEE';
+      } else if (courseCode.startsWith('MEE')) {
+        department = 'MEE';
+      } else if (courseCode.startsWith('CIV')) {
+        department = 'CIV';
+      } else if (courseCode.startsWith('ASE')) {
+        department = 'ASE';
+      } else if (courseCode.startsWith('MAT') || courseCode.startsWith('CCA')) {
+        department = 'AIM';
+      } else {
+        const match = courseCode.match(/^[A-Z]+/);
+        department = match ? match[0] : 'CSE';
+      }
+
+      // Infer semester based on the first digit of the course code
+      const digitMatch = courseCode.match(/\d/);
+      const firstDigit = digitMatch ? parseInt(digitMatch[0], 10) : 1;
+      let semester = 1;
+      if (firstDigit === 1) semester = 1;
+      else if (firstDigit === 2) semester = 3;
+      else if (firstDigit === 3) semester = 5;
+      else if (firstDigit === 4) semester = 7;
+
+      // Infer year from paperName
+      let year = '2024-25'; // Fallback
+      if (paper.paperName) {
+        const match = paper.paperName.match(/\d{4}/);
+        if (match) {
+          const fullYear = parseInt(match[0], 10);
+          const prevYear = fullYear - 1;
+          const shortYearStr = String(fullYear).slice(-2);
+          year = `${prevYear}-${shortYearStr}`;
+        }
+      }
+
+      // Map paperType to examType (MTE, TEE)
+      const examType = (paper.paperType || '').trim().toUpperCase() === 'TEE' ? 'TEE' : 'MTE';
+
+      // Generate a unique ID (p_ prefix instead of pv_)
+      const uniqueId = `p_${paper.id || crypto.randomBytes(8).toString('hex')}`;
+
+      const mappedPaper = {
+        courseCode,
+        courseTitle,
+        department,
+        examType,
+        year,
+        semester,
+        url: paperUrl,
+        uploadedBy: 'Community',
+        status: 'approved',
+        createdAt: new Date().toISOString()
+      };
+
+      await savePaper(uniqueId, mappedPaper);
+      existingUrls.add(paperUrl.toLowerCase()); // Avoid duplicates in the same run
+      savedCount++;
+    }
+
+    console.log(`[Sync] Papers sync completed. Saved ${savedCount} new papers.`);
+  } catch (error) {
+    console.error('[Sync] Error syncing papers:', error);
   }
 };
 
@@ -2882,6 +3126,92 @@ app.post('/api/auth/reset-password', authLimiter, authRateLimiter(5, 15 * 60 * 1
   }
 });
 
+// ================= SETTINGS ROUTE =================
+
+// Get guide visibility setting
+app.get('/api/settings/guide-visible', async (req, res) => {
+  try {
+    let visible = false; // Default is hidden
+    if (db) {
+      const doc = await db.collection('settings').findOne({ key: 'guide_visible' });
+      if (doc) {
+        visible = !!doc.value;
+      }
+    } else {
+      visible = global.guideVisible || false;
+    }
+    res.json({ visible });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch settings.' });
+  }
+});
+
+// Update guide visibility setting (Admin only)
+app.post('/api/settings/guide-visible', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { visible } = req.body;
+    if (typeof visible !== 'boolean') {
+      return res.status(400).json({ error: 'visible (boolean) is required.' });
+    }
+    
+    if (db) {
+      await db.collection('settings').updateOne(
+        { key: 'guide_visible' },
+        { $set: { value: visible } },
+        { upsert: true }
+      );
+    } else {
+      global.guideVisible = visible;
+    }
+    
+    res.json({ success: true, visible });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update settings.' });
+  }
+});
+
+// Get events lock setting
+app.get('/api/settings/events-locked', async (req, res) => {
+  try {
+    let locked = true; // Default is locked
+    if (db) {
+      const doc = await db.collection('settings').findOne({ key: 'events_locked' });
+      if (doc) {
+        locked = !!doc.value;
+      }
+    } else {
+      locked = global.eventsLocked !== false; // Default is true
+    }
+    res.json({ locked });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch settings.' });
+  }
+});
+
+// Update events lock setting (Admin only)
+app.post('/api/settings/events-locked', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { locked } = req.body;
+    if (typeof locked !== 'boolean') {
+      return res.status(400).json({ error: 'locked (boolean) is required.' });
+    }
+    
+    if (db) {
+      await db.collection('settings').updateOne(
+        { key: 'events_locked' },
+        { $set: { value: locked } },
+        { upsert: true }
+      );
+    } else {
+      global.eventsLocked = locked;
+    }
+    
+    res.json({ success: true, locked });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update settings.' });
+  }
+});
+
 // 3. Get User Profile Progress
 app.get('/api/user/profile', authenticate, async (req, res) => {
   const userProfile = { ...req.user };
@@ -3138,6 +3468,206 @@ app.get('/api/mess-menu', (req, res) => {
     success: true,
     messes: VALID_MESS_IDS.map(id => ({ id, name: MESS_NAMES[id] }))
   });
+});
+
+// ================= STUDENT PAPERS (PYQ) ROUTES =================
+
+// 1. GET /api/papers - Get approved papers with optional search and department filters
+app.get('/api/papers', async (req, res) => {
+  try {
+    const { department, search } = req.query;
+
+    // Cooldown check for on-demand sync: 10 minutes (600,000 ms)
+    const now = Date.now();
+    if (now - lastPassVitianSyncTime > 10 * 60 * 1000) {
+      // Trigger sync asynchronously without blocking the response
+      syncPassVitianPapers().catch(err => console.error('[Sync] On-demand PassVitian sync failed:', err));
+    }
+
+    let list = await getPapers();
+    
+    // Filter only approved papers for public view
+    list = list.filter(p => p.status === 'approved');
+
+    if (department) {
+      list = list.filter(p => p.department === department);
+    }
+
+    if (search) {
+      const cleanSearch = search.trim().toLowerCase();
+      list = list.filter(p => 
+        p.courseCode.toLowerCase().includes(cleanSearch) || 
+        p.courseTitle.toLowerCase().includes(cleanSearch)
+      );
+    }
+
+    res.json({ success: true, papers: list });
+  } catch (error) {
+    console.error('GET /api/papers error:', error);
+    res.status(500).json({ error: 'Failed to retrieve papers.' });
+  }
+});
+
+// 2. GET /api/papers/moderation - Get pending papers (Admin Only)
+app.get('/api/papers/moderation', authenticate, requireAdmin, async (req, res) => {
+  try {
+    let list = await getPapers();
+    const pending = list.filter(p => p.status === 'pending');
+    res.json({ success: true, papers: pending });
+  } catch (error) {
+    console.error('GET /api/papers/moderation error:', error);
+    res.status(500).json({ error: 'Failed to retrieve pending papers.' });
+  }
+});
+
+// 3. POST /api/papers - Upload a new paper (Authenticated Users)
+app.post('/api/papers', authenticate, async (req, res) => {
+  try {
+    const { courseCode, courseTitle, department, examType, year, semester, url, fileData, fileName, examDate } = req.body;
+
+    if (!courseCode || !courseTitle || !examType || !year || !semester) {
+      return res.status(400).json({ error: 'All fields (courseCode, courseTitle, examType, year, semester) are required.' });
+    }
+
+    let fileUrl = url || '';
+
+    // Handle base64 file upload if present
+    if (fileData && fileName) {
+      const fileExtension = (path.extname(fileName) || '').toLowerCase();
+      const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.gif'];
+      if (!allowedExtensions.includes(fileExtension)) {
+        return res.status(400).json({ error: 'Only PDF and image files (PDF, JPG, JPEG, PNG, WEBP, GIF) are allowed.' });
+      }
+
+      const matches = fileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        const buffer = Buffer.from(matches[2], 'base64');
+        if (isCloudinaryConfigured) {
+          try {
+            fileUrl = await uploadToCloudinary(buffer, 'vitlife_papers');
+          } catch (cloudinaryErr) {
+            console.error('Cloudinary upload failed, falling back to local:', cloudinaryErr);
+            const fileExtension = path.extname(fileName) || '.pdf';
+            const uniqueName = `paper_${Date.now()}_${Math.random().toString(36).substring(2, 8)}${fileExtension}`;
+            const filePath = path.join(uploadsDir, uniqueName);
+            fs.writeFileSync(filePath, buffer);
+            fileUrl = `/uploads/${uniqueName}`;
+          }
+        } else {
+          const fileExtension = path.extname(fileName) || '.pdf';
+          const uniqueName = `paper_${Date.now()}_${Math.random().toString(36).substring(2, 8)}${fileExtension}`;
+          const filePath = path.join(uploadsDir, uniqueName);
+          fs.writeFileSync(filePath, buffer);
+          fileUrl = `/uploads/${uniqueName}`;
+        }
+      } else {
+        return res.status(400).json({ error: 'Invalid file data format.' });
+      }
+    }
+
+    if (!fileUrl) {
+      return res.status(400).json({ error: 'Please enter a URL or upload a file.' });
+    }
+
+    // Basic URL validation only if it is not an uploaded local file
+    if (!fileUrl.startsWith('/uploads/') && !fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
+      return res.status(400).json({ error: 'Please enter a valid URL (starting with http:// or https://) or upload a file.' });
+    }
+
+    // Infer department if not provided
+    let inferredDept = department;
+    if (!inferredDept) {
+      const code = courseCode.trim().toUpperCase();
+      if (code.startsWith('MAT3002') || code.startsWith('MAT2003')) {
+        inferredDept = 'DSA';
+      } else if (code.startsWith('CSE') || code.startsWith('CSD')) {
+        inferredDept = 'CSE';
+      } else if (code.startsWith('ECE')) {
+        inferredDept = 'ECE';
+      } else if (code.startsWith('EEE')) {
+        inferredDept = 'EEE';
+      } else if (code.startsWith('MEE')) {
+        inferredDept = 'MEE';
+      } else if (code.startsWith('CIV')) {
+        inferredDept = 'CIV';
+      } else if (code.startsWith('ASE')) {
+        inferredDept = 'ASE';
+      } else if (code.startsWith('MAT') || code.startsWith('CCA')) {
+        inferredDept = 'AIM';
+      } else {
+        const match = code.match(/^[A-Z]+/);
+        inferredDept = match ? match[0] : 'CSE';
+      }
+    }
+
+    const isAdmin = req.user.role === 'admin';
+    const paperId = `paper_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    const newPaper = {
+      courseCode: courseCode.trim().toUpperCase(),
+      courseTitle: courseTitle.trim(),
+      department: inferredDept.trim().toUpperCase(),
+      examType: examType.trim(),
+      year: year.trim(),
+      semester: parseInt(semester, 10) || 1,
+      url: fileUrl.trim(),
+      examDate: examDate ? examDate.trim() : null,
+      uploadedBy: req.user.email,
+      status: isAdmin ? 'approved' : 'pending',
+      createdAt: new Date().toISOString()
+    };
+
+    await savePaper(paperId, newPaper);
+
+    res.status(201).json({
+      success: true,
+      message: isAdmin ? 'Paper uploaded and approved successfully!' : 'Paper submitted successfully! It will appear once approved by an administrator.',
+      paper: { _id: paperId, ...newPaper }
+    });
+  } catch (error) {
+    console.error('POST /api/papers error:', error);
+    res.status(500).json({ error: 'Failed to submit paper.' });
+  }
+});
+
+// 4. PUT /api/papers/:id/approve - Approve a pending paper (Admin Only)
+app.put('/api/papers/:id/approve', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const list = await getPapers();
+    const paper = list.find(p => p._id === id);
+
+    if (!paper) {
+      return res.status(404).json({ error: 'Paper not found.' });
+    }
+
+    paper.status = 'approved';
+    await savePaper(id, paper);
+
+    res.json({ success: true, message: 'Paper approved successfully.' });
+  } catch (error) {
+    console.error('PUT /api/papers/:id/approve error:', error);
+    res.status(500).json({ error: 'Failed to approve paper.' });
+  }
+});
+
+// 5. DELETE /api/papers/:id - Reject or delete a paper (Admin Only)
+app.delete('/api/papers/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const list = await getPapers();
+    const paper = list.find(p => p._id === id);
+
+    if (!paper) {
+      return res.status(404).json({ error: 'Paper not found.' });
+    }
+
+    await deletePaper(id);
+    res.json({ success: true, message: 'Paper deleted successfully.' });
+  } catch (error) {
+    console.error('DELETE /api/papers/:id error:', error);
+    res.status(500).json({ error: 'Failed to delete paper.' });
+  }
 });
 
 // ================= OPPORTUNITY & SCRAPER ROUTES =================
@@ -4195,6 +4725,11 @@ if (!process.env.VERCEL) {
   setTimeout(() => {
     cleanupExpiredEvents().catch(err => console.error("Local startup cleanup failed:", err));
   }, 10000); // 10s delay to allow DB connection to settle
+
+  // Run PassVitian papers sync on startup
+  setTimeout(() => {
+    syncPassVitianPapers().catch(err => console.error("Startup PassVitian sync failed:", err));
+  }, 5000); // 5s delay to allow DB connection to settle
 
   setInterval(() => {
     cleanupExpiredEvents().catch(err => console.error("Local interval cleanup failed:", err));

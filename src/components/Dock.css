@@ -102,9 +102,15 @@
 }
 
 /* Hide Dock on Desktop viewports, as desktop uses the sidebar */
-@media (min-width: 769px) {
+@media (min-width: 769px) and (min-height: 481px) {
   .dock-outer {
     display: none !important;
+  }
+}
+
+@media (pointer: coarse) and (max-width: 1024px) {
+  .dock-outer {
+    display: flex !important;
   }
 }
 

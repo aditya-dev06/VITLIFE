@@ -455,7 +455,9 @@ export default function CampusLife({
   fetchClubs, 
   fetchEvents,
   initialSelectedEventId,
-  clearInitialSelectedEvent
+  clearInitialSelectedEvent,
+  eventsLocked = true,
+  onToggleEventsLock
 }) {
   const isAdmin = user && user.role === 'admin';
   const isManager = user && (user.role === 'club_manager' || user.role === 'admin');
@@ -1261,36 +1263,73 @@ export default function CampusLife({
       {/* ═══════════════ TAB 2: EVENTS ═══════════════ */}
       {activeSubTab === 'events' && (
         <>
-          {sortedEvents.length > 0 ? (
-            <Masonry
-              items={masonryItems}
-              ease="power3.out"
-              duration={0.6}
-              stagger={0.05}
-              animateFrom="bottom"
-              scaleOnHover={true}
-              hoverScale={0.95}
-              blurToFocus={true}
-              colorShiftOnHover={false}
-              renderItem={(item) => (
-                <EventCardItem
-                  event={item.event}
-                  clubs={clubs}
-                  token={token}
-                  isAdmin={isAdmin}
-                  fetchEvents={fetchEvents}
-                  setSelectedEventDetails={setSelectedEventDetails}
-                  isOngoingSection={false}
-                  isMasonry={true}
-                  imgHeight={item.imgHeight}
-                />
-              )}
-            />
-          ) : (
-            <div className="empty-state">
-              <span style={{ fontSize: '3rem' }}>📅</span>
-              <p>No events yet. {isManager ? 'Be the first to create one!' : 'Check back soon!'}</p>
+          {isAdmin && (
+            <div className="glass-panel" style={{ marginBottom: '1.25rem', padding: '0.85rem 1.25rem', background: eventsLocked ? 'rgba(239, 68, 68, 0.08)' : 'rgba(16, 185, 129, 0.08)', border: eventsLocked ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', width: '100%', marginTop: '0.5rem' }}>
+              <span style={{ fontSize: '0.85rem', color: 'hsl(var(--text-primary))', fontWeight: '600' }}>
+                {eventsLocked ? '🔒 Events Section is Locked (Students see a placeholder)' : '🔓 Events Section is Unlocked (Students see active events)'}
+              </span>
+              <button
+                onClick={onToggleEventsLock}
+                className="paper-btn"
+                style={{
+                  width: 'auto',
+                  margin: 0,
+                  padding: '0.4rem 0.9rem',
+                  fontSize: '0.78rem',
+                  background: eventsLocked ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                  border: eventsLocked ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+                  color: eventsLocked ? '#10b981' : '#ef4444',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '700',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {eventsLocked ? 'Unlock Section' : 'Lock Section'}
+              </button>
             </div>
+          )}
+
+          {eventsLocked && !isAdmin ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', minHeight: '300px', background: 'hsla(var(--bg-card) / 0.3)', border: '1px dashed hsla(var(--border-glass))', borderRadius: '16px', padding: '3rem 2rem', textAlign: 'center', marginTop: '1rem', width: '100%', backdropFilter: 'blur(10px)' }}>
+              <span style={{ fontSize: '3.5rem', marginBottom: '1rem', display: 'block' }}>🔒</span>
+              <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.4rem', color: 'hsl(var(--text-primary))', fontWeight: '800' }}>Events will resume after exams</h3>
+              <p style={{ margin: 0, fontSize: '0.9rem', color: 'hsl(var(--text-muted))', maxWidth: '420px', lineHeight: '1.5' }}>Stay focused on your preparations! All club recruitments, hackathons, and campus events are paused and will resume once the exams are completed.</p>
+            </div>
+          ) : (
+            <>
+              {sortedEvents.length > 0 ? (
+                <Masonry
+                  items={masonryItems}
+                  ease="power3.out"
+                  duration={0.6}
+                  stagger={0.05}
+                  animateFrom="bottom"
+                  scaleOnHover={true}
+                  hoverScale={0.95}
+                  blurToFocus={true}
+                  colorShiftOnHover={false}
+                  renderItem={(item) => (
+                    <EventCardItem
+                      event={item.event}
+                      clubs={clubs}
+                      token={token}
+                      isAdmin={isAdmin}
+                      fetchEvents={fetchEvents}
+                      setSelectedEventDetails={setSelectedEventDetails}
+                      isOngoingSection={false}
+                      isMasonry={true}
+                      imgHeight={item.imgHeight}
+                    />
+                  )}
+                />
+              ) : (
+                <div className="empty-state">
+                  <span style={{ fontSize: '3rem' }}>📅</span>
+                  <p>No events yet. {isManager ? 'Be the first to create one!' : 'Check back soon!'}</p>
+                </div>
+              )}
+            </>
           )}
         </>
       )}
@@ -1298,35 +1337,72 @@ export default function CampusLife({
       {/* ═══════════════ TAB 2.5: ACTIVE EVENTS ═══════════════ */}
       {activeSubTab === 'active_events' && (
         <>
-          {ongoingEvents.length > 0 ? (
-            <div className="event-masonry-grid" style={{ marginTop: '1rem', alignItems: 'stretch' }}>
-              {ongoingEvents.map(event => (
-                <ElectricBorder
-                  key={`active-border-${event.id}`}
-                  color="#03b3c3"
-                  speed={1.2}
-                  chaos={0.15}
-                  borderRadius={16}
-                  style={{ display: 'flex' }}
-                >
-                  <EventCardItem
-                    event={event}
-                    clubs={clubs}
-                    token={token}
-                    isAdmin={isAdmin}
-                    fetchEvents={fetchEvents}
-                    setSelectedEventDetails={setSelectedEventDetails}
-                    isOngoingSection={true}
-                    isMasonry={false}
-                  />
-                </ElectricBorder>
-              ))}
+          {isAdmin && (
+            <div className="glass-panel" style={{ marginBottom: '1.25rem', padding: '0.85rem 1.25rem', background: eventsLocked ? 'rgba(239, 68, 68, 0.08)' : 'rgba(16, 185, 129, 0.08)', border: eventsLocked ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', width: '100%', marginTop: '0.5rem' }}>
+              <span style={{ fontSize: '0.85rem', color: 'hsl(var(--text-primary))', fontWeight: '600' }}>
+                {eventsLocked ? '🔒 Events Section is Locked (Students see a placeholder)' : '🔓 Events Section is Unlocked (Students see active events)'}
+              </span>
+              <button
+                onClick={onToggleEventsLock}
+                className="paper-btn"
+                style={{
+                  width: 'auto',
+                  margin: 0,
+                  padding: '0.4rem 0.9rem',
+                  fontSize: '0.78rem',
+                  background: eventsLocked ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                  border: eventsLocked ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+                  color: eventsLocked ? '#10b981' : '#ef4444',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '700',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {eventsLocked ? 'Unlock Section' : 'Lock Section'}
+              </button>
+            </div>
+          )}
+
+          {eventsLocked && !isAdmin ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', minHeight: '300px', background: 'hsla(var(--bg-card) / 0.3)', border: '1px dashed hsla(var(--border-glass))', borderRadius: '16px', padding: '3rem 2rem', textAlign: 'center', marginTop: '1rem', width: '100%', backdropFilter: 'blur(10px)' }}>
+              <span style={{ fontSize: '3.5rem', marginBottom: '1rem', display: 'block' }}>🔒</span>
+              <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.4rem', color: 'hsl(var(--text-primary))', fontWeight: '800' }}>Events will resume after exams</h3>
+              <p style={{ margin: 0, fontSize: '0.9rem', color: 'hsl(var(--text-muted))', maxWidth: '420px', lineHeight: '1.5' }}>Stay focused on your preparations! All club recruitments, hackathons, and campus events are paused and will resume once the exams are completed.</p>
             </div>
           ) : (
-            <div className="empty-state">
-              <span style={{ fontSize: '3rem' }}>🔥</span>
-              <p>No events are currently happening. Check out the "Upcoming Events" tab for upcoming programs!</p>
-            </div>
+            <>
+              {ongoingEvents.length > 0 ? (
+                <div className="event-masonry-grid" style={{ marginTop: '1rem', alignItems: 'stretch' }}>
+                  {ongoingEvents.map(event => (
+                    <ElectricBorder
+                      key={`active-border-${event.id}`}
+                      color="#03b3c3"
+                      speed={1.2}
+                      chaos={0.15}
+                      borderRadius={16}
+                      style={{ display: 'flex' }}
+                    >
+                      <EventCardItem
+                        event={event}
+                        clubs={clubs}
+                        token={token}
+                        isAdmin={isAdmin}
+                        fetchEvents={fetchEvents}
+                        setSelectedEventDetails={setSelectedEventDetails}
+                        isOngoingSection={true}
+                        isMasonry={false}
+                      />
+                    </ElectricBorder>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <span style={{ fontSize: '3rem' }}>🔥</span>
+                  <p>No events are currently happening. Check out the "Upcoming Events" tab for upcoming programs!</p>
+                </div>
+              )}
+            </>
           )}
         </>
       )}
@@ -1334,7 +1410,7 @@ export default function CampusLife({
       {/* FAB: Create Event & Create Event Modal (shared across Events and Active Events tabs) */}
       {(activeSubTab === 'events' || activeSubTab === 'active_events') && (
         <>
-          {isManager && (
+          {isManager && (!eventsLocked || isAdmin) && (
             <button
               className="fab-create"
               onClick={() => setShowCreateEvent(true)}
@@ -2192,16 +2268,102 @@ function EditClubModal({ club, onClose, onSubmit, loading }) {
               >📁 Upload</button>
             </div>
             {iconMode === 'url' ? (
-              <input type="text" value={iconUrl} onChange={e => setIconUrl(e.target.value)} placeholder="Enter emoji (e.g. 🖥️) or absolute URL" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <input 
+                  type="text" 
+                  value={iconUrl} 
+                  onChange={e => setIconUrl(e.target.value)} 
+                  placeholder="Enter emoji (e.g. 🖥️) or absolute URL"
+                  style={{
+                    width: '100%', padding: '0.85rem 1rem', background: 'rgba(15, 23, 42, 0.5)',
+                    border: '1px solid hsla(var(--border-glass))', borderRadius: '8px', color: '#fff'
+                  }}
+                />
+                {iconUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIconUrl('');
+                      setIconFile(null);
+                    }}
+                    style={{
+                      alignSelf: 'flex-start',
+                      padding: '0.25rem 0.65rem',
+                      fontSize: '0.72rem',
+                      borderRadius: '4px',
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      border: '1px solid rgba(239, 68, 68, 0.25)',
+                      color: '#ef4444',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.2rem',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#ef4444';
+                      e.currentTarget.style.color = '#ffffff';
+                      e.currentTarget.style.borderColor = '#ef4444';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                      e.currentTarget.style.color = '#ef4444';
+                      e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.25)';
+                    }}
+                  >
+                    🗑️ Remove Custom Logo
+                  </button>
+                )}
+              </div>
             ) : (
-              <input type="file" accept="image/jpeg,image/png,image/gif,image/webp"
-                onChange={e => setIconFile(e.target.files?.[0] || null)}
-                style={{
-                  width: '100%', padding: '0.5rem', borderRadius: '8px',
-                  background: 'hsl(var(--bg-card))', border: '1px solid hsla(var(--border-glass))',
-                  color: 'hsl(var(--text-primary))', fontSize: '0.85rem'
-                }}
-              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <input type="file" accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={e => setIconFile(e.target.files?.[0] || null)}
+                  style={{
+                    width: '100%', padding: '0.5rem', borderRadius: '8px',
+                    background: 'hsl(var(--bg-card))', border: '1px solid hsla(var(--border-glass))',
+                    color: 'hsl(var(--text-primary))', fontSize: '0.85rem'
+                  }}
+                />
+                {(iconFile || club.icon) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIconUrl('');
+                      setIconFile(null);
+                      setIconMode('url');
+                    }}
+                    style={{
+                      alignSelf: 'flex-start',
+                      padding: '0.25rem 0.65rem',
+                      fontSize: '0.72rem',
+                      borderRadius: '4px',
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      border: '1px solid rgba(239, 68, 68, 0.25)',
+                      color: '#ef4444',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.2rem',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#ef4444';
+                      e.currentTarget.style.color = '#ffffff';
+                      e.currentTarget.style.borderColor = '#ef4444';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                      e.currentTarget.style.color = '#ef4444';
+                      e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.25)';
+                    }}
+                  >
+                    🗑️ Remove Custom Logo
+                  </button>
+                )}
+              </div>
             )}
           </div>
 

@@ -1,12 +1,43 @@
 
 
-const VITBhopalGuide = ({ isVitBhopal, userSemester = 1, userProgram = '' }) => {
+const VITBhopalGuide = ({ isVitBhopal, userSemester = 1, userProgram = '', isAdmin = false, guideVisible = false, onToggleGuideVisibility }) => {
   const semNum = parseInt(userSemester, 10);
   const isIntegrated = userProgram.toLowerCase().includes('integrated') || userProgram.toLowerCase().includes('m.tech') || userProgram.toLowerCase().includes('bim');
 
   if (isVitBhopal) {
     return (
       <div>
+        {isAdmin && (
+          <div className="glass-panel" style={{ marginBottom: '2rem', padding: '1.25rem 1.5rem', background: 'hsla(var(--primary) / 0.08)', border: '1px solid hsla(var(--primary) / 0.3)', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+              <span style={{ fontSize: '0.9rem', fontWeight: '700', color: 'hsl(var(--text-primary))' }}>
+                ⚙️ Admin Visibility Panel
+              </span>
+              <span style={{ fontSize: '0.78rem', color: 'hsl(var(--text-secondary))' }}>
+                The Guide tab is currently {guideVisible ? '🟢 Visible to all students' : '🔴 Hidden from students'}.
+              </span>
+            </div>
+            <button
+              onClick={onToggleGuideVisibility}
+              className="paper-btn"
+              style={{
+                width: 'auto',
+                margin: 0,
+                padding: '0.5rem 1rem',
+                fontSize: '0.8rem',
+                background: guideVisible ? 'rgba(239, 68, 68, 0.15)' : 'hsla(var(--primary) / 0.15)',
+                border: guideVisible ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid hsla(var(--primary) / 0.3)',
+                color: guideVisible ? '#ef4444' : 'hsl(var(--primary))',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: '600'
+              }}
+            >
+              {guideVisible ? 'Hide Guide' : 'Show Guide'}
+            </button>
+          </div>
+        )}
+
         <div className="section-header">
           <h1 className="section-title">VIT Bhopal Academic Guide</h1>
           <p className="section-subtitle">

@@ -441,7 +441,11 @@ const Auth = ({ onLoginSuccess, theme, setTheme }) => {
   const handleGuestContinue = () => {
     let guestId = localStorage.getItem('ds_guest_id');
     if (!guestId) {
-      guestId = 'guest_' + crypto.randomUUID();
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        guestId = 'guest_' + crypto.randomUUID();
+      } else {
+        guestId = 'guest_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
+      }
       localStorage.setItem('ds_guest_id', guestId);
     }
 

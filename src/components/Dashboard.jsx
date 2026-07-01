@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import BounceCards from './BounceCards';
 import Hyperspeed from './Hyperspeed';
 
@@ -876,12 +876,47 @@ const filterMainDishes = (itemsStr) => {
   return mainDishes.length > 0 ? mainDishes.slice(0, 5) : items.slice(0, 3);
 };
 
-const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, clubs = [], events = [], fetchEvents, token, theme, onNavigateToEvent }) => {
-  const [trackerTab, setTrackerTab] = useState('mess'); // 'class' | 'mess'
+const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, clubs = [], events = [], fetchEvents, token, theme, onNavigateToEvent, eventsLocked = true, onToggleEventsLock, isAdmin = false }) => {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-  
+  const [isDemoView, setIsDemoView] = useState(false);
+
+  useEffect(() => {
+    if (!user || !user.timetable || user.timetable.length === 0) {
+      const interval = setInterval(() => {
+        setIsDemoView(prev => !prev);
+      }, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
+  const [showSubtitle, setShowSubtitle] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSubtitle(false);
+    }, 30000);
+    return () => clearTimeout(timer);
+  }, []);
+  const [mealCycleOffset, setMealCycleOffset] = useState(0);
+  const mealResetTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    if (mealCycleOffset > 0) {
+      if (mealResetTimeoutRef.current) {
+        clearTimeout(mealResetTimeoutRef.current);
+      }
+      mealResetTimeoutRef.current = setTimeout(() => {
+        setMealCycleOffset(0);
+      }, 15000);
+    }
+    return () => {
+      if (mealResetTimeoutRef.current) {
+        clearTimeout(mealResetTimeoutRef.current);
+      }
+    };
+  }, [mealCycleOffset]);
+
   const [selectedMess, setSelectedMess] = useState(() => {
     const OLD_TO_NEW = { mayuri: 'mayuri-boys', crcl: 'crcl-boys', jmb: 'jmb-boys', safal: 'safal-boys' };
     const stored = localStorage.getItem('ds_selected_mess') || 'mayuri-boys';
@@ -1020,34 +1055,57 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
     const currentMinutes = hours * 60 + minutes;
     const currentDay = currentTime.getDay(); // 0-6
 
-    let mealType;
-    let label;
-    let isTomorrow = false;
-    let targetDay = currentDay;
-    let isServingNow = false;
+    let baseMealType;
+    let baseIsTomorrow = false;
+    let baseTargetDay = currentDay;
+    let baseIsServingNow = false;
 
     if (currentMinutes <= 570) {
-      mealType = 'breakfast';
-      label = 'Breakfast';
-      isServingNow = currentMinutes >= 450;
+      baseMealType = 'breakfast';
+      baseIsServingNow = currentMinutes >= 450;
     } else if (currentMinutes <= 870) {
-      mealType = 'lunch';
-      label = 'Lunch';
-      isServingNow = currentMinutes >= 750;
-    } else if (currentMinutes <= 1050) {
-      mealType = 'snacks';
-      label = 'Snacks';
-      isServingNow = currentMinutes >= 990;
+      baseMealType = 'lunch';
+      baseIsServingNow = currentMinutes >= 735;
+    } else if (currentMinutes <= 1110) {
+      baseMealType = 'snacks';
+      baseIsServingNow = currentMinutes >= 1020;
     } else if (currentMinutes <= 1290) {
-      mealType = 'dinner';
-      label = 'Dinner';
-      isServingNow = currentMinutes >= 1170;
+      baseMealType = 'dinner';
+      baseIsServingNow = currentMinutes >= 1155;
     } else {
-      mealType = 'breakfast';
-      label = 'Breakfast';
-      isTomorrow = true;
-      targetDay = (currentDay + 1) % 7;
+      baseMealType = 'breakfast';
+      baseIsTomorrow = true;
+      baseTargetDay = (currentDay + 1) % 7;
     }
+
+    const MEALS_ORDER = ['breakfast', 'lunch', 'snacks', 'dinner'];
+    const baseMealIndex = MEALS_ORDER.indexOf(baseMealType);
+    const targetMealIndex = (baseMealIndex + mealCycleOffset) % 4;
+    const mealType = MEALS_ORDER[targetMealIndex];
+
+    const mealLabels = {
+      breakfast: 'Breakfast',
+      lunch: 'Lunch',
+      snacks: 'Snacks',
+      dinner: 'Dinner'
+    };
+    const label = mealLabels[mealType];
+
+    let isTomorrow = baseIsTomorrow;
+    let targetDay = baseTargetDay;
+
+    if (baseIsTomorrow) {
+      if (targetMealIndex < baseMealIndex) {
+        targetDay = (currentDay + 2) % 7;
+      }
+    } else {
+      if (targetMealIndex < baseMealIndex) {
+        isTomorrow = true;
+        targetDay = (currentDay + 1) % 7;
+      }
+    }
+
+    const isServingNow = mealCycleOffset === 0 ? baseIsServingNow : false;
 
     const mealIcons = {
       breakfast: '🥞',
@@ -1237,7 +1295,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: isMobileDevice ? '0.5rem' : '0.85rem' }}>
           {/* Header row: status + mess selector */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: isMobileDevice ? '0.4rem' : '0.6rem' }}>
               <span style={{ fontSize: isMobileDevice ? '1.1rem' : '1.35rem' }}>{mealInfo.icon}</span>
               <span style={{ fontSize: isMobileDevice ? '0.7rem' : '0.85rem', textTransform: 'uppercase', color: 'hsl(var(--text-muted))', fontWeight: 700, letterSpacing: '0.04em' }}>
@@ -1252,29 +1310,57 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
                 {mealInfo.isServingNow ? 'LIVE' : 'NEXT'}
               </span>
             </div>
-            <select
-              value={selectedMess}
-              onChange={handleMessChange}
-              style={{
-                background: 'hsla(var(--bg-card) / 0.5)',
-                border: '1px solid hsla(var(--border-glass))',
-                color: 'hsl(var(--text-primary))',
-                fontSize: isMobileDevice ? '0.65rem' : '0.8rem', fontWeight: 700,
-                padding: isMobileDevice ? '0.15rem 0.35rem' : '0.25rem 0.55rem', borderRadius: '6px',
-                cursor: 'pointer', outline: 'none'
-              }}
-            >
-              <optgroup label="Boys">
-                {MESS_OPTIONS.filter(m => m.group === 'boys').map(m => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </optgroup>
-              <optgroup label="Girls">
-                {MESS_OPTIONS.filter(m => m.group === 'girls').map(m => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </optgroup>
-            </select>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: isMobileDevice ? '0.3rem' : '0.45rem' }}>
+              <button
+                onClick={() => setMealCycleOffset(prev => (prev + 1) % 4)}
+                style={{
+                  background: 'linear-gradient(135deg, hsla(var(--primary) / 0.15), hsla(var(--secondary) / 0.15))',
+                  border: '1px solid hsla(var(--primary) / 0.25)',
+                  color: 'hsl(var(--primary))',
+                  fontSize: isMobileDevice ? '0.6rem' : '0.7rem',
+                  fontWeight: 700,
+                  padding: isMobileDevice ? '0.18rem 0.45rem' : '0.25rem 0.65rem',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.2rem',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, hsla(var(--primary) / 0.25), hsla(var(--secondary) / 0.25))';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, hsla(var(--primary) / 0.15), hsla(var(--secondary) / 0.15))';
+                }}
+              >
+                What's Next? ➡️
+              </button>
+              <select
+                value={selectedMess}
+                onChange={handleMessChange}
+                style={{
+                  background: 'hsla(var(--bg-card) / 0.5)',
+                  border: '1px solid hsla(var(--border-glass))',
+                  color: 'hsl(var(--text-primary))',
+                  fontSize: isMobileDevice ? '0.6rem' : '0.75rem', fontWeight: 700,
+                  padding: isMobileDevice ? '0.15rem 0.3rem' : '0.25rem 0.5rem', borderRadius: '6px',
+                  cursor: 'pointer', outline: 'none'
+                }}
+              >
+                <optgroup label="Boys">
+                  {MESS_OPTIONS.filter(m => m.group === 'boys').map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Girls">
+                  {MESS_OPTIONS.filter(m => m.group === 'girls').map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
           </div>
 
           {/* Dish pills */}
@@ -1314,8 +1400,38 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
 
     const renderClassTrackerSection = () => {
       if (info.status === 'no_timetable') {
+        if (isDemoView) {
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: isMobileDevice ? '0.4rem' : '0.8rem', animation: 'fadeIn 0.5s ease-out' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: isMobileDevice ? '0.6rem' : '0.75rem', fontWeight: 800, color: 'hsl(var(--primary))', background: 'hsla(var(--primary) / 0.1)', padding: isMobileDevice ? '0.12rem 0.45rem' : '0.2rem 0.6rem', borderRadius: '10px' }}>
+                  🔴 IN CLASS (DEMO)
+                </span>
+                <button className="tracker-manage-btn" onClick={() => onNavigate('timetable')} style={{ fontSize: isMobileDevice ? '0.6rem' : '0.75rem', padding: isMobileDevice ? '0.15rem 0.4rem' : '0.2rem 0.6rem', background: 'hsla(var(--primary) / 0.15)', border: '1px solid hsla(var(--primary) / 0.3)', color: 'hsl(var(--primary))' }}>Set Up Now</button>
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.15rem' }}>
+                  <span style={{ fontSize: isMobileDevice ? '0.6rem' : '0.75rem', fontWeight: 800, color: 'hsl(var(--primary))', background: 'hsla(var(--primary) / 0.1)', padding: isMobileDevice ? '0.08rem 0.3rem' : '0.15rem 0.45rem', borderRadius: '4px' }}>Slot A1</span>
+                  <span style={{ fontSize: isMobileDevice ? '0.65rem' : '0.8rem', color: 'hsl(var(--text-muted))' }}>· Theory (Demo)</span>
+                </div>
+                <h2 style={{ margin: '0.1rem 0', fontSize: isMobileDevice ? '1.15rem' : '1.45rem', fontWeight: 800, fontFamily: 'var(--font-heading)' }}>CSE2002 (DSA)</h2>
+                <span style={{ fontSize: isMobileDevice ? '0.7rem' : '0.85rem', color: 'hsl(var(--text-muted))' }}>📍 LHC-102 (First Floor)</span>
+              </div>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: isMobileDevice ? '0.7rem' : '0.85rem', marginBottom: '0.1rem' }}>
+                  <span>🕒 09:00 - 09:50</span>
+                  <span style={{ fontWeight: 600, color: 'hsl(var(--primary))' }}>12m left</span>
+                </div>
+                <div style={{ height: isMobileDevice ? '5px' : '7px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                  <div style={{ width: '76%', height: '100%', background: 'linear-gradient(90deg, hsl(var(--primary)), hsl(var(--secondary)))', borderRadius: '3px' }}></div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+        
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: isMobileDevice ? '0.5rem' : '0.85rem', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: isMobileDevice ? '0.5rem' : '0.85rem', justifyContent: 'center', animation: 'fadeIn 0.5s ease-out' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: isMobileDevice ? '0.5rem' : '0.75rem' }}>
               <span style={{ fontSize: isMobileDevice ? '1.4rem' : '1.8rem' }}>📅</span>
               <h3 style={{ margin: 0, fontSize: isMobileDevice ? '0.9rem' : '1.15rem', fontWeight: 700 }}>Track Your Classes Live</h3>
@@ -1425,39 +1541,21 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
       );
     }
 
-    // Mobile: tab-based compact layout
+    // Mobile: stack both vertically
     return (
-      <div className={`bento-item span-2 live-tracker-item live-tracker-panel ${statusClass}`} style={{ padding: '0.8rem 1rem' }}>
-        {/* Tab buttons */}
-        <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.65rem', background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '0.2rem' }}>
-          <button
-            onClick={() => setTrackerTab('mess')}
-            style={{
-              flex: 1, padding: '0.3rem 0', borderRadius: '8px', border: 'none', cursor: 'pointer',
-              fontSize: '0.7rem', fontWeight: 700, transition: 'all 0.2s',
-              background: trackerTab === 'mess' ? 'hsla(var(--primary) / 0.15)' : 'transparent',
-              color: trackerTab === 'mess' ? 'hsl(var(--primary))' : 'hsl(var(--text-muted))',
-              borderBottom: trackerTab === 'mess' ? '2px solid hsl(var(--primary))' : '2px solid transparent'
-            }}
-          >
-            🍽️ Mess Menu
-          </button>
-          <button
-            onClick={() => setTrackerTab('class')}
-            style={{
-              flex: 1, padding: '0.3rem 0', borderRadius: '8px', border: 'none', cursor: 'pointer',
-              fontSize: '0.7rem', fontWeight: 700, transition: 'all 0.2s',
-              background: trackerTab === 'class' ? 'hsla(var(--secondary) / 0.15)' : 'transparent',
-              color: trackerTab === 'class' ? 'hsl(var(--secondary))' : 'hsl(var(--text-muted))',
-              borderBottom: trackerTab === 'class' ? '2px solid hsl(var(--secondary))' : '2px solid transparent'
-            }}
-          >
-            📅 Class Alert{info.status === 'ongoing' ? ' 🔴' : ''}
-          </button>
+      <div className={`bento-item span-2 live-tracker-item live-tracker-panel ${statusClass}`} style={{ padding: '1rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
+          {/* Top: Mess Menu */}
+          <div>
+            {renderMessTrackerSection()}
+          </div>
+          {/* Divider */}
+          <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', width: '100%' }} />
+          {/* Bottom: Class Alert */}
+          <div>
+            {renderClassTrackerSection()}
+          </div>
         </div>
-
-        {/* Tab content */}
-        {trackerTab === 'mess' ? renderMessTrackerSection() : renderClassTrackerSection()}
       </div>
     );
   };
@@ -1595,7 +1693,9 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
 
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobileDevice(window.innerWidth <= 768);
+      const isTouch = window.matchMedia('(pointer: coarse)').matches;
+      const isLandscapeMobile = window.innerHeight <= 480;
+      setIsMobileDevice(window.innerWidth <= 768 || isLandscapeMobile || (isTouch && window.innerWidth <= 1024));
     };
     checkMobile();
     window.addEventListener('resize', checkMobile);
@@ -1741,11 +1841,20 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
       )}
       <div style={{ position: 'relative', zIndex: 1 }}>
         <div className="section-header">
-        <h1 className="section-title">Welcome Back, {user ? user.name : 'User'}</h1>
-        <p className="section-subtitle">
-          Here is your college lifestyle and management companion for today. Keep track of college events, active clubs, and your academic roadmap.
-        </p>
-      </div>
+          <h1 className="section-title">Welcome Back, {user ? (user.isGuest ? 'Guest' : user.name) : 'User'}</h1>
+          <p 
+            className="section-subtitle"
+            style={{
+              maxHeight: showSubtitle ? '100px' : '0px',
+              opacity: showSubtitle ? 1 : 0,
+              margin: showSubtitle ? '0.5rem 0 0 0' : '0px',
+              overflow: 'hidden',
+              transition: 'all 0.8s cubic-bezier(0.4, 0, 0.2, 1)'
+            }}
+          >
+            Here is your college lifestyle and management companion for today. Keep track of college events, active clubs, and your academic roadmap.
+          </p>
+        </div>
 
       {user && (
         <div className="bento-grid">
@@ -1769,7 +1878,43 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
               </button>
             </div>
 
+            {isAdmin && (
+              <div className="glass-panel" style={{ marginBottom: '1rem', padding: '0.75rem 1rem', background: eventsLocked ? 'rgba(239, 68, 68, 0.08)' : 'rgba(16, 185, 129, 0.08)', border: eventsLocked ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
+                <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-primary))', fontWeight: '600' }}>
+                  {eventsLocked ? '🔒 Events Section is Locked (Students see a placeholder)' : '🔓 Events Section is Unlocked (Students see active events)'}
+                </span>
+                <button
+                  onClick={onToggleEventsLock}
+                  className="paper-btn"
+                  style={{
+                    width: 'auto',
+                    margin: 0,
+                    padding: '0.35rem 0.75rem',
+                    fontSize: '0.75rem',
+                    background: eventsLocked ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                    border: eventsLocked ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+                    color: eventsLocked ? '#10b981' : '#ef4444',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: '600'
+                  }}
+                >
+                  {eventsLocked ? 'Unlock Section' : 'Lock Section'}
+                </button>
+              </div>
+            )}
+
             {(() => {
+              if (eventsLocked && !isAdmin) {
+                return (
+                  <div style={{ display: 'flex', flexGrow: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', minHeight: '180px', background: 'rgba(255, 255, 255, 0.02)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: '12px', padding: '1.5rem', textAlign: 'center' }}>
+                    <span style={{ fontSize: '2.5rem', marginBottom: '0.75rem', display: 'block' }}>🔒</span>
+                    <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', color: 'hsl(var(--text-primary))', fontWeight: '700' }}>Events will resume after exams</h4>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}>Stay tuned! Check back once exams are completed for exciting club recruitments and hackathons.</p>
+                  </div>
+                );
+              }
+
               const N = recommendedEvents.length;
               if (N === 0) {
                 return (

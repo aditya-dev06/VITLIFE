@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-06-30 10:00:27",
+  "lastUpdated": "2026-07-01 14:56:02",
   "count": 46,
   "opportunities": [
     {
@@ -280,7 +280,7 @@
       "type": "hackathon",
       "organization": "Alibaba Cloud",
       "link": "https://qwencloud-hackathon.devpost.com/",
-      "deadline": "May 26 - Jul 09, 2026 (10 days left)",
+      "deadline": "May 26 - Jul 09, 2026 (8 days left)",
       "matchScore": 85,
       "description": "Themes: Machine Learning/AI, Design, Productivity. Host: Alibaba Cloud",
       "tags": [
@@ -296,7 +296,7 @@
       "type": "hackathon",
       "organization": "Salesforce",
       "link": "https://slackhack.devpost.com/",
-      "deadline": "May 20 - Jul 13, 2026 (14 days left)",
+      "deadline": "May 20 - Jul 13, 2026 (13 days left)",
       "matchScore": 75,
       "description": "Themes: Beginner Friendly, Enterprise, Low/No Code. Host: Salesforce",
       "tags": [
@@ -312,7 +312,7 @@
       "type": "hackathon",
       "organization": "reddit",
       "link": "https://redditgameswithahook.devpost.com/",
-      "deadline": "Jun 17 - Jul 15, 2026 (16 days left)",
+      "deadline": "Jun 17 - Jul 15, 2026 (15 days left)",
       "matchScore": 75,
       "description": "Themes: Beginner Friendly, Gaming, Web. Host: reddit",
       "tags": [
@@ -328,7 +328,7 @@
       "type": "hackathon",
       "organization": "arm",
       "link": "https://arm-ai-optimization-challenge.devpost.com/",
-      "deadline": "Jun 04 - Aug 14, 2026 (about 2 months left)",
+      "deadline": "Jun 04 - Aug 14, 2026 (about 1 month left)",
       "matchScore": 85,
       "description": "Themes: Machine Learning/AI. Host: arm",
       "tags": [
@@ -343,7 +343,7 @@
       "type": "hackathon",
       "organization": "GenAI Fund",
       "link": "https://agentic-ai-build-week-2026.devpost.com/",
-      "deadline": "Jun 09 - Jul 11, 2026 (12 days left)",
+      "deadline": "Jun 09 - Jul 11, 2026 (11 days left)",
       "matchScore": 85,
       "description": "Themes: Machine Learning/AI. Host: GenAI Fund",
       "tags": [
@@ -390,7 +390,7 @@
       "type": "hackathon",
       "organization": "Kaya",
       "link": "https://kaya-ai-iit-hackathon-2026.devpost.com/",
-      "deadline": "Jun 10 - Jul 10, 2026 (11 days left)",
+      "deadline": "Jun 10 - Jul 10, 2026 (10 days left)",
       "matchScore": 85,
       "description": "Themes: IoT, Machine Learning/AI, Enterprise. Host: Kaya",
       "tags": [
@@ -406,7 +406,7 @@
       "type": "hackathon",
       "organization": "LUMA",
       "link": "https://luma-hackathon-500.devpost.com/",
-      "deadline": "Apr 11 - Jul 10, 2026 (11 days left)",
+      "deadline": "Apr 11 - Jul 10, 2026 (10 days left)",
       "matchScore": 85,
       "description": "Themes: Beginner Friendly, Machine Learning/AI, Open Ended. Host: LUMA",
       "tags": [
@@ -414,22 +414,6 @@
         "Remote",
         "Beginner Friendly",
         "Machine Learning/AI"
-      ]
-    },
-    {
-      "id": "devpost-29857",
-      "title": "Creator Colosseum Startup Competition: Student Founders. Real Startups. ",
-      "type": "hackathon",
-      "organization": "Creator Colosseum",
-      "link": "https://creatorcolosseum.devpost.com/",
-      "deadline": "Apr 24 - Jun 30, 2026 (about 17 hours left)",
-      "matchScore": 75,
-      "description": "Themes: Beginner Friendly, Low/No Code, Social Good. Host: Creator Colosseum",
-      "tags": [
-        "Hackathon",
-        "Remote",
-        "Beginner Friendly",
-        "Low/No Code"
       ]
     },
     {
@@ -449,44 +433,12 @@
       ]
     },
     {
-      "id": "devpost-29933",
-      "title": "Build the Future with AI \u2014 From Code to No-Code",
-      "type": "hackathon",
-      "organization": "Innovation Hacks",
-      "link": "https://build-the-future-with-ai.devpost.com/",
-      "deadline": "May 31 - Jun 30, 2026 (about 14 hours left)",
-      "matchScore": 85,
-      "description": "Themes: Low/No Code, Machine Learning/AI, Web. Host: Innovation Hacks",
-      "tags": [
-        "Hackathon",
-        "Remote",
-        "Low/No Code",
-        "Machine Learning/AI"
-      ]
-    },
-    {
-      "id": "devpost-30100",
-      "title": "Moonshot Hackathon",
-      "type": "hackathon",
-      "organization": "Aethra",
-      "link": "https://moonshot-aethra.devpost.com/",
-      "deadline": "Jun 03 - 30, 2026 (about 7 hours left)",
-      "matchScore": 85,
-      "description": "Themes: Beginner Friendly, Machine Learning/AI, Open Ended. Host: Aethra",
-      "tags": [
-        "Hackathon",
-        "Remote",
-        "Beginner Friendly",
-        "Machine Learning/AI"
-      ]
-    },
-    {
       "id": "devpost-29364",
       "title": "Github readme generation ",
       "type": "hackathon",
       "organization": "presentme",
       "link": "https://github-readme-generation.devpost.com/",
-      "deadline": "Apr 22 - Jul 06, 2026 (7 days left)",
+      "deadline": "Apr 22 - Jul 06, 2026 (5 days left)",
       "matchScore": 75,
       "description": "Themes: Beginner Friendly, Education, Low/No Code. Host: presentme",
       "tags": [
@@ -497,14 +449,110 @@
       ]
     },
     {
+      "id": "devpost-29613",
+      "title": "CockroachDB \u00d7 AWS Hackathon - Build with Agentic Memory",
+      "type": "hackathon",
+      "organization": "Cockroach Labs",
+      "link": "https://cockroachdb-ai.devpost.com/",
+      "deadline": "Jun 30 - Aug 18, 2026 (about 2 months left)",
+      "matchScore": 85,
+      "description": "Themes: Machine Learning/AI, Databases, DevOps. Host: Cockroach Labs",
+      "tags": [
+        "Hackathon",
+        "Remote",
+        "Machine Learning/AI",
+        "Databases"
+      ]
+    },
+    {
+      "id": "devpost-29445",
+      "title": "Hoobit Hacks 2026",
+      "type": "hackathon",
+      "organization": "Hoobit",
+      "link": "https://hoobit-hacks-2026.devpost.com/",
+      "deadline": "Mar 30 - Jul 18, 2026 (17 days left)",
+      "matchScore": 85,
+      "description": "Themes: Beginner Friendly, Machine Learning/AI, Social Good. Host: Hoobit",
+      "tags": [
+        "Hackathon",
+        "Remote",
+        "Beginner Friendly",
+        "Machine Learning/AI"
+      ]
+    },
+    {
+      "id": "devpost-30239",
+      "title": "FutureAI Global Hackathon 2026",
+      "type": "hackathon",
+      "organization": "Innovation Hacks",
+      "link": "https://futureai-global-hackthon.devpost.com/",
+      "deadline": "May 29 - Jul 05, 2026 (4 days left)",
+      "matchScore": 85,
+      "description": "Themes: Beginner Friendly, Machine Learning/AI, Open Ended. Host: Innovation Hacks",
+      "tags": [
+        "Hackathon",
+        "Remote",
+        "Beginner Friendly",
+        "Machine Learning/AI"
+      ]
+    },
+    {
+      "id": "unstop-1708678",
+      "title": "MSOC 2026 \u2014 MSTC Summer of Code Data Science",
+      "type": "hackathon",
+      "organization": "Dhirubhai Ambani Institute of Information and Communication Technology (DA-IICT), Gandhinagar",
+      "link": "https://unstop.com/hackathons/msoc-2026-mstc-summer-of-code-data-science-dhirubhai-ambani-institute-of-information-and-communication-techno-1708678",
+      "deadline": "Jul 13, 2026 (11 days left)",
+      "matchScore": 80,
+      "description": "MSOC 2026 &mdash; MSTC Summer of Code (Data Science &amp; Analytics Track)\nAbout the Program:\nMSOC (MSTC Summer of Code) is a guided learning-to-build program organized by the Microsoft Student Techni...",
+      "tags": [
+        "Hackathon",
+        "India",
+        "Artificial Intelligence (AI)",
+        "Data Science Tools"
+      ]
+    },
+    {
+      "id": "unstop-1671501",
+      "title": "Roboauto-2026",
+      "type": "hackathon",
+      "organization": "Vidya Jyothi Institute of Technology",
+      "link": "https://unstop.com/hackathons/roboauto-2026-vidya-jyothi-institute-of-technology-1671501",
+      "deadline": "Jul 05, 2026 (4 days left)",
+      "matchScore": 80,
+      "description": "RoboAuto Hackathon 2026 &ndash; AGV &amp; Automation Challenge:\nRoboAuto Hackathon 2026 is an intensive 24-hour hands-on robotics and automation challenge designed to push the boundaries of innovation...",
+      "tags": [
+        "Hackathon",
+        "India",
+        "Embedded Systems Design",
+        "Automation Systems Design"
+      ]
+    },
+    {
+      "id": "unstop-1706104",
+      "title": "COSC Hackweek",
+      "type": "hackathon",
+      "organization": "Chaitanya Bharathi Institute of Technology (CBIT), Hyderabad",
+      "link": "https://unstop.com/hackathons/cosc-hackweek-chaitanya-bharathi-institute-of-technology-cbit-hyderabad-1706104",
+      "deadline": "Jul 05, 2026 (3 days left)",
+      "matchScore": 80,
+      "description": "COSC Hackweek is a week long online event, presented by the CBIT Open Source Community. Hackweek is designed to help you learn, build, and explore the world of technology and open-source through daily...",
+      "tags": [
+        "Hackathon",
+        "India",
+        "Communication Skills",
+        "Collaboration Skills"
+      ]
+    },
+    {
       "id": "unstop-1703344",
       "title": "Vibe2Vision",
       "type": "hackathon",
       "organization": "Veer Surendra Sai University of Technology (VSSUT), Odisha",
       "link": "https://unstop.com/hackathons/vibe2vision-ieee-sheaspire-30-veer-surendra-sai-university-of-technology-vssut-odisha-1703344",
-      "deadline": "Jul 05, 2026 (5 days left)",
+      "deadline": "Jul 07, 2026 (5 days left)",
       "matchScore": 80,
-      "description": "All participants are requested to read the complete rulebook carefully.\nVibe2Vision is an unconstrained vibe-coding hackathon organized by the IEEE Women in Engineering (WIE) Chapter, VSSUT Student Br...",
+      "description": "All participants are requested to read the complete rule book before the event.\nVibe2Vision 2026 is a 36-hour innovation hackathon organized by the IEEE Women in Engineering (WIE) Chapter, VSSUT Stude...",
       "tags": [
         "Hackathon",
         "India",
@@ -518,7 +566,7 @@
       "type": "hackathon",
       "organization": "Manipal University (MU), Jaipur",
       "link": "https://unstop.com/hackathons/cascade-a-cryptic-hunt-manipal-university-mu-jaipur-1704689",
-      "deadline": "Jul 05, 2026 (3 days left)",
+      "deadline": "Jul 05, 2026 (2 days left)",
       "matchScore": 80,
       "description": "General:\n\nThe competition will be conducted entirely through the official Cryptic Hunt Portal.\nEach registered team will receive unique login credentials before the event.\nParticipants are responsible...",
       "tags": [
@@ -550,7 +598,7 @@
       "type": "hackathon",
       "organization": "Indian Institute of Technology, Indian School of Mines (IIT ISM), Dhanbad",
       "link": "https://unstop.com/hackathons/bizzathon-hackathon-e-summit-2026-iit-ism-dhanbad-indian-institute-of-technology-indian-school-of-mines-iit-i-1704716",
-      "deadline": "Aug 09, 2026 (25 days left)",
+      "deadline": "Aug 09, 2026 (23 days left)",
       "matchScore": 80,
       "description": "About the Competition:\n\nBizzathon is an 18-hour hackathon where participants solve real-world problem statements provided by the judging panel at the start of the competition.\nTeams analyze the proble...",
       "tags": [
@@ -566,7 +614,7 @@
       "type": "hackathon",
       "organization": "Apex Institute of Technology, Chandigarh University",
       "link": "https://unstop.com/hackathons/algoquest-2026-national-level-coding-competition-apex-institute-of-technology-chandigarh-university-1704834",
-      "deadline": "Jul 05, 2026 (5 days left)",
+      "deadline": "Jul 05, 2026 (3 days left)",
       "matchScore": 80,
       "description": "Tagline\nCode. Compete. Conquer. Rise Beyond Limits.\n\nAbout the Event\nAscent Quest 2026 is the flagship national-level online coding competition organized by The Ascent Circle to bring together aspirin...",
       "tags": [
@@ -598,9 +646,9 @@
       "type": "hackathon",
       "organization": "Indian Institute of Management (IIM), Bangalore",
       "link": "https://unstop.com/hackathons/student-innovation-product-summit-sips-2026-iim-bangalore-1704216",
-      "deadline": "Jul 30, 2026 (5 days left)",
+      "deadline": "Jul 30, 2026 (4 days left)",
       "matchScore": 80,
-      "description": "The Student Innovation &amp; Product Summit (SIPS) 2026 is a national innovation competition organized by the Centre for Software &amp; IT Management (CSITM), IIM Bangalore. The summit provides underg...",
+      "description": "Official Telegram Group:- https://t.me/+bbJ75C7KqOA5NDM9\nGoogle Form Required to Fill:- https://docs.google.com/forms/d/1EK09lyL-bsI76Fgj-SgFmyPHSwpASrGuN-IEWdUNyqA/edit\nThe Student Innovation &amp; P...",
       "tags": [
         "Hackathon",
         "India",
@@ -614,7 +662,7 @@
       "type": "hackathon",
       "organization": "Build in AI for India",
       "link": "https://unstop.com/hackathons/build-in-ai-for-india-build-in-ai-for-india-1704081",
-      "deadline": "Jul 06, 2026 (6 days left)",
+      "deadline": "Jul 06, 2026 (5 days left)",
       "matchScore": 80,
       "description": "About Build in AI for India\n\nBuild in AI for India is a nationwide 7-day online AI hackathon bringing together students, developers, founders, researchers, and builders to create AI-powered solutions ...",
       "tags": [
@@ -630,7 +678,7 @@
       "type": "hackathon",
       "organization": "Hackathon Raptors",
       "link": "https://unstop.com/hackathons/port-mortem-2026-code-resurrection-hackathon-hackathon-raptors-1704134",
-      "deadline": "Jul 31, 2026 (1 month left)",
+      "deadline": "Jul 31, 2026 (30 days left)",
       "matchScore": 80,
       "description": "About the Hackathon:\n\nPort Mortem 2026 is a 72-hour online hackathon focused on AI-assisted software migration and cross-language code porting. Participants will rewrite a real open-source project fro...",
       "tags": [
@@ -646,7 +694,7 @@
       "type": "hackathon",
       "organization": "Chandigarh University (CU), Ajitgarh, Punjab",
       "link": "https://unstop.com/hackathons/ascent-quest-2026-the-ultimate-coding-challenge-chandigarh-university-cu-ajitgarh-punjab-1704073",
-      "deadline": "Jul 09, 2026 (8 days left)",
+      "deadline": "Jul 09, 2026 (7 days left)",
       "matchScore": 80,
       "description": "Ascent Quest 2026 &ndash; National Level Coding Competition\nThink Fast. Code Smarter. Rise Higher.\nReady to put your coding skills to the test? Join Ascent Quest 2026, a national-level online coding c...",
       "tags": [
@@ -662,7 +710,7 @@
       "type": "hackathon",
       "organization": "DR RVR NRI Institute of Technology Deemed to Be University",
       "link": "https://unstop.com/hackathons/innogenesis-2026-national-level-hackathon-dr-rvr-nri-institute-of-technology-deemed-to-be-university-1702857",
-      "deadline": "Jul 23, 2026 (23 days left)",
+      "deadline": "Jul 23, 2026 (21 days left)",
       "matchScore": 80,
       "description": "InnoGenesis 2026 is a National Level Hackathon organized by Dr. RVR NRI Institute of Technology. The event is scheduled to be held on 7&ndash;8 August 2026 and features 24 hours of non-stop innovation...",
       "tags": [
@@ -678,7 +726,7 @@
       "type": "hackathon",
       "organization": "AI Academia",
       "link": "https://unstop.com/hackathons/futurex-ai-academia-1703899",
-      "deadline": "Jul 05, 2026 (4 days left)",
+      "deadline": "Jul 05, 2026 (3 days left)",
       "matchScore": 80,
       "description": "FutureX is a national-level innovation hackathon designed to challenge participants to envision life in the year 2040 through creativity, innovation, and strategic thinking. Participants will take on ...",
       "tags": [
@@ -686,54 +734,6 @@
         "India",
         "Artificial Intelligence (AI)",
         "Creative Thinking"
-      ]
-    },
-    {
-      "id": "unstop-1702474",
-      "title": "Women Who Master",
-      "type": "hackathon",
-      "organization": "Aspire For Her x Logitech",
-      "link": "https://unstop.com/hackathons/crp-women-who-master-aspire-for-her-x-logitech-1702474",
-      "deadline": "Sep 10, 2026 (21 days left)",
-      "matchScore": 80,
-      "description": "Women Who Master 2026 is a national-level all-women hackathon designed to bring together aspiring innovators, problem-solvers, and future technology leaders from across India. The hackathon provides p...",
-      "tags": [
-        "Hackathon",
-        "India",
-        "Machine Learning Concepts",
-        "Teamwork and Collaboration"
-      ]
-    },
-    {
-      "id": "unstop-1703568",
-      "title": "AI Alliance Forge 2026",
-      "type": "hackathon",
-      "organization": "Apex Institute of Technology, Chandigarh University",
-      "link": "https://unstop.com/hackathons/ai-alliance-forge-2026-apex-institute-of-technology-chandigarh-university-1703568",
-      "deadline": "Jul 31, 2026 (30 days left)",
-      "matchScore": 80,
-      "description": "About AI Alliance Forge 2026\n\nAI Alliance Forge 2026 is an online coding challenge hosted by the Apex Institute of Technology, Chandigarh University.\nThe event is designed to bring together bright min...",
-      "tags": [
-        "Hackathon",
-        "India",
-        "Artificial Intelligence (AI)",
-        "Machine Learning Concepts"
-      ]
-    },
-    {
-      "id": "unstop-1703493",
-      "title": "Heritage to Horizon: A 24hrs Ideathon",
-      "type": "hackathon",
-      "organization": "Guru Tegh Bahadur Institute of Technology (GTBIT), New Delhi",
-      "link": "https://unstop.com/hackathons/heritage-to-horizon-wie-week-20-guru-tegh-bahadur-institute-of-technology-gtbit-new-delhi-1703493",
-      "deadline": "Jul 04, 2026 (2 days left)",
-      "matchScore": 80,
-      "description": "A&nbsp;24-hour ideathon inspired by groundbreaking historical inventions created by women. Participants draw inspiration from these inventions and transform their core ideas into innovative, technolog...",
-      "tags": [
-        "Hackathon",
-        "India",
-        "Creativity",
-        "Ideation"
       ]
     }
   ]

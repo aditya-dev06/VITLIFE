@@ -15,6 +15,7 @@ const VITBhopalGuide = lazy(() => import('./components/VITBhopalGuide'));
 const Auth = lazy(() => import('./components/Auth'));
 const TermsAndConditions = lazy(() => import('./components/TermsAndConditions'));
 const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
+const CommunityPage = lazy(() => import('./components/CommunityPage'));
 
 // Global fetch interceptor to catch 401/403 responses and trigger logouts (HMR-safe)
 if (!window.fetch.__isWrapped) {
@@ -269,7 +270,73 @@ function App() {
   const [theme, setTheme] = useState(localStorage.getItem('ds_ai_theme') || 'dark');
   const [installPrompt, setInstallPrompt] = useState(null); // PWA install prompt
   const [highlightedEventId, setHighlightedEventId] = useState(null);
+  const [guideVisible, setGuideVisible] = useState(false);
+  const [eventsLocked, setEventsLocked] = useState(true);
   const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    fetch('/api/settings/guide-visible')
+      .then(res => res.json())
+      .then(data => {
+        if (data && typeof data.visible === 'boolean') {
+          setGuideVisible(data.visible);
+        }
+      })
+      .catch(err => console.error('Failed to load guide visibility:', err));
+
+    fetch('/api/settings/events-locked')
+      .then(res => res.json())
+      .then(data => {
+        if (data && typeof data.locked === 'boolean') {
+          setEventsLocked(data.locked);
+        }
+      })
+      .catch(err => console.error('Failed to load events lock status:', err));
+  }, []);
+
+  const handleToggleGuideVisibility = async () => {
+    try {
+      const nextVisible = !guideVisible;
+      const res = await fetch('/api/settings/guide-visible', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ visible: nextVisible })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setGuideVisible(nextVisible);
+      } else {
+        alert(data.error || 'Failed to update visibility');
+      }
+    } catch (err) {
+      console.error('Failed to update guide visibility:', err);
+    }
+  };
+
+  const handleToggleEventsLock = async () => {
+    try {
+      const nextLocked = !eventsLocked;
+      const res = await fetch('/api/settings/events-locked', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ locked: nextLocked })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setEventsLocked(nextLocked);
+      } else {
+        alert(data.error || 'Failed to update lock status');
+      }
+    } catch (err) {
+      console.error('Failed to update events lock:', err);
+    }
+  };
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e) => {
@@ -361,9 +428,19 @@ function App() {
     const diffY = touchStartY.current - e.changedTouches[0].clientY;
 
     if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 75) {
-      const tabs = user 
-        ? ['dashboard', 'opportunities', 'timetable', 'guide', 'campus'] 
-        : ['dashboard', 'opportunities', 'guide'];
+      const tabs = [];
+      if (user) {
+        tabs.push('dashboard', 'timetable', 'community', 'opportunities');
+        if (guideVisible || user.role === 'admin') {
+          tabs.push('guide');
+        }
+        tabs.push('campus');
+      } else {
+        tabs.push('dashboard', 'community', 'opportunities');
+        if (guideVisible) {
+          tabs.push('guide');
+        }
+      }
 
       const currentIndex = tabs.indexOf(activeTab);
       if (currentIndex !== -1) {
@@ -697,6 +774,9 @@ function App() {
             isVitBhopal={user ? user.isVitBhopal : false} 
             userSemester={user ? user.semester : 1}
             userProgram={user ? user.program : ''}
+            isAdmin={user && user.role === 'admin'}
+            guideVisible={guideVisible}
+            onToggleGuideVisibility={handleToggleGuideVisibility}
           />
         );
       case 'timetable':
@@ -709,6 +789,12 @@ function App() {
             user={user}
             onUpdateTimetable={handleUpdateTimetable}
             syncStatus={profileSyncStatus}
+          />
+        );
+      case 'community':
+        return (
+          <CommunityPage 
+            user={user}
           />
         );
       case 'campus':
@@ -726,6 +812,8 @@ function App() {
             fetchEvents={fetchEvents}
             initialSelectedEventId={highlightedEventId}
             clearInitialSelectedEvent={() => setHighlightedEventId(null)}
+            eventsLocked={eventsLocked}
+            onToggleEventsLock={handleToggleEventsLock}
           />
         );
       default:
@@ -741,6 +829,9 @@ function App() {
             fetchEvents={fetchEvents}
             token={token}
             theme={theme}
+            eventsLocked={eventsLocked}
+            onToggleEventsLock={handleToggleEventsLock}
+            isAdmin={user && user.role === 'admin'}
             onNavigateToEvent={(eventId) => {
               setHighlightedEventId(eventId);
               setActiveTab('campus');
@@ -835,23 +926,29 @@ function App() {
                 🎯 Opportunities Hub
               </button>
             </li>
-            <li className={`nav-item ${activeTab === 'guide' ? 'active' : ''}`}>
-              <button onClick={() => handleTabClick('guide')}>
-                🏫 {user && user.isVitBhopal ? 'VIT Bhopal Guide' : 'DS & AI Guide'}
+            <li className={`nav-item ${activeTab === 'community' ? 'active' : ''}`}>
+              <button onClick={() => handleTabClick('community')}>
+                👥 Student Community
               </button>
             </li>
-            {user && (
-              <li className={`nav-item ${activeTab === 'campus' ? 'active' : ''}`}>
-                <button onClick={() => handleTabClick('campus')}>
-                  🎪 College Life
-                </button>
-              </li>
-            )}
-            {/* Timetable available to all including guests (saves locally) */}
             {user && (
               <li className={`nav-item ${activeTab === 'timetable' ? 'active' : ''}`}>
                 <button onClick={() => handleTabClick('timetable')}>
                   📅 Schedule
+                </button>
+              </li>
+            )}
+            {(guideVisible || (user && user.role === 'admin')) && (
+              <li className={`nav-item ${activeTab === 'guide' ? 'active' : ''}`}>
+                <button onClick={() => handleTabClick('guide')}>
+                  🏫 {user && user.isVitBhopal ? 'VIT Bhopal Guide' : 'DS & AI Guide'}
+                </button>
+              </li>
+            )}
+            {user && (
+              <li className={`nav-item ${activeTab === 'campus' ? 'active' : ''}`}>
+                <button onClick={() => handleTabClick('campus')}>
+                  🎪 College Life
                 </button>
               </li>
             )}
@@ -1191,31 +1288,26 @@ function App() {
       )}
       {/* Mobile Bottom Navigation (Dock) */}
       {(() => {
-        const dockItems = [
-          {
-            icon: (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <polyline points="9 22 9 12 15 12 15 22" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            ),
-            label: 'Home',
-            onClick: () => handleTabClick('dashboard'),
-            className: activeTab === 'dashboard' ? 'active' : ''
-          },
-          {
-            icon: (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
-                <circle cx="12" cy="12" r="10" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx="12" cy="12" r="6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx="12" cy="12" r="2" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            ),
-            label: 'Opps',
-            onClick: () => handleTabClick('opportunities'),
-            className: activeTab === 'opportunities' ? 'active' : ''
-          },
-          ...(user ? [{
+        const dockItems = [];
+        
+        // 1. Home (Always first)
+        dockItems.push({
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <polyline points="9 22 9 12 15 12 15 22" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          ),
+          label: 'Home',
+          onClick: () => handleTabClick('dashboard'),
+          className: activeTab === 'dashboard' ? 'active' : ''
+        });
+
+        if (user) {
+          // Logged in user order: Home, Schedule, Community (Center), Opps, Guide (if visible/admin), College Life
+          
+          // 2. Schedule
+          dockItems.push({
             icon: (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
                 <rect x="3" y="4" width="18" height="18" rx="2" ry="2" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1227,19 +1319,54 @@ function App() {
             label: 'Schedule',
             onClick: () => handleTabClick('timetable'),
             className: activeTab === 'timetable' ? 'active' : ''
-          }] : []),
-          {
+          });
+
+          // 3. Community (Exactly Center of 5!)
+          dockItems.push({
             icon: (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
-                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="9" cy="7" r="4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             ),
-            label: 'Guide',
-            onClick: () => handleTabClick('guide'),
-            className: activeTab === 'guide' ? 'active' : ''
-          },
-          ...(user ? [{
+            label: 'Community',
+            onClick: () => handleTabClick('community'),
+            className: activeTab === 'community' ? 'active' : ''
+          });
+
+          // 4. Opps
+          dockItems.push({
+            icon: (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
+                <circle cx="12" cy="12" r="10" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="12" cy="12" r="6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="12" cy="12" r="2" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ),
+            label: 'Opps',
+            onClick: () => handleTabClick('opportunities'),
+            className: activeTab === 'opportunities' ? 'active' : ''
+          });
+
+          // 5. Guide (Admin always, student only if visible)
+          if (guideVisible || user.role === 'admin') {
+            dockItems.push({
+              icon: (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              ),
+              label: 'Guide',
+              onClick: () => handleTabClick('guide'),
+              className: activeTab === 'guide' ? 'active' : ''
+            });
+          }
+
+          // 6. College Life
+          dockItems.push({
             icon: (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
                 <path d="M22 10v6M2 10l10-5 10 5-10 5z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1249,8 +1376,55 @@ function App() {
             label: 'College Life',
             onClick: () => handleTabClick('campus'),
             className: activeTab === 'campus' ? 'active' : ''
-          }] : [])
-        ];
+          });
+
+        } else {
+          // Guest order: Home, Community (Center), Opps, Guide (if visible)
+          
+          // 2. Community (Exactly Center of 3!)
+          dockItems.push({
+            icon: (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="9" cy="7" r="4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ),
+            label: 'Community',
+            onClick: () => handleTabClick('community'),
+            className: activeTab === 'community' ? 'active' : ''
+          });
+
+          // 3. Opps
+          dockItems.push({
+            icon: (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
+                <circle cx="12" cy="12" r="10" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="12" cy="12" r="6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="12" cy="12" r="2" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ),
+            label: 'Opps',
+            onClick: () => handleTabClick('opportunities'),
+            className: activeTab === 'opportunities' ? 'active' : ''
+          });
+
+          // 4. Guide (Only if visible)
+          if (guideVisible) {
+            dockItems.push({
+              icon: (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              ),
+              label: 'Guide',
+              onClick: () => handleTabClick('guide'),
+              className: activeTab === 'guide' ? 'active' : ''
+            });
+          }
+        }
 
         return (
           <Dock
