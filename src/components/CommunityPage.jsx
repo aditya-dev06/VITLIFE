@@ -33,6 +33,9 @@ export default function CommunityPage({ user }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadExamDate, setUploadExamDate] = useState('');
   const [uploadLoading, setUploadLoading] = useState(false);
+
+
+
   // PDF Preview Modal State
   const [previewPaper, setPreviewPaper] = useState(null);
   const [selectedCourseCode, setSelectedCourseCode] = useState(null);
@@ -760,7 +763,17 @@ export default function CommunityPage({ user }) {
                   required
                   placeholder="e.g. MAT3002"
                   value={courseCode}
-                  onChange={(e) => setCourseCode(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCourseCode(val);
+                    if (val) {
+                      const cleanCode = val.trim().toUpperCase();
+                      const match = papers.find(p => p.courseCode && p.courseCode.trim().toUpperCase() === cleanCode);
+                      if (match && match.courseTitle) {
+                        setCourseTitle(match.courseTitle);
+                      }
+                    }
+                  }}
                   style={{ textTransform: 'uppercase' }}
                 />
                 <label className="floating-label">Course Code</label>
