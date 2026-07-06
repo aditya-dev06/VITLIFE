@@ -134,7 +134,7 @@ export default function TimetablePage({ user, onUpdateTimetable, syncStatus = 's
     });
 
     // 4. Pattern matching for complete entries like A11-MAT-2002-LT-AB-127-FS or A11-MAT-2002-LT-AB127
-    const pattern = /\b([A-F][12][1-4])[\s-]*([A-Z]{3,4})[\s-]*(\d{4})(?:[\s-]*(LTP|LT|LP|L|P|T))?(?:[\s-]*([A-Z]{2,3})[\s-]*(\d{3}))?/g;
+    const pattern = /\b([A-F][12][1-4])[\s-]*([A-Z]{3,4})[\s-]*(\d{4})(?:[\s-]*(LTP|LT|LP|L|P|T))?(?:[\s-]*([A-Z]{2,4})[\s-]*(\d{1,4}))?/g;
     
     const parsedEntries = [];
     let match;
@@ -182,8 +182,8 @@ export default function TimetablePage({ user, onUpdateTimetable, syncStatus = 's
             Math.max(0, Math.min(s.index, nearestCourse.index) - 10), 
             Math.min(normalized.length, Math.max(s.index, nearestCourse.index) + 40)
           );
-          const roomMatch = /(AB|AR|LC|CR)[\s-]*\d{3}/.exec(searchWindow);
-          const room = roomMatch ? roomMatch[0].replace(/\s/g, '-') : '';
+          const roomMatch = /([A-Z]{2,4})[\s-]*(\d{1,4})/.exec(searchWindow);
+          const room = roomMatch ? `${roomMatch[1]}-${roomMatch[2]}` : '';
           
           parsedEntries.push({
             slot: s.slot,
