@@ -7,7 +7,7 @@ import Dock from './components/Dock';
 import { motion, AnimatePresence } from 'motion/react';
 
 const Dashboard = lazy(() => import('./components/Dashboard'));
-const Roadmap = lazy(() => import('./components/Roadmap'));
+// const Roadmap = lazy(() => import('./components/Roadmap'));
 const Opportunities = lazy(() => import('./components/Opportunities'));
 const CampusLife = lazy(() => import('./components/CampusLife'));
 const TimetablePage = lazy(() => import('./components/TimetablePage'));
@@ -42,210 +42,7 @@ if (!window.fetch.__isWrapped) {
 }
 
 // Default Initial Skills Database
-const INITIAL_SKILLS = [
-  // LEVEL 1
-  {
-    id: "l1-la",
-    level: 1,
-    name: "Linear Algebra & Matrices",
-    category: "Math Foundations",
-    status: "To Do",
-    description: "Vectors, matrix operations, eigenvalues, eigenvectors, and singular value decomposition (SVD). The core geometry behind ML representations.",
-    resources: [
-      { name: "MIT Gilbert Strang Lectures", link: "https://ocw.mit.edu/courses/18-06-linear-algebra-spring-2010/" },
-      { name: "3Blue1Brown Essence of Linear Algebra", link: "https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab" }
-    ],
-    assignment: "Implement SVD from scratch using Python's NumPy library and use it to compress an image."
-  },
-  {
-    id: "l1-ps",
-    level: 1,
-    name: "Probability & Statistics",
-    category: "Math Foundations",
-    status: "To Do",
-    description: "Probability distributions (Normal, Binomial, Poisson), Bayes theorem, hypothesis testing, confidence intervals, and t-tests.",
-    resources: [
-      { name: "StatQuest: Statistics Fundamentals", link: "https://youtube.com/playlist?list=PLblh5JKOoLUK0FLuzwntyYI10UQFUhsY9" },
-      { name: "Harvard Stat 110 (Probability)", link: "https://online.harvard.edu/courses/introduction-probability" }
-    ],
-    assignment: "Conduct a t-test and calculate confidence intervals on a sample student grade dataset using scipy.stats."
-  },
-  {
-    id: "l1-py",
-    level: 1,
-    name: "Python Core & Data Wrangling",
-    category: "Programming",
-    status: "To Do",
-    description: "Mastering Python syntax, object-oriented concepts, and core libraries: NumPy, Pandas, Matplotlib, and Seaborn for data manipulation.",
-    resources: [
-      { name: "Kaggle Learn: Python & Pandas", link: "https://www.kaggle.com/learn" },
-      { name: "Python for Data Analysis (Book Reference)", link: "https://wesmckinney.com/book/" }
-    ],
-    assignment: "Clean and explore the Titanic dataset on Kaggle: handle missing values, engineer 2 features, and plot correlations."
-  },
-  {
-    id: "l1-dsa",
-    level: 1,
-    name: "Data Structures & Algorithms",
-    category: "CSE Core",
-    status: "To Do",
-    description: "Linked lists, stacks, queues, trees, graphs, sorting, searching, and recursion. Matches VIT Bhopal course CSE2002.",
-    resources: [
-      { name: "Abdul Bari DSA Series", link: "https://www.youtube.com/user/abdulbari5400" },
-      { name: "GeeksforGeeks DSA Self-Paced", link: "https://www.geeksforgeeks.org/data-structures/" }
-    ],
-    assignment: "Implement a Binary Search Tree (BST) and write recursive functions for In-order, Pre-order, and Post-order traversals."
-  },
-
-  // LEVEL 2
-  {
-    id: "l2-nm",
-    level: 2,
-    name: "Numerical Methods & SciPy",
-    category: "Computational Math",
-    status: "To Do",
-    description: "Root-finding algorithms, numerical integration, Euler and Runge-Kutta methods for solving ODEs. Essential for engineering simulations.",
-    resources: [
-      { name: "Numerical Recipes in Python / C", link: "http://numerical.recipes/" },
-      { name: "Coursera: Scientific Computing", link: "https://www.coursera.org/learn/scientific-computing" }
-    ],
-    assignment: "Write a Python script solving a 2D projectile motion simulation using Runge-Kutta 4th Order (RK4) method and plot the trajectory."
-  },
-  {
-    id: "l2-sql",
-    level: 2,
-    name: "SQL & DBMS",
-    category: "Databases",
-    status: "To Do",
-    description: "Relational database modeling, normalization, transaction ACID properties, and complex SQL joins, aggregations, and subqueries. Matches CSE3001.",
-    resources: [
-      { name: "SQLBolt: Interactive SQL Tutorials", link: "https://sqlbolt.com/" },
-      { name: "Mode Analytics: SQL Tutorial", link: "https://mode.com/sql-tutorial/" }
-    ],
-    assignment: "Create a database schema for an e-commerce platform and write queries containing inner, left, and aggregate GROUP BY operations."
-  },
-  {
-    id: "l2-ml",
-    level: 2,
-    name: "Classical Machine Learning",
-    category: "AI Core",
-    status: "To Do",
-    description: "Supervised and unsupervised models: Linear/Logistic Regression, Support Vector Machines, Random Forests, K-Means Clustering, and PCA.",
-    resources: [
-      { name: "Andrew Ng ML Specialization", link: "https://www.coursera.org/specializations/machine-learning-introduction" },
-      { name: "Scikit-Learn Official User Guide", link: "https://scikit-learn.org/stable/user_guide.html" }
-    ],
-    assignment: "Implement a Logistic Regression classification model from scratch using NumPy gradient descent and train it on Iris dataset."
-  },
-  {
-    id: "l2-git",
-    level: 2,
-    name: "Git & Version Control",
-    category: "Tools",
-    status: "To Do",
-    description: "Branching, merging, pulling, committing, pull requests, resolving merge conflicts, and structuring project repositories on GitHub.",
-    resources: [
-      { name: "GitHub Skills: Introduction to GitHub", link: "https://skills.github.com/" },
-      { name: "Git Simple Guide", link: "https://rogerdudler.github.io/git-guide/" }
-    ],
-    assignment: "Create a GitHub repository, push code, make a secondary branch, edit code, commit, merge with main, resolving a mock conflict."
-  },
-
-  // LEVEL 3
-  {
-    id: "l3-dl",
-    level: 3,
-    name: "Neural Networks & PyTorch",
-    category: "Deep Learning",
-    status: "To Do",
-    description: "Multi-Layer Perceptrons, backpropagation, SGD, Adam, activation functions, regularization, and implementing deep nets using PyTorch.",
-    resources: [
-      { name: "Andrej Karpathy Neural Networks: Zero to Hero", link: "https://karpathy.ai/zero-to-hero.html" },
-      { name: "PyTorch Deep Learning Boot Camp", link: "https://pytorch.org/tutorials/beginner/deep_learning_60min_blitz.html" }
-    ],
-    assignment: "Build and train a 3-layer Convolutional Neural Network (CNN) in PyTorch to classify CIFAR-10 images with >75% accuracy."
-  },
-  {
-    id: "l3-cv",
-    level: 3,
-    name: "Computer Vision",
-    category: "AI Specialization",
-    status: "To Do",
-    description: "Image classification, object detection (YOLO), semantic segmentation, and convolutional architectures (ResNet, EfficientNet).",
-    resources: [
-      { name: "Stanford CS231n: CNNs for Computer Vision", link: "http://cs231n.stanford.edu/" },
-      { name: "Fast.ai: Practical Deep Learning for Coders", link: "https://course.fast.ai/" }
-    ],
-    assignment: "Use transfer learning with a pre-trained ResNet-50 in PyTorch to classify a custom dataset of medical images (e.g. skin lesions)."
-  },
-  {
-    id: "l3-nlp",
-    level: 3,
-    name: "Natural Language Processing",
-    category: "AI Specialization",
-    status: "To Do",
-    description: "Tokenization, word embeddings (Word2Vec, GloVe), Recurrent Neural Networks (RNNs), LSTMs, GRUs, and attention mechanisms.",
-    resources: [
-      { name: "Stanford CS224n: NLP with Deep Learning", link: "http://web.stanford.edu/class/cs224n/" },
-      { name: "Hugging Face NLP Course", link: "https://huggingface.co/learn/nlp-course" }
-    ],
-    assignment: "Build a movie review sentiment classifier using pre-trained Word2Vec embeddings and a bi-directional LSTM in PyTorch."
-  },
-  {
-    id: "l3-bd",
-    level: 3,
-    name: "HPC & Big Data Systems",
-    category: "Computational Science",
-    status: "To Do",
-    description: "Parallel programming paradigms, MapReduce framework, Apache Spark, Hadoop, and writing distributed data processing jobs using PySpark.",
-    resources: [
-      { name: "Berkeley CS267: High Performance Computing", link: "https://sites.google.com/lbl.gov/cs267-spr2024" },
-      { name: "Databricks Spark Tutorials", link: "https://www.databricks.com/learn/training/login" }
-    ],
-    assignment: "Write a PySpark script to run statistical aggregation and filtering on a 5GB CSV file containing historical sensor readings."
-  },
-
-  // LEVEL 4
-  {
-    id: "l4-gen",
-    level: 4,
-    name: "Generative AI & LLMs",
-    category: "Cutting-Edge AI",
-    status: "To Do",
-    description: "Transformers (Self-Attention, Encoder-Decoder), BERT, GPT models, Prompt Engineering, RAG (Retrieval-Augmented Generation), and LangChain.",
-    resources: [
-      { name: "DeepLearning.AI: Generative AI with LLMs", link: "https://www.deeplearning.ai/courses/generative-ai-with-llms/" },
-      { name: "Hugging Face Transformer Documentation", link: "https://huggingface.co/docs/transformers" }
-    ],
-    assignment: "Build a local chatbot that answers questions based on uploaded PDF files using LangChain, OpenAI API or local Ollama (Llama3), and ChromaDB."
-  },
-  {
-    id: "l4-ops",
-    level: 4,
-    name: "MLOps & Deployment",
-    category: "Engineering",
-    status: "To Do",
-    description: "FastAPI endpoints, containerization with Docker, CI/CD pipelines, MLflow tracking, and model monitoring in production environments.",
-    resources: [
-      { name: "Made With ML (Goku Mohandas)", link: "https://madewithml.com/" },
-      { name: "MLOps Zoomcamp (DataTalksClub)", link: "https://github.com/DataTalksClub/mlops-zoomcamp" }
-    ],
-    assignment: "Create a FastAPI web API serving a scikit-learn model, containerize it using a Dockerfile, and push it to Docker Hub."
-  },
-  {
-    id: "l4-sciml",
-    level: 4,
-    name: "Scientific ML & PINNs",
-    category: "Computational Science",
-    status: "To Do",
-    description: "Physics-Informed Neural Networks (PINNs), solving partial differential equations using neural networks, and SciML software (Julia/Python SciML).",
-    resources: [
-      { name: "MIT 18.337J: Scientific Machine Learning", link: "https://github.com/mitmath/18337" },
-      { name: "PINNs Tutorial (Maziar Raissi)", link: "https://github.com/maziarraissi/PINNs" }
-    ],
-    assignment: "Write a Physics-Informed Neural Network in PyTorch to solve the 1D Burger's Equation and plot the approximate solution."
-  }
-];
+const INITIAL_SKILLS = [];
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -751,15 +548,6 @@ function App() {
 
   const renderActiveComponent = () => {
     switch (activeTab) {
-      case 'roadmap':
-        return (
-          <Roadmap 
-            skills={skills} 
-            userCourses={user ? user.courses : []}
-            userSemester={user ? user.semester : 1}
-            onUpdateSkillStatus={handleUpdateSkillStatus} 
-          />
-        );
       case 'opportunities':
         return (
           <Opportunities 
@@ -916,11 +704,6 @@ function App() {
                 🏠 Dashboard
               </button>
             </li>
-            <li className={`nav-item ${activeTab === 'roadmap' ? 'active' : ''}`}>
-              <button onClick={() => handleTabClick('roadmap')}>
-                🗺️ Skill Roadmap
-              </button>
-            </li>
             <li className={`nav-item ${activeTab === 'opportunities' ? 'active' : ''}`}>
               <button onClick={() => handleTabClick('opportunities')}>
                 🎯 Opportunities Hub
@@ -1051,7 +834,7 @@ function App() {
                 >
                   <svg stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="1.15em" width="1.15em" xmlns="http://www.w3.org/2000/svg">
                     <circle cx="12" cy="12" r="3"></circle>
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                   </svg>
                 </button>
               )}
@@ -1265,7 +1048,7 @@ function App() {
             </div>
             <div style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.95rem', lineHeight: '1.6', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <p>
-                Welcome to <strong>VIT Life</strong>, a premium, centralized ecosystem designed for student developers and tech enthusiasts. Our goal is to connect you with the latest events, hackathons, club recruitment, and skill roadmaps.
+                 Welcome to <strong>VIT Life</strong>, a premium, centralized ecosystem designed for student developers and tech enthusiasts. Our goal is to connect you with the latest events, hackathons, and club recruitment.
               </p>
               <p>
                 Built by a dedicated team at the <strong>VIT Life Developer Network</strong>. We focus on modern interactions, premium aesthetics, and responsive performance.

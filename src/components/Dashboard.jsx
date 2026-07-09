@@ -1678,15 +1678,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
           </div>
         </div>
 
-        <div style={{ marginTop: '1.5rem' }}>
-          <button 
-            className="btn-secondary" 
-            onClick={() => onNavigate('roadmap')} 
-            style={{ width: '100%', padding: '0.7rem', fontSize: '0.85rem', fontWeight: 700, borderRadius: '12px' }}
-          >
-            🚀 Open Learning Roadmap
-          </button>
-        </div>
+        {/* Removed Roadmap button */}
       </div>
     );
   };
@@ -1852,7 +1844,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
               transition: 'all 0.8s cubic-bezier(0.4, 0, 0.2, 1)'
             }}
           >
-            Here is your college lifestyle and management companion for today. Keep track of college events, active clubs, and your academic roadmap.
+             Here is your college lifestyle and management companion for today. Keep track of college events, active clubs, and your academic timetable.
           </p>
         </div>
 
@@ -2078,44 +2070,8 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
 
 
       {/* Dashboard Main Split Layout */}
-      <div className="dash-layout">
-        {/* Left: Focus / Roadmap Tasks */}
-        <div className="glass-panel dashboard-panel">
-          <h3 style={{ marginBottom: '1.5rem', fontSize: '1.3rem' }}>Focus Items for Today</h3>
-          <div className="quick-list">
-            {inProgressSkills.length > 0 ? (
-              inProgressSkills.map((skill, index) => (
-                <div key={index} className="glass-card quick-item">
-                  <div className="quick-bullet"></div>
-                  <div className="quick-content">
-                    <div className="quick-title">Resume Learning: {skill.name}</div>
-                    <div className="quick-meta">Category: {skill.category} | Level {skill.level}</div>
-                  </div>
-                  <button className="btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => onNavigate('roadmap')}>
-                    Open
-                  </button>
-                </div>
-              ))
-            ) : (
-              <div className="glass-card quick-item" style={{ color: 'hsl(var(--text-muted))', justifyContent: 'center' }}>
-                🎉 You don't have any skills marked as "In Progress". Go to the Roadmap to select one!
-              </div>
-            )}
-
-            <div className="glass-card quick-item">
-              <div className="quick-bullet" style={{ background: 'hsl(var(--secondary))' }}></div>
-              <div className="quick-content">
-                <div className="quick-title">Daily Practice Quiz</div>
-                <div className="quick-meta">Test your statistics & ML knowledge to earn 50 XP</div>
-              </div>
-              <button className="btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => onNavigate('practice')}>
-                Solve
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Latest Opportunities Preview */}
+      <div className="dash-layout" style={{ gridTemplateColumns: '1fr' }}>
+        {/* Latest Opportunities Preview */}
         <div className="glass-panel dashboard-panel">
           <h3 style={{ marginBottom: '1.5rem', fontSize: '1.3rem' }}>Latest Openings</h3>
           <div className="quick-list">
