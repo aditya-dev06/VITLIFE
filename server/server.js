@@ -54,16 +54,30 @@ app.use(cors((req, callback) => {
     return callback(null, corsOptions);
   }
 
-  // Allow same-origin requests dynamically by checking host header
+  // Allow same-origin requests dynamically by checking host and x-forwarded-host headers
   const host = req.header('Host');
-  if (host) {
-    const hostWithProtocolHttp = `http://${host}`;
-    const hostWithProtocolHttps = `https://${host}`;
-    if (origin === hostWithProtocolHttp || origin === hostWithProtocolHttps) {
+  const forwardedHost = req.header('x-forwarded-host');
+  const hostnames = [];
+  if (host) hostnames.push(host);
+  if (forwardedHost) hostnames.push(forwardedHost);
+
+  const isSameOrigin = hostnames.some(h => {
+    return origin === `http://${h}` || origin === `https://${h}`;
+  });
+
+  if (isSameOrigin) {
+    corsOptions.origin = true;
+    return callback(null, corsOptions);
+  }
+
+  // Allow all vercel.app subdomains dynamically
+  try {
+    const parsedOrigin = new URL(origin);
+    if (parsedOrigin.hostname.endsWith('.vercel.app')) {
       corsOptions.origin = true;
       return callback(null, corsOptions);
     }
-  }
+  } catch {}
 
   // Check env-configured allowed origins
   if (ALLOWED_ORIGINS.length > 0 && ALLOWED_ORIGINS.includes(origin)) {
