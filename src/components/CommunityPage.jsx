@@ -119,6 +119,101 @@ const convertImagesToPDF = async (base64Images) => {
   });
 };
 
+const loadPdfJS = () => {
+  return new Promise((resolve, reject) => {
+    if (window.pdfjsLib) {
+      resolve(window.pdfjsLib);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js';
+    script.onload = () => {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+      resolve(window.pdfjsLib);
+    };
+    script.onerror = (err) => reject(new Error('Failed to load PDF reader engine.'));
+    document.head.appendChild(script);
+  });
+};
+
+const loadPdfLib = () => {
+  return new Promise((resolve, reject) => {
+    if (window.PDFLib) {
+      resolve(window.PDFLib);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+    script.onload = () => resolve(window.PDFLib);
+    script.onerror = (err) => reject(new Error('Failed to load PDF compiler engine.'));
+    document.head.appendChild(script);
+  });
+};
+
+const extractTextFromPDF = async (arrayBuffer, tesseractWorker) => {
+  const pdfjsLib = await loadPdfJS();
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
+  
+  let combinedText = '';
+  
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items.map(item => item.str).join(' ');
+    
+    // If the digital text is too short, we fall back to rendering the page to a canvas and doing OCR!
+    if (pageText.trim().length < 20 && tesseractWorker) {
+      try {
+        const scale = 1.5;
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        
+        await page.render({
+          canvasContext: ctx,
+          viewport: viewport
+        }).promise;
+        
+        const canvasBase64 = canvas.toDataURL('image/jpeg', 0.85);
+        const ret = await tesseractWorker.recognize(canvasBase64);
+        if (ret.data && ret.data.text) {
+          combinedText += ret.data.text + '\n';
+        }
+      } catch (ocrErr) {
+        console.warn(`OCR fallback failed for PDF page ${i}:`, ocrErr);
+      }
+    } else {
+      combinedText += pageText + '\n';
+    }
+  }
+  
+  return combinedText;
+};
+
+const mergePDFs = async (pdfArrayBuffers) => {
+  const PDFLib = await loadPdfLib();
+  const { PDFDocument } = PDFLib;
+  
+  const mergedPdf = await PDFDocument.create();
+  
+  for (const buffer of pdfArrayBuffers) {
+    const srcPdf = await PDFDocument.load(buffer);
+    const copiedPages = await mergedPdf.copyPages(srcPdf, srcPdf.getPageIndices());
+    copiedPages.forEach((page) => mergedPdf.addPage(page));
+  }
+  
+  const pdfBytes = await mergedPdf.save();
+  const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.readAsDataURL(blob);
+  });
+};
+
 const parsePaperText = (text, existingPapers) => {
   const result = {};
   
@@ -355,6 +450,24 @@ export default function CommunityPage({ user }) {
     };
   }, [showUploadModal]);
 
+  const readAsArrayBuffer = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (err) => reject(err);
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  const readAsDataURL = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleUploadSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -369,66 +482,57 @@ export default function CommunityPage({ user }) {
     try {
       const token = localStorage.getItem('ds_ai_token');
       
-      const fileDataArr = [];
-      const fileNameArr = [];
+      const imageDatas = [];
+      const pdfBuffers = [];
       let fullTextCombined = '';
 
-      // 1. Load OCR worker if images are uploaded
-      let Tesseract = null;
-      let worker = null;
-      const hasImages = selectedFiles.some(f => f.type.startsWith('image/'));
-      if (hasImages) {
-        Tesseract = await loadTesseract();
-        worker = await Tesseract.createWorker('eng');
-      }
+      // 1. Initialize Tesseract worker to support image OCR & scanned PDF OCR fallbacks
+      setSuccess('⚙️ Initializing analysis engine...');
+      const Tesseract = await loadTesseract();
+      const worker = await Tesseract.createWorker('eng');
 
       // 2. Process each file
-      for (const file of selectedFiles) {
-        // PDF size check (Vercel payload limit is 4.5MB; base64 adds ~33% overhead)
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        setSuccess(`🔍 Analyzing file ${i + 1} of ${selectedFiles.length}: ${file.name}...`);
+
         if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+          // PDF size check (Vercel payload limit is 4.5MB; base64 adds ~33% overhead)
           if (file.size > 3.3 * 1024 * 1024) {
-            throw new Error(`PDF file "${file.name}" is too large (maximum 3.3MB for direct uploads). Please compress the PDF or use another file.`);
+            throw new Error(`PDF file "${file.name}" is too large (maximum 3.3MB). Please compress the PDF first.`);
           }
-        }
+          
+          const arrayBuffer = await readAsArrayBuffer(file);
+          pdfBuffers.push(arrayBuffer);
 
-        let base64Data;
-        let finalFileName = file.name;
-
-        if (file.type.startsWith('image/')) {
+          // Extract text for auto-fill / duplicate checking
+          try {
+            const extractedText = await extractTextFromPDF(arrayBuffer, worker);
+            if (extractedText) {
+              fullTextCombined += extractedText + '\n';
+            }
+          } catch (pdfReadErr) {
+            console.warn('Failed to extract text from PDF:', pdfReadErr);
+          }
+        } else if (file.type.startsWith('image/')) {
           // Compress image client-side to fit within Vercel body limits
-          base64Data = await compressImage(file);
-          const lastDotIdx = file.name.lastIndexOf('.');
-          const baseName = lastDotIdx !== -1 ? file.name.substring(0, lastDotIdx) : 'image';
-          finalFileName = `${baseName}.jpg`;
+          const base64Data = await compressImage(file);
+          imageDatas.push(base64Data);
 
           // Run OCR to extract full text and metadata
-          if (worker) {
-            try {
-              const ret = await worker.recognize(base64Data);
-              if (ret.data && ret.data.text) {
-                fullTextCombined += ret.data.text + '\n';
-              }
-            } catch (ocrErr) {
-              console.warn('OCR page scan failed:', ocrErr);
+          try {
+            const ret = await worker.recognize(base64Data);
+            if (ret.data && ret.data.text) {
+              fullTextCombined += ret.data.text + '\n';
             }
+          } catch (ocrErr) {
+            console.warn('OCR page scan failed:', ocrErr);
           }
-        } else {
-          const reader = new FileReader();
-          const base64Promise = new Promise((resolve, reject) => {
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = (err) => reject(err);
-          });
-          reader.readAsDataURL(file);
-          base64Data = await base64Promise;
         }
-
-        fileDataArr.push(base64Data);
-        fileNameArr.push(finalFileName);
       }
 
-      if (worker) {
-        await worker.terminate();
-      }
+      // Terminate OCR worker
+      await worker.terminate();
 
       // 3. Parse combined text to extract metadata
       const detected = parsePaperText(fullTextCombined, papers);
@@ -438,16 +542,50 @@ export default function CommunityPage({ user }) {
       const yearVal = detected.year || '2024-25';
       const semesterVal = detected.semester || '1';
 
-      // 4. If we uploaded images, compile them client-side into a single PDF
-      let finalFileData = fileDataArr.length === 1 ? fileDataArr[0] : fileDataArr;
-      let finalFileNameVal = fileNameArr.length === 1 ? fileNameArr[0] : fileNameArr;
+      // 4. Compile/Merge files into a single PDF
+      let finalFileData = '';
+      let finalFileNameVal = '';
 
-      if (hasImages) {
+      if (pdfBuffers.length > 0 && imageDatas.length === 0) {
+        // ONLY PDFs
+        if (pdfBuffers.length === 1) {
+          setSuccess('📄 Preparing PDF for upload...');
+          finalFileData = await readAsDataURL(selectedFiles[0]);
+          finalFileNameVal = selectedFiles[0].name;
+        } else {
+          setSuccess('📄 Merging multiple PDFs...');
+          finalFileData = await mergePDFs(pdfBuffers);
+          const codeClean = courseCodeVal !== 'UNKNOWN' ? courseCodeVal.toLowerCase() : 'paper';
+          finalFileNameVal = `${codeClean}_merged_${Date.now()}.pdf`;
+        }
+      } else if (imageDatas.length > 0 && pdfBuffers.length === 0) {
+        // ONLY IMAGES
         setSuccess('📄 Compiling pages into a single PDF...');
-        finalFileData = await convertImagesToPDF(fileDataArr);
+        finalFileData = await convertImagesToPDF(imageDatas);
         const codeClean = courseCodeVal !== 'UNKNOWN' ? courseCodeVal.toLowerCase() : 'paper';
         finalFileNameVal = `${codeClean}_scanned_${Date.now()}.pdf`;
+      } else if (imageDatas.length > 0 && pdfBuffers.length > 0) {
+        // MIXED IMAGES AND PDFs
+        setSuccess('📄 Compiling images and merging with PDFs...');
+        const tempPdfBase64 = await convertImagesToPDF(imageDatas);
+        
+        // Convert base64 dataURI to ArrayBuffer
+        const base64Clean = tempPdfBase64.substring(tempPdfBase64.indexOf(',') + 1);
+        const binaryStr = atob(base64Clean);
+        const len = binaryStr.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+        const tempPdfBuffer = bytes.buffer;
+
+        // Merge the image PDF buffer with all uploaded PDF buffers
+        finalFileData = await mergePDFs([tempPdfBuffer, ...pdfBuffers]);
+        const codeClean = courseCodeVal !== 'UNKNOWN' ? courseCodeVal.toLowerCase() : 'paper';
+        finalFileNameVal = `${codeClean}_compiled_${Date.now()}.pdf`;
       }
+
+      setSuccess('🚀 Uploading paper in background...');
 
       const payload = {
         courseCode: courseCodeVal,
