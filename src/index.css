@@ -68,82 +68,84 @@
   --transition-bounce: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* ── Premium Alabaster Light Mode Theme ── */
-:root.light-theme {
+/* ── Bright Crisp Alabaster Light Mode Theme ── */
+:root.light-theme,
+:root.light {
   /* ── Canvas & Card Bases ── */
-  --bg-deep: 218 22% 88%;           /* Cool Titanium Slate-Blue Canvas (#ccd3e0) */
-  --bg-card: 218 18% 93%;           /* Soft Titanium Card Base (#e8ebf0) */
-  --bg-card-hover: 218 18% 90%;     /* Satin Slate-Blue Hover (#e0e4eb) */
-  --surface-glass: 218 18% 93% / 0.85; /* Frosted Glass Card Base */
+  --bg-deep: 210 40% 98%;           /* Bright Crisp Slate Canvas (#f8fafc) */
+  --bg-card: 0 0% 100%;             /* Pure White Card Base (#ffffff) */
+  --bg-card-hover: 210 40% 96%;     /* Soft Slate Hover (#f1f5f9) */
+  --surface-glass: 0 0% 100% / 0.95; /* Pure White Glass Card Base */
 
   /* ── Brand Accents ── */
-  --primary: 250 72% 48%;           /* Premium Royal Indigo-Violet (#2a1cb8) */
-  --secondary: 192 85% 30%;         /* Deep Slate Teal (#0b7285) */
-  --accent: 342 75% 45%;            /* Velvet Rose Crimson (#c91a54) */
+  --primary: 250 89% 60%;           /* Amethyst Violet (#635bff) */
+  --secondary: 185 85% 45%;         /* Deep Slate Teal (#0ea5e9) */
+  --accent: 330 85% 55%;            /* Aurora Pink */
   --primary-contrast: 0 0% 100%;    /* High contrast text overlay (white) */
 
   /* ── Border Separators ── */
-  --border-base: 218 16% 80%;       /* Low-profile solid separators (#bec5d1) */
-  --border-glass: 218 16% 80% / 0.4;/* Frosted glass border outline (40% Opacity) */
-  --border-glow: 250 72% 48% / 0.15;/* Royal Indigo glow separator */
+  --border-base: 214 32% 91%;       /* Crisp Slate Separation (#e2e8f0) */
+  --border-glass: 214 32% 91% / 0.8;/* Subtle Crisp Border Outline */
+  --border-glow: 250 89% 60% / 0.2; /* Indigo glow separator */
 
-  /* ── Typography (Contrast Optimized) ── */
-  --text-primary: 228 15% 8%;       /* Ink Charcoal (#131418) - 14:1 Contrast (AAA) */
-  --text-secondary: 230 10% 28%;    /* Slate Gray (#40434b) - 8.5:1 Contrast (AAA) */
-  --text-muted: 231 12% 38%;        /* Muted Slate (#575c68) - 6:1 Contrast (AA) */
+  /* ── Typography (High Contrast AAA) ── */
+  --text-primary: 222 47% 11%;       /* Ink Charcoal (#0f172a - 16:1 Contrast AAA) */
+  --text-secondary: 215 25% 27%;    /* Dark Slate Copy (#334155 - 11:1 Contrast AAA) */
+  --text-muted: 215 16% 47%;        /* Slate Muted (#64748b - 5.5:1 Contrast AA) */
 
   /* ── Official shadcn/ui Standard CSS Theme Tokens (Light Mode) ── */
-  --background: hsl(218 22% 88%);
-  --foreground: hsl(228 15% 8%);
-  --card: hsl(218 18% 93%);
-  --card-foreground: hsl(228 15% 8%);
-  --popover: hsl(218 18% 93%);
-  --popover-foreground: hsl(228 15% 8%);
+  --background: hsl(210 40% 98%);
+  --foreground: hsl(222 47% 11%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(222 47% 11%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(222 47% 11%);
   --primary-foreground: hsl(0 0% 100%);
-  --secondary-foreground: hsl(228 15% 8%);
-  --muted: hsl(218 18% 90%);
-  --muted-foreground: hsl(231 12% 38%);
-  --accent-foreground: hsl(228 15% 8%);
-  --destructive: hsl(342 75% 45%);
-  --border: hsl(218 16% 80%);
-  --input: hsl(218 16% 78%);
-  --ring: hsl(250 72% 48% / 0.5);
+  --secondary-foreground: hsl(222 47% 11%);
+  --muted: hsl(210 40% 96%);
+  --muted-foreground: hsl(215 16% 47%);
+  --accent-foreground: hsl(222 47% 11%);
+  --destructive: hsl(0 84% 60%);
+  --border: hsl(214 32% 91%);
+  --input: hsl(214 32% 90%);
+  --ring: hsl(250 89% 60% / 0.4);
 
   /* shadcn Sidebar Tokens (Light Mode) */
-  --sidebar: hsl(220 14% 96%);
-  --sidebar-foreground: hsl(230 10% 35%);
-  --sidebar-primary: hsl(250 72% 48%);
+  --sidebar: hsl(0 0% 100%);
+  --sidebar-foreground: hsl(222 47% 11%);
+  --sidebar-primary: hsl(250 89% 60%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(220 14% 91%);
-  --sidebar-accent-foreground: hsl(250 72% 48%);
-  --sidebar-border: hsl(220 14% 88%);
-  --sidebar-ring: hsl(250 72% 48% / 0.5);
+  --sidebar-accent: hsl(210 40% 96%);
+  --sidebar-accent-foreground: hsl(250 89% 60%);
+  --sidebar-border: hsl(214 32% 91%);
+  --sidebar-ring: hsl(250 89% 60% / 0.4);
 
   /* ── Ambient & Glassmorphism Shadows ── */
   --shadow-lg:
-    0 10px 30px -10px hsla(218, 22%, 30%, 0.12),
-    0 1px 3px hsla(218, 22%, 30%, 0.05),
-    0 0 0 1px hsla(var(--border-glass));
+    0 10px 30px -10px rgba(0, 0, 0, 0.08),
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 0 0 1px hsl(214 32% 91%);
 }
 
-/* Light mode body background with luxury metallic ambient gradients */
-body.light-theme {
-  background-color: hsl(218 22% 88%) !important;
+/* Light mode body background */
+body.light-theme,
+body.light {
+  background-color: #f8fafc !important;
   background-image:
-    radial-gradient(at 0% 0%, hsla(218, 22%, 40%, 0.06) 0px, transparent 60%),
-    radial-gradient(at 100% 0%, hsla(218, 18%, 50%, 0.05) 0px, transparent 50%),
-    radial-gradient(at 50% 100%, hsla(218, 22%, 30%, 0.04) 0px, transparent 60%) !important;
-  -webkit-font-smoothing: subpixel-antialiased !important;
-  -moz-osx-font-smoothing: auto !important;
+    radial-gradient(at 0% 0%, rgba(99, 91, 255, 0.03) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(14, 165, 233, 0.03) 0px, transparent 50%) !important;
+  color: #0f172a !important;
+  -webkit-font-smoothing: antialiased !important;
 }
 
-/* ── Light Mode Element Overrides ── */
-
-/* Sidebar Panel — Dark Midnight-Slate (#0f111a) in Light Mode */
-.light-theme .sidebar {
-  background: #0f111a !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35) !important;
+/* ── Light Mode Sidebar & Overrides ── */
+.light-theme .app-sidebar,
+.light .app-sidebar,
+.light-theme .sidebar,
+.light .sidebar {
+  background: #ffffff !important;
+  border-right: 1px solid #e2e8f0 !important;
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.03) !important;
 }
 
 .light-theme .sidebar .logo-gradient-text {
