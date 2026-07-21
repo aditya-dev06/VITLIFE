@@ -96,12 +96,18 @@
 }
 
 /* ── User block ── */
+.sidebar-user-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  flex-shrink: 0;
+}
+
 .sidebar-user {
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  padding: 0.5rem 0.75rem;
-  flex-shrink: 0;
 }
 
 .sidebar-avatar {
@@ -138,7 +144,56 @@
 .sidebar-user-role {
   font-size: 0.7rem;
   color: var(--sidebar-text-muted);
-  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-user-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.1rem;
+}
+
+.sidebar-user-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 6px;
+  color: var(--sidebar-text);
+  padding: 0.25rem 0.45rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.sidebar-user-btn:hover {
+  background: var(--sidebar-item-hover);
+  color: hsl(var(--text-primary, 210 20% 98%));
+}
+
+.sidebar-user-btn--signup {
+  background: hsl(250 89% 65% / 0.15);
+  border-color: hsl(250 89% 65% / 0.3);
+  color: hsl(250 89% 75%);
+  font-weight: 700;
+  font-size: 0.7rem;
+  padding: 0.25rem 0.6rem;
+  letter-spacing: 0.02em;
+}
+
+.sidebar-user-btn--signup:hover {
+  background: hsl(250 89% 65% / 0.25);
+  color: #fff;
+}
+
+.sidebar-user-btn--logout:hover {
+  background: hsl(0 70% 65% / 0.15);
+  color: hsl(0 70% 75%);
+  border-color: hsl(0 70% 65% / 0.3);
 }
 
 /* ── Divider ── */

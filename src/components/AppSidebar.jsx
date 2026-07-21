@@ -105,6 +105,21 @@ export default function AppSidebar({
     return 'Offline';
   };
 
+  const getSubInfo = () => {
+    if (!user) return 'CDS Student';
+    if (user.isGuest) return 'Guest • Not signed in';
+    if (user.isVitBhopal) {
+      let reg = user.registrationNumber || '';
+      if (!reg && user.email) {
+        const parts = user.email.split('@')[0].split('.');
+        reg = parts[parts.length - 1] ? parts[parts.length - 1].toUpperCase() : '';
+      }
+      return `${reg ? reg + ' • ' : ''}Sem ${user.semester || 1}`;
+    }
+    if (user.semester && user.semester !== 0) return `Sem ${user.semester}`;
+    return 'Global Member';
+  };
+
   const isOpen = isMobile ? mobileOpen : !collapsed;
 
   return (
@@ -147,16 +162,62 @@ export default function AppSidebar({
 
         {/* User info */}
         {user && (
-          <div className="sidebar-user">
-            <div className="sidebar-avatar">
-              {(user.name || 'U')[0].toUpperCase()}
+          <div className="sidebar-user-block">
+            <div className="sidebar-user">
+              <div className="sidebar-avatar">
+                {user.name ? user.name.substring(0, 2).toUpperCase() : 'DS'}
+              </div>
+              {isOpen && (
+                <div className="sidebar-user-info">
+                  <span className="sidebar-user-name" title={user.name || 'Student'}>
+                    {user.name || 'Student'}
+                  </span>
+                  <span className="sidebar-user-role">{getSubInfo()}</span>
+                </div>
+              )}
             </div>
+
             {isOpen && (
-              <div className="sidebar-user-info">
-                <span className="sidebar-user-name">{user.name || 'User'}</span>
-                <span className="sidebar-user-role">
-                  {user?.isGuest ? 'Guest' : user?.role === 'admin' ? 'Admin' : 'Student'}
-                </span>
+              <div className="sidebar-user-actions">
+                {user.isGuest ? (
+                  <button
+                    className="sidebar-user-btn sidebar-user-btn--signup"
+                    onClick={onLogout}
+                    title="Create Account / Sign In"
+                  >
+                    Sign Up
+                  </button>
+                ) : (
+                  <>
+                    {onEditProfile && (
+                      <button
+                        className="sidebar-user-btn"
+                        onClick={onEditProfile}
+                        title="Edit Profile"
+                      >
+                        <Settings size={14} />
+                      </button>
+                    )}
+                  </>
+                )}
+                {onToggleTheme && (
+                  <button
+                    className="sidebar-user-btn"
+                    onClick={onToggleTheme}
+                    title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+                  >
+                    {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+                  </button>
+                )}
+                {!user.isGuest && (
+                  <button
+                    className="sidebar-user-btn sidebar-user-btn--logout"
+                    onClick={onLogout}
+                    title="Sign Out"
+                  >
+                    <LogOut size={14} />
+                  </button>
+                )}
               </div>
             )}
           </div>
