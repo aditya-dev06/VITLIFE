@@ -360,43 +360,6 @@ export default function CommunityPage({ user }) {
     setVisibleChunkCount(24);
   }, [searchQuery, filterExamType, filterYear, activeSubTab]);
 
-  // Derived course groups (memoized for high performance)
-  const courseGroups = useMemo(() => {
-    const grouped = filteredPapers.reduce((acc, paper) => {
-      const code = (paper.courseCode || '').trim().toUpperCase();
-      if (!code) return acc;
-      if (!acc[code]) {
-        acc[code] = {
-          courseCode: code,
-          courseTitle: paper.courseTitle || code,
-          department: paper.department,
-          semester: paper.semester,
-          papersList: []
-        };
-      }
-      acc[code].papersList.push(paper);
-      return acc;
-    }, {});
-    return Object.values(grouped);
-  }, [filteredPapers]);
-
-  const visibleCourseGroups = useMemo(() => {
-    return courseGroups.slice(0, visibleChunkCount);
-  }, [courseGroups, visibleChunkCount]);
-
-  // IntersectionObserver to auto-load next chunk when scrolling near end
-  useEffect(() => {
-    if (!sentinelRef.current) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && visibleChunkCount < courseGroups.length) {
-        setVisibleChunkCount(prev => prev + 24);
-      }
-    }, { threshold: 0.1 });
-
-    observer.observe(sentinelRef.current);
-    return () => observer.disconnect();
-  }, [visibleChunkCount, courseGroups.length]);
-
   // Derived selected course group
   const selectedCourseGroup = (() => {
     if (!selectedCourseCode) return null;
@@ -490,6 +453,43 @@ export default function CommunityPage({ user }) {
     if (filterYear) list = list.filter(p => p.year === filterYear);
     return list;
   }, [papers, searchQuery, filterExamType, filterYear]);
+
+  // Derived course groups (memoized for high performance, declared after filteredPapers)
+  const courseGroups = useMemo(() => {
+    const grouped = filteredPapers.reduce((acc, paper) => {
+      const code = (paper.courseCode || '').trim().toUpperCase();
+      if (!code) return acc;
+      if (!acc[code]) {
+        acc[code] = {
+          courseCode: code,
+          courseTitle: paper.courseTitle || code,
+          department: paper.department,
+          semester: paper.semester,
+          papersList: []
+        };
+      }
+      acc[code].papersList.push(paper);
+      return acc;
+    }, {});
+    return Object.values(grouped);
+  }, [filteredPapers]);
+
+  const visibleCourseGroups = useMemo(() => {
+    return courseGroups.slice(0, visibleChunkCount);
+  }, [courseGroups, visibleChunkCount]);
+
+  // IntersectionObserver to auto-load next chunk when scrolling near end
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && visibleChunkCount < courseGroups.length) {
+        setVisibleChunkCount(prev => prev + 24);
+      }
+    }, { threshold: 0.1 });
+
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [visibleChunkCount, courseGroups.length]);
 
   // Only re-fetch from network when filters change (not search query)
   useEffect(() => {
