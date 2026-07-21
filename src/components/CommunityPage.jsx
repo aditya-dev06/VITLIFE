@@ -9,6 +9,43 @@ const isImageUrl = (url) => {
   return imageRegex.test(url) || url.includes('/image/upload/');
 };
 
+const compressImage = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        const maxDim = 1600;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        resolve(dataUrl);
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
+
 
 export default function CommunityPage({ user }) {
   const [activeSubTab, setActiveSubTab] = useState('pyq'); // 'pyq' | 'chats' | 'marketplace'
@@ -155,16 +192,33 @@ export default function CommunityPage({ user }) {
           throw new Error('Please select a file to upload.');
         }
 
-        const reader = new FileReader();
-        const base64Promise = new Promise((resolve, reject) => {
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = (err) => reject(err);
-        });
-        reader.readAsDataURL(selectedFile);
-        const base64Data = await base64Promise;
+        // PDF size check (Vercel payload limit is 4.5MB; base64 adds ~33% overhead)
+        if (selectedFile.type === 'application/pdf' || selectedFile.name.toLowerCase().endsWith('.pdf')) {
+          if (selectedFile.size > 3.3 * 1024 * 1024) {
+            throw new Error('PDF file size is too large (maximum 3.3MB for direct uploads due to server limits). Please compress the PDF or use the Link URL upload option instead.');
+          }
+        }
+
+        let base64Data;
+        let finalFileName = selectedFile.name;
+        if (selectedFile.type.startsWith('image/')) {
+          // Compress image client-side to fit within Vercel body limits and optimize server storage
+          base64Data = await compressImage(selectedFile);
+          const lastDotIdx = selectedFile.name.lastIndexOf('.');
+          const baseName = lastDotIdx !== -1 ? selectedFile.name.substring(0, lastDotIdx) : 'image';
+          finalFileName = `${baseName}.jpg`;
+        } else {
+          const reader = new FileReader();
+          const base64Promise = new Promise((resolve, reject) => {
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = (err) => reject(err);
+          });
+          reader.readAsDataURL(selectedFile);
+          base64Data = await base64Promise;
+        }
 
         payload.fileData = base64Data;
-        payload.fileName = selectedFile.name;
+        payload.fileName = finalFileName;
       } else {
         if (!uploadUrl) {
           throw new Error('Please enter a document URL.');
