@@ -5,6 +5,9 @@ const ACADEMIC_YEARS = ['2023-24', '2024-25', '2025-26'];
 
 const isImageUrl = (url) => {
   if (!url) return false;
+  if (Array.isArray(url)) {
+    return url.length > 0 && url.every(u => isImageUrl(u));
+  }
   const imageRegex = /\.(jpg|jpeg|png|webp|gif)(\?|#|$)/i;
   return imageRegex.test(url) || url.includes('/image/upload/');
 };
@@ -67,7 +70,7 @@ export default function CommunityPage({ user }) {
   const [uploadSemester, setUploadSemester] = useState('1');
   const [uploadUrl, setUploadUrl] = useState('');
   const [uploadMethod, setUploadMethod] = useState('file'); // 'file' | 'link'
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploadExamDate, setUploadExamDate] = useState('');
   const [uploadLoading, setUploadLoading] = useState(false);
 
@@ -194,37 +197,45 @@ export default function CommunityPage({ user }) {
       };
 
       if (uploadMethod === 'file') {
-        if (!selectedFile) {
-          throw new Error('Please select a file to upload.');
+        if (!selectedFiles || selectedFiles.length === 0) {
+          throw new Error('Please select at least one file to upload.');
         }
 
-        // PDF size check (Vercel payload limit is 4.5MB; base64 adds ~33% overhead)
-        if (selectedFile.type === 'application/pdf' || selectedFile.name.toLowerCase().endsWith('.pdf')) {
-          if (selectedFile.size > 3.3 * 1024 * 1024) {
-            throw new Error('PDF file size is too large (maximum 3.3MB for direct uploads due to server limits). Please compress the PDF or use the Link URL upload option instead.');
+        const fileDataArr = [];
+        const fileNameArr = [];
+
+        for (const file of selectedFiles) {
+          // PDF size check (Vercel payload limit is 4.5MB; base64 adds ~33% overhead)
+          if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+            if (file.size > 3.3 * 1024 * 1024) {
+              throw new Error(`PDF file "${file.name}" is too large (maximum 3.3MB for direct uploads due to server limits). Please compress the PDF or use the Link URL upload option instead.`);
+            }
           }
+
+          let base64Data;
+          let finalFileName = file.name;
+          if (file.type.startsWith('image/')) {
+            // Compress image client-side to fit within Vercel body limits and optimize server storage
+            base64Data = await compressImage(file);
+            const lastDotIdx = file.name.lastIndexOf('.');
+            const baseName = lastDotIdx !== -1 ? file.name.substring(0, lastDotIdx) : 'image';
+            finalFileName = `${baseName}.jpg`;
+          } else {
+            const reader = new FileReader();
+            const base64Promise = new Promise((resolve, reject) => {
+              reader.onload = () => resolve(reader.result);
+              reader.onerror = (err) => reject(err);
+            });
+            reader.readAsDataURL(file);
+            base64Data = await base64Promise;
+          }
+
+          fileDataArr.push(base64Data);
+          fileNameArr.push(finalFileName);
         }
 
-        let base64Data;
-        let finalFileName = selectedFile.name;
-        if (selectedFile.type.startsWith('image/')) {
-          // Compress image client-side to fit within Vercel body limits and optimize server storage
-          base64Data = await compressImage(selectedFile);
-          const lastDotIdx = selectedFile.name.lastIndexOf('.');
-          const baseName = lastDotIdx !== -1 ? selectedFile.name.substring(0, lastDotIdx) : 'image';
-          finalFileName = `${baseName}.jpg`;
-        } else {
-          const reader = new FileReader();
-          const base64Promise = new Promise((resolve, reject) => {
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = (err) => reject(err);
-          });
-          reader.readAsDataURL(selectedFile);
-          base64Data = await base64Promise;
-        }
-
-        payload.fileData = base64Data;
-        payload.fileName = finalFileName;
+        payload.fileData = fileDataArr.length === 1 ? fileDataArr[0] : fileDataArr;
+        payload.fileName = fileNameArr.length === 1 ? fileNameArr[0] : fileNameArr;
       } else {
         if (!uploadUrl) {
           throw new Error('Please enter a document URL.');
@@ -252,7 +263,7 @@ export default function CommunityPage({ user }) {
       setCourseCode('');
       setCourseTitle('');
       setUploadUrl('');
-      setSelectedFile(null);
+      setSelectedFiles([]);
       setUploadExamDate('');
       setShowUploadModal(false);
       
@@ -962,22 +973,25 @@ export default function CommunityPage({ user }) {
               </div>
 
               {uploadMethod === 'file' ? (
-                <div className="floating-field active" style={{ border: '1px dashed hsla(var(--border-glass))', padding: '1.25rem', borderRadius: '8px', background: 'rgba(255,255,255,0.01)', textAlign: 'center' }}>
+                 <div className="floating-field active" style={{ border: '1px dashed hsla(var(--border-glass))', padding: '1.25rem', borderRadius: '8px', background: 'rgba(255,255,255,0.01)', textAlign: 'center' }}>
                   <input
                     type="file"
                     accept=".pdf,image/*"
+                    multiple
                     required
-                    onChange={(e) => setSelectedFile(e.target.files[0])}
+                    onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
                     style={{ display: 'none' }}
                     id="paper-file-upload-input"
                   />
                   <label htmlFor="paper-file-upload-input" style={{ cursor: 'pointer', display: 'block' }}>
                     <span style={{ fontSize: '1.8rem', display: 'block', marginBottom: '0.5rem' }}>📤</span>
                     <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'hsl(var(--primary))' }}>
-                      {selectedFile ? selectedFile.name : 'Select File from Gallery/Device'}
+                      {selectedFiles.length > 0 
+                        ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`) 
+                        : 'Select File(s) from Gallery/Device'}
                     </span>
                     <span style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))', display: 'block', marginTop: '0.2rem' }}>
-                      Supports PDF and Images
+                      Supports PDF and multiple Images
                     </span>
                   </label>
                 </div>
@@ -1049,25 +1063,43 @@ export default function CommunityPage({ user }) {
               border: '1px solid rgba(255,255,255,0.08)',
               boxShadow: '0 10px 30px -10px rgba(0,0,0,0.5)'
             }}>
-              <a
-                href={previewPaper.url}
-                download
-                target="_blank"
-                rel="noopener noreferrer"
-                className="paper-btn download"
-                style={{ margin: 0, padding: '0.4rem 0.85rem', fontSize: '0.75rem', borderRadius: '20px', fontWeight: '600' }}
-              >
-                📥 Download
-              </a>
-              <a
-                href={previewPaper.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="paper-btn preview"
-                style={{ margin: 0, padding: '0.4rem 0.85rem', fontSize: '0.75rem', borderRadius: '20px', fontWeight: '600' }}
-              >
-                ↗️ Open Tab
-              </a>
+              {Array.isArray(previewPaper.url) ? (
+                previewPaper.url.map((url, idx) => (
+                  <a
+                    key={idx}
+                    href={url}
+                    download={`paper_page_${idx + 1}.jpg`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="paper-btn download"
+                    style={{ margin: 0, padding: '0.4rem 0.85rem', fontSize: '0.75rem', borderRadius: '20px', fontWeight: '600' }}
+                  >
+                    📥 Page {idx + 1}
+                  </a>
+                ))
+              ) : (
+                <>
+                  <a
+                    href={previewPaper.url}
+                    download
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="paper-btn download"
+                    style={{ margin: 0, padding: '0.4rem 0.85rem', fontSize: '0.75rem', borderRadius: '20px', fontWeight: '600' }}
+                  >
+                    📥 Download
+                  </a>
+                  <a
+                    href={previewPaper.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="paper-btn preview"
+                    style={{ margin: 0, padding: '0.4rem 0.85rem', fontSize: '0.75rem', borderRadius: '20px', fontWeight: '600' }}
+                  >
+                    ↗️ Open Tab
+                  </a>
+                </>
+              )}
 
               {/* Conditional Zoom & Rotate buttons for image preview */}
               {isImageUrl(previewPaper.url) && (
@@ -1106,6 +1138,7 @@ export default function CommunityPage({ user }) {
                 (() => {
                   const isLandscape = window.innerWidth > window.innerHeight;
                   const isHorizontalLayout = isLandscape || rotation === 90 || rotation === 270;
+                  const imageUrls = Array.isArray(previewPaper.url) ? previewPaper.url : [previewPaper.url];
                   return (
                     <div
                       className="preview-media-viewport"
@@ -1122,32 +1155,41 @@ export default function CommunityPage({ user }) {
                         height: '100%',
                         width: '100%',
                         overflowX: 'hidden',
-                        overflowY: isHorizontalLayout ? 'auto' : 'hidden',
+                        overflowY: 'auto',
                         display: 'flex',
                         flexDirection: 'column',
-                        justifyContent: isHorizontalLayout ? 'flex-start' : 'center',
+                        justifyContent: 'flex-start',
                         alignItems: 'center',
+                        gap: '2rem',
                         cursor: zoomScale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default',
-                        touchAction: isHorizontalLayout && zoomScale === 1 ? 'pan-y' : 'none',
-                        padding: isHorizontalLayout ? '1rem 0 5rem 0' : '0'
+                        touchAction: zoomScale === 1 ? 'pan-y' : 'none',
+                        padding: '2rem 1rem 8rem 1rem'
                       }}
                     >
-                      <img
-                        src={previewPaper.url}
-                        alt={`${previewPaper.courseCode} — ${previewPaper.courseTitle}`}
-                        style={{
-                          transform: `translate(${zoomOffset.x}px, ${zoomOffset.y}px) scale(${zoomScale}) rotate(${rotation}deg)`,
-                          transformOrigin: isHorizontalLayout ? 'center top' : 'center center',
-                          transition: isDragging ? 'none' : 'transform 0.12s cubic-bezier(0.16, 1, 0.3, 1)',
-                          width: isHorizontalLayout ? '100%' : 'auto',
-                          height: 'auto',
-                          maxWidth: '100%',
-                          maxHeight: isHorizontalLayout ? 'none' : '100%',
-                          objectFit: 'contain',
-                          userSelect: 'none',
-                          pointerEvents: 'none'
-                        }}
-                      />
+                      {imageUrls.map((url, idx) => (
+                        <div key={idx} style={{ position: 'relative', width: isHorizontalLayout ? '100%' : 'auto', maxWidth: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <img
+                            src={url}
+                            alt={`Page ${idx + 1}`}
+                            style={{
+                              transform: `translate(${zoomOffset.x}px, ${zoomOffset.y}px) scale(${zoomScale}) rotate(${rotation}deg)`,
+                              transformOrigin: 'center top',
+                              transition: isDragging ? 'none' : 'transform 0.12s cubic-bezier(0.16, 1, 0.3, 1)',
+                              width: isHorizontalLayout ? '100%' : 'auto',
+                              height: 'auto',
+                              maxWidth: '100%',
+                              maxHeight: isHorizontalLayout ? 'none' : '85vh',
+                              objectFit: 'contain',
+                              userSelect: 'none',
+                              pointerEvents: 'none',
+                              boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+                              borderRadius: '8px',
+                              border: '1px solid rgba(255, 255, 255, 0.05)'
+                            }}
+                          />
+                          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.72rem', marginTop: '0.50rem', fontWeight: 600 }}>Page {idx + 1} of {imageUrls.length}</span>
+                        </div>
+                      ))}
                     </div>
                   );
                 })()

@@ -3564,49 +3564,65 @@ app.post('/api/papers', optionalAuthenticate, async (req, res) => {
 
     let fileUrl = url || '';
 
-    // Handle base64 file upload if present
+    // Handle base64 file upload if present (supporting single or multiple uploads)
     if (fileData && fileName) {
-      const fileExtension = (path.extname(fileName) || '').toLowerCase();
-      const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.gif'];
-      if (!allowedExtensions.includes(fileExtension)) {
-        return res.status(400).json({ error: 'Only PDF and image files (PDF, JPG, JPEG, PNG, WEBP, GIF) are allowed.' });
-      }
+      const isArray = Array.isArray(fileData);
+      const fileDataArr = isArray ? fileData : [fileData];
+      const fileNameArr = isArray ? fileName : [fileName];
+      const uploadedUrls = [];
 
-      const matches = fileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-      if (matches && matches.length === 3) {
-        const buffer = Buffer.from(matches[2], 'base64');
-        if (isCloudinaryConfigured) {
-          try {
-            // Revert back to 'auto' (image) to allow inline viewing, but requires Cloudinary settings change
-            const resType = 'auto';
-            fileUrl = await uploadToCloudinary(buffer, 'vitlife_papers', resType);
-          } catch (cloudinaryErr) {
-            console.error('Cloudinary upload failed, falling back to local:', cloudinaryErr);
-            const fileExtension = path.extname(fileName) || '.pdf';
+      for (let i = 0; i < fileDataArr.length; i++) {
+        const currentFileData = fileDataArr[i];
+        const currentFileName = fileNameArr[i];
+
+        const fileExtension = (path.extname(currentFileName) || '').toLowerCase();
+        const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.gif'];
+        if (!allowedExtensions.includes(fileExtension)) {
+          return res.status(400).json({ error: `Only PDF and image files are allowed. Invalid file extension: ${fileExtension}` });
+        }
+
+        const matches = currentFileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const buffer = Buffer.from(matches[2], 'base64');
+          let currentFileUrl = '';
+          if (isCloudinaryConfigured) {
+            try {
+              const resType = 'auto';
+              currentFileUrl = await uploadToCloudinary(buffer, 'vitlife_papers', resType);
+            } catch (cloudinaryErr) {
+              console.error('Cloudinary upload failed, falling back to local:', cloudinaryErr);
+              const fileExtension = path.extname(currentFileName) || '.pdf';
+              const uniqueName = `paper_${Date.now()}_${Math.random().toString(36).substring(2, 8)}${fileExtension}`;
+              const filePath = path.join(uploadsDir, uniqueName);
+              fs.writeFileSync(filePath, buffer);
+              currentFileUrl = `/uploads/${uniqueName}`;
+            }
+          } else {
+            const fileExtension = path.extname(currentFileName) || '.pdf';
             const uniqueName = `paper_${Date.now()}_${Math.random().toString(36).substring(2, 8)}${fileExtension}`;
             const filePath = path.join(uploadsDir, uniqueName);
             fs.writeFileSync(filePath, buffer);
-            fileUrl = `/uploads/${uniqueName}`;
+            currentFileUrl = `/uploads/${uniqueName}`;
           }
+          uploadedUrls.push(currentFileUrl);
         } else {
-          const fileExtension = path.extname(fileName) || '.pdf';
-          const uniqueName = `paper_${Date.now()}_${Math.random().toString(36).substring(2, 8)}${fileExtension}`;
-          const filePath = path.join(uploadsDir, uniqueName);
-          fs.writeFileSync(filePath, buffer);
-          fileUrl = `/uploads/${uniqueName}`;
+          return res.status(400).json({ error: 'Invalid file data format.' });
         }
-      } else {
-        return res.status(400).json({ error: 'Invalid file data format.' });
       }
+
+      fileUrl = isArray ? uploadedUrls : (uploadedUrls[0] || '');
     }
 
-    if (!fileUrl) {
+    if (!fileUrl || (Array.isArray(fileUrl) && fileUrl.length === 0)) {
       return res.status(400).json({ error: 'Please enter a URL or upload a file.' });
     }
 
     // Basic URL validation only if it is not an uploaded local file
-    if (!fileUrl.startsWith('/uploads/') && !fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
-      return res.status(400).json({ error: 'Please enter a valid URL (starting with http:// or https://) or upload a file.' });
+    const urlsToValidate = Array.isArray(fileUrl) ? fileUrl : [fileUrl];
+    for (const u of urlsToValidate) {
+      if (!u.startsWith('/uploads/') && !u.startsWith('http://') && !u.startsWith('https://')) {
+        return res.status(400).json({ error: 'Please enter a valid URL (starting with http:// or https://) or upload a file.' });
+      }
     }
 
     // Infer department if not provided
