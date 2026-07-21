@@ -824,14 +824,43 @@ export default function CommunityPage({ user }) {
 
       {/* ── SHARE A PAPER MODAL ── */}
       {showUploadModal && (
-        <div className="aurora-modal-overlay" onClick={() => setShowUploadModal(false)}>
-          <div className="aurora-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
-            <div className="aurora-modal-header">
-              <h3>Share Exam Paper</h3>
-              <button className="aurora-modal-close" onClick={() => setShowUploadModal(false)}>×</button>
+        <div className="aurora-modal-overlay" onClick={() => setShowUploadModal(false)} style={{ padding: 0, zIndex: 99999 }}>
+          <div 
+            className="aurora-modal-card" 
+            onClick={(e) => e.stopPropagation()} 
+            style={{ 
+              maxWidth: '100vw', 
+              width: '100vw', 
+              height: '100vh', 
+              maxHeight: '100vh', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              borderRadius: '0px', 
+              border: 'none', 
+              background: '#0b0f19', 
+              position: 'relative',
+              overflowY: 'auto'
+            }}
+          >
+            <div className="aurora-modal-header" style={{ padding: '1.5rem 2rem', borderBottom: '1px solid hsla(var(--border-glass))' }}>
+              <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '800', color: 'hsl(var(--text-primary))' }}>Share Exam Paper</h3>
+              <button 
+                className="aurora-modal-close" 
+                onClick={() => setShowUploadModal(false)}
+                style={{
+                  fontSize: '2.5rem',
+                  color: '#ef4444',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  margin: 0
+                }}
+              >
+                ×
+              </button>
             </div>
             
-            <form onSubmit={handleUploadSubmit} className="aurora-form">
+            <form onSubmit={handleUploadSubmit} className="aurora-form" style={{ padding: '2rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem', maxWidth: '600px', margin: '0 auto', width: '100%' }}>
               <div className="floating-field active">
                 <input
                   type="text"
