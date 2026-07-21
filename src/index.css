@@ -1,5 +1,5 @@
 /* Core Design System & Theme Settings */
-@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=Sora:wght@300;400;500;600;700;800&display=swap');
+/* Fonts are loaded via <link rel="preload"> in index.html — no @import needed here */
 
 :root {
   /* Typography Fonts */

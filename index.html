@@ -3,12 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="google-site-verification" content="JXBzhWECx1sxO9jLLamSau7MeXvFWN9clrfqLhHE-i8" />
+    <!-- Preconnect to font origins early -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=Sora:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript>
-      <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=Sora:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    </noscript>
+
+    <!-- STEP 1: Preload the LCP font (Space Grotesk 700/800 used for the "VIT" heading) -->
+    <!-- This eliminates the 2-round-trip font-CSS → woff2 waterfall for the heading -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700;800&display=swap" rel="stylesheet"></noscript>
+
+    <!-- STEP 2: Defer remaining fonts (Sora, Geist Mono, Inter, Plus Jakarta Sans) — not needed for LCP -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Sora:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=Geist+Mono:wght@300;400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Sora:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=Geist+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet"></noscript>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#0d0e12" />
@@ -19,6 +25,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="description" content="Centralized college lifestyle and management portal for VIT Bhopal students, featuring event management, club directories, academic guidelines, and student resources." />
     <title>VIT Life - College Lifestyle & Management Portal | VIT Bhopal</title>
+    <!-- STEP 3: Inline critical CSS for LCP element (auth card hero) -->
+    <!-- Eliminates render-block wait for index.css for above-the-fold content -->
+    <style>
+      *,*::before,*::after{box-sizing:border-box}
+      html{height:100%}
+      body{margin:0;min-height:100%;background-color:#0d0e12;color:#f5f7fa;-webkit-font-smoothing:antialiased}
+      #root{min-height:100vh;display:flex;flex-direction:column}
+      .aurora-brand-logo{font-family:'Space Grotesk',sans-serif;font-size:2.2rem;font-weight:800;display:flex;align-items:center;justify-content:center;gap:.15rem;margin-bottom:.4rem}
+      .aurora-brand-vit{background:linear-gradient(135deg,#818cf8,#635bff,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:.04em}
+      .aurora-brand-sub{font-family:sans-serif;font-size:.78rem;font-weight:400;color:rgba(255,255,255,.4);letter-spacing:.1em;text-transform:uppercase}
+    </style>
+    <!-- Google Sign-In SDK (async/defer — does not block render) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
