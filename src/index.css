@@ -27,6 +27,35 @@
   --text-primary: 210 20% 98%;    /* #f5f7fa - Headings & Emphasis (Contrast 18.7:1, AAA) */
   --text-secondary: 240 5% 82%;  /* #cdcdcf - Standard Copy & Labels (Contrast 12.5:1, AAA) */
   --text-muted: 240 4% 56%;      /* #8c8c91 - Captions & Timestamps (Contrast 5.5:1, AA) */
+
+  /* ── Official shadcn/ui Standard CSS Theme Tokens ── */
+  --radius: 0.625rem;
+  --background: hsl(240 8% 5%);
+  --foreground: hsl(210 20% 98%);
+  --card: hsl(240 8% 8%);
+  --card-foreground: hsl(210 20% 98%);
+  --popover: hsl(240 8% 8%);
+  --popover-foreground: hsl(210 20% 98%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary-foreground: hsl(240 8% 5%);
+  --muted: hsl(240 6% 12%);
+  --muted-foreground: hsl(240 4% 56%);
+  --accent-foreground: hsl(210 20% 98%);
+  --destructive: hsl(0 70% 60%);
+  --destructive-foreground: hsl(0 0% 100%);
+  --border: hsl(240 6% 15%);
+  --input: hsl(240 6% 18%);
+  --ring: hsl(250 89% 65% / 0.5);
+
+  /* shadcn Sidebar Tokens */
+  --sidebar: hsl(240 8% 6%);
+  --sidebar-foreground: hsl(240 5% 80%);
+  --sidebar-primary: hsl(250 89% 65%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(240 8% 11%);
+  --sidebar-accent-foreground: hsl(250 89% 72%);
+  --sidebar-border: hsl(240 6% 14%);
+  --sidebar-ring: hsl(250 89% 65% / 0.5);
   
   /* Ambient Shadow Specs */
   --shadow-lg: 
@@ -62,6 +91,33 @@
   --text-primary: 228 15% 8%;       /* Ink Charcoal (#131418) - 14:1 Contrast (AAA) */
   --text-secondary: 230 10% 28%;    /* Slate Gray (#40434b) - 8.5:1 Contrast (AAA) */
   --text-muted: 231 12% 38%;        /* Muted Slate (#575c68) - 6:1 Contrast (AA) */
+
+  /* ── Official shadcn/ui Standard CSS Theme Tokens (Light Mode) ── */
+  --background: hsl(218 22% 88%);
+  --foreground: hsl(228 15% 8%);
+  --card: hsl(218 18% 93%);
+  --card-foreground: hsl(228 15% 8%);
+  --popover: hsl(218 18% 93%);
+  --popover-foreground: hsl(228 15% 8%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary-foreground: hsl(228 15% 8%);
+  --muted: hsl(218 18% 90%);
+  --muted-foreground: hsl(231 12% 38%);
+  --accent-foreground: hsl(228 15% 8%);
+  --destructive: hsl(342 75% 45%);
+  --border: hsl(218 16% 80%);
+  --input: hsl(218 16% 78%);
+  --ring: hsl(250 72% 48% / 0.5);
+
+  /* shadcn Sidebar Tokens (Light Mode) */
+  --sidebar: hsl(220 14% 96%);
+  --sidebar-foreground: hsl(230 10% 35%);
+  --sidebar-primary: hsl(250 72% 48%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(220 14% 91%);
+  --sidebar-accent-foreground: hsl(250 72% 48%);
+  --sidebar-border: hsl(220 14% 88%);
+  --sidebar-ring: hsl(250 72% 48% / 0.5);
 
   /* ── Ambient & Glassmorphism Shadows ── */
   --shadow-lg:
