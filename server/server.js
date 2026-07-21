@@ -3615,9 +3615,30 @@ app.post('/api/papers', optionalAuthenticate, async (req, res) => {
           return res.status(400).json({ error: `Only PDF and image files are allowed. Invalid file extension: ${fileExtension}` });
         }
 
-        const matches = currentFileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-        if (matches && matches.length === 3) {
-          const buffer = Buffer.from(matches[2], 'base64');
+        console.log(`[UPLOAD DIAGNOSTIC] File: ${currentFileName}, Length: ${currentFileData ? currentFileData.length : 0}`);
+        if (currentFileData && typeof currentFileData === 'string') {
+          console.log(`[UPLOAD DIAGNOSTIC] Starts with: "${currentFileData.substring(0, 100)}"`);
+          console.log(`[UPLOAD DIAGNOSTIC] Ends with: "${currentFileData.substring(currentFileData.length - 50)}"`);
+        } else {
+          console.log(`[UPLOAD DIAGNOSTIC] Type of fileData is: ${typeof currentFileData}`);
+        }
+
+        let base64Content = '';
+        let mimeType = '';
+        if (currentFileData && typeof currentFileData === 'string' && currentFileData.startsWith('data:')) {
+          const commaIdx = currentFileData.indexOf(',');
+          if (commaIdx !== -1) {
+            base64Content = currentFileData.substring(commaIdx + 1);
+            const mimeMatch = currentFileData.substring(0, commaIdx).match(/^data:([^;]+)/);
+            if (mimeMatch) {
+              mimeType = mimeMatch[1];
+            }
+          }
+        }
+
+        console.log(`[UPLOAD DIAGNOSTIC] Extracted base64Content length: ${base64Content.length}, mimeType: ${mimeType}`);
+        if (base64Content) {
+          const buffer = Buffer.from(base64Content, 'base64');
           let currentFileUrl = '';
           if (isCloudinaryConfigured) {
             try {
