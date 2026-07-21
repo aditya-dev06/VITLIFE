@@ -878,7 +878,7 @@ export default function CommunityPage({ user }) {
                   </h4>
                 </div>
                 
-                <div className="paper-files-list" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div className="paper-files-list scroll-fade-y" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '60vh', overflowY: 'auto', padding: '0.5rem 0.25rem' }}>
                   {selectedCourseGroup.papersList.map(paper => {
                     // Premium dynamic badges
                     const getBadgeProps = (type) => {
@@ -1161,7 +1161,7 @@ export default function CommunityPage({ user }) {
               )}
 
               {/* Public Papers List */}
-              <div className="pyq-list-section">
+              <div className="pyq-list-section scroll-fade-b">
                 <h3>Available Question Papers ({filteredPapers.length})</h3>
                 {loading ? (
                   <div className="pyq-loading-state">
