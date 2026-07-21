@@ -1,5 +1,5 @@
-const CACHE_NAME = 'cds-hub-static-cache-v3';
-const API_CACHE_NAME = 'cds-hub-api-cache-v3';
+const CACHE_NAME = 'cds-hub-static-cache-v4';
+const API_CACHE_NAME = 'cds-hub-api-cache-v4';
 
 // Sensitive API paths that must NEVER be cached
 const SENSITIVE_API_PATHS = [
@@ -104,17 +104,22 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Handle static assets (Stale-While-Revalidate for local resources)
+  // Handle static assets (Stale-While-Revalidate for local resources only)
   event.respondWith(
     caches.match(event.request).then(cachedResponse => {
       if (cachedResponse) {
-        fetch(event.request)
-          .then(networkResponse => {
-            if (networkResponse.status === 200) {
-              caches.open(CACHE_NAME).then(cache => cache.put(event.request, networkResponse));
-            }
-          })
-          .catch(() => {});
+        // Only background-revalidate same-origin non-font requests to avoid double-fetching fonts
+        const isCrossOrigin = requestUrl.origin !== self.location.origin;
+        const isFontRequest = event.request.destination === 'font';
+        if (!isCrossOrigin && !isFontRequest) {
+          fetch(event.request)
+            .then(networkResponse => {
+              if (networkResponse.status === 200) {
+                caches.open(CACHE_NAME).then(cache => cache.put(event.request, networkResponse));
+              }
+            })
+            .catch(() => {});
+        }
         return cachedResponse;
       }
 
