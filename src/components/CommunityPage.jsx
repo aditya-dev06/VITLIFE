@@ -111,7 +111,13 @@ export default function CommunityPage({ user }) {
       let queryUrl = '/api/papers';
       if (searchQuery) queryUrl += `?search=${encodeURIComponent(searchQuery)}`;
       
-      const res = await fetch(queryUrl);
+      const token = localStorage.getItem('ds_ai_token');
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const res = await fetch(queryUrl, { headers });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to fetch papers.');
       
@@ -528,6 +534,23 @@ export default function CommunityPage({ user }) {
                             <span style={{ padding: '0.2rem 0.65rem', fontSize: '0.68rem', borderRadius: '6px', background: badge.bg, border: badge.border, color: badge.color, fontWeight: '700', letterSpacing: '0.02em' }}>
                               {paper.examType}
                             </span>
+                            {paper.status === 'pending' && (
+                              <span style={{ 
+                                padding: '0.2rem 0.65rem', 
+                                fontSize: '0.68rem', 
+                                borderRadius: '6px', 
+                                background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.08))', 
+                                border: '1px solid rgba(245, 158, 11, 0.35)', 
+                                color: '#f59e0b', 
+                                fontWeight: '700', 
+                                letterSpacing: '0.02em',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.3rem'
+                              }}>
+                                ⏳ In Process
+                              </span>
+                            )}
                             <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', fontWeight: '600' }}>
                               Year {paper.year}
                             </span>

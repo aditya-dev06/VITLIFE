@@ -3504,8 +3504,8 @@ app.get('/api/mess-menu', (req, res) => {
 
 // ================= STUDENT PAPERS (PYQ) ROUTES =================
 
-// 1. GET /api/papers - Get approved papers with optional search and department filters
-app.get('/api/papers', async (req, res) => {
+// 1. GET /api/papers - Get approved papers (and pending papers uploaded by the current user) with optional search and department filters
+app.get('/api/papers', optionalAuthenticate, async (req, res) => {
   try {
     const { department, search } = req.query;
 
@@ -3518,8 +3518,9 @@ app.get('/api/papers', async (req, res) => {
 
     let list = await getPapers();
     
-    // Filter only approved papers for public view
-    list = list.filter(p => p.status === 'approved');
+    // Filter approved papers or pending papers uploaded by this user
+    const userEmail = req.user ? req.user.email : null;
+    list = list.filter(p => p.status === 'approved' || (userEmail && p.uploadedBy === userEmail && p.status === 'pending'));
 
     if (department) {
       list = list.filter(p => p.department === department);
