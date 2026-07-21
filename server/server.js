@@ -1030,8 +1030,32 @@ if (MONGODB_URI) {
             console.log(`Seeded ${seeds.length} papers to MongoDB Atlas.`);
           }
         }
+      // Sync local users to MongoDB on startup to recover any unsaved profile/verification state
+      try {
+        if (fs.existsSync(USERS_FILE)) {
+          const localUsers = JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8')) || {};
+          let syncedCount = 0;
+          for (const email of Object.keys(localUsers)) {
+            const userData = localUsers[email];
+            if (userData && typeof email === 'string') {
+              const lowerEmail = email.toLowerCase().trim();
+              const updateData = { ...userData };
+              delete updateData._id;
+              
+              await db.collection('users').updateOne(
+                { email: lowerEmail },
+                { $set: updateData },
+                { upsert: true }
+              );
+              syncedCount++;
+            }
+          }
+          if (syncedCount > 0) {
+            console.log(`[Sync] Successfully synced/recovered ${syncedCount} users from users.json to MongoDB.`);
+          }
+        }
       } catch (e) {
-        console.error("Error seeding papers to MongoDB:", e.message);
+        console.error("Error syncing users from users.json to MongoDB:", e.message);
       }
     })
     .catch(err => {
@@ -1426,9 +1450,11 @@ const saveUser = async (email, userData) => {
   }
   if (db) {
     try {
+      const updateData = { ...userData };
+      delete updateData._id;
       await db.collection('users').updateOne(
         { email: lowerEmail },
-        { $set: userData },
+        { $set: updateData },
         { upsert: true }
       );
       return;
@@ -2831,6 +2857,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     // Progressive self-healing migration to Scrypt
     if (!user.passwordHash.startsWith('scrypt$')) {
       user.passwordHash = hashPasswordScrypt(password, user.salt);
+      await saveUser(lowerEmail, user);
       console.log(`🔒 Auto-migrated user ${lowerEmail} password hash from PBKDF2 to Scrypt.`);
     }
 
