@@ -12,10 +12,7 @@
 }
 
 .input-group:focus-within {
-  border-color: hsl(250 89% 65% / 0.6);
-  box-shadow:
-    0 0 0 3px hsl(250 89% 65% / 0.12),
-    0 2px 8px rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 /* The actual <input> */
@@ -45,10 +42,6 @@
   color: hsl(var(--text-muted, 240 4% 56%));
   line-height: 1;
   transition: color 0.2s ease;
-}
-
-.input-group:focus-within .input-group__addon {
-  color: hsl(250 89% 65%);
 }
 
 /* Leading addon (left icon) */
