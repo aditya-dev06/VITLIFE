@@ -1,0 +1,98 @@
+/* ── InputGroup Component Styles ── */
+.input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+}
+
+.input-group:focus-within {
+  border-color: hsl(250 89% 65% / 0.6);
+  box-shadow:
+    0 0 0 3px hsl(250 89% 65% / 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* The actual <input> */
+.input-group__input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0.7rem 0.75rem;
+  font-size: 0.9rem;
+  font-family: var(--font-body, 'Inter', sans-serif);
+  color: hsl(var(--text-primary, 210 20% 98%));
+  caret-color: hsl(250 89% 65%);
+}
+
+.input-group__input::placeholder {
+  color: hsl(var(--text-muted, 240 4% 56%));
+}
+
+/* Addons (icons, labels, counts) */
+.input-group__addon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: hsl(var(--text-muted, 240 4% 56%));
+  line-height: 1;
+  transition: color 0.2s ease;
+}
+
+.input-group:focus-within .input-group__addon {
+  color: hsl(250 89% 65%);
+}
+
+/* Leading addon (left icon) */
+.input-group__addon--inline-start {
+  padding: 0 0.25rem 0 0.85rem;
+}
+
+/* Trailing addon (right — result count, button, etc.) */
+.input-group__addon--inline-end {
+  padding: 0 0.85rem 0 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: hsl(var(--text-muted, 240 4% 56%));
+  white-space: nowrap;
+  border-left: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* Clear button inside addon */
+.input-group__addon button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.input-group__addon button:hover {
+  opacity: 1;
+}
+
+/* Light mode overrides */
+:root.light-theme .input-group {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: hsl(var(--border-base, 218 16% 80%));
+}
+
+:root.light-theme .input-group__input {
+  color: hsl(var(--text-primary, 228 15% 8%));
+}
+
+:root.light-theme .input-group__addon--inline-end {
+  border-left-color: hsl(var(--border-base, 218 16% 80%));
+}

@@ -1,4 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Search, X } from 'lucide-react';
+import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/InputGroup';
 
 const EXAM_TYPES = ['MTE', 'TEE', 'CAT-1', 'CAT-2', 'FAT'];
 const ACADEMIC_YEARS = ['2023-24', '2024-25', '2025-26'];
@@ -323,6 +325,8 @@ export default function CommunityPage({ user }) {
   const [papers, setPapers] = useState([]);
   const [pendingPapers, setPendingPapers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const debounceRef = useRef(null);
   const [filterExamType, setFilterExamType] = useState('');
   const [filterYear, setFilterYear] = useState('');
   const [loading, setLoading] = useState(false);
@@ -391,37 +395,24 @@ export default function CommunityPage({ user }) {
     }
   };
 
+  // Fetch ALL papers once — filtering is client-side (instant, no re-fetch per keystroke)
   const fetchPapers = useCallback(async () => {
     setLoading(true);
     try {
-      let queryUrl = '/api/papers';
-      if (searchQuery) queryUrl += `?search=${encodeURIComponent(searchQuery)}`;
-      
       const token = localStorage.getItem('ds_ai_token');
       const headers = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const res = await fetch(queryUrl, { headers });
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch('/api/papers', { headers });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to fetch papers.');
-      
-      let list = data.papers || [];
-      if (filterExamType) {
-        list = list.filter(p => p.examType === filterExamType);
-      }
-      if (filterYear) {
-        list = list.filter(p => p.year === filterYear);
-      }
-      setPapers(list);
+      setPapers(data.papers || []);
     } catch (err) {
       console.error(err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, filterExamType, filterYear]);
+  }, []);
 
   const fetchPendingPapers = useCallback(async () => {
     try {
@@ -438,13 +429,27 @@ export default function CommunityPage({ user }) {
     }
   }, []);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchPapers();
-    if (user && user.role === 'admin') {
-      fetchPendingPapers();
+  // Client-side instant filtering — derived from all papers, no network call
+  const filteredPapers = useMemo(() => {
+    let list = papers;
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter(p =>
+        (p.courseCode || '').toLowerCase().includes(q) ||
+        (p.courseTitle || '').toLowerCase().includes(q) ||
+        (p.department || '').toLowerCase().includes(q)
+      );
     }
-  }, [searchQuery, filterExamType, filterYear, fetchPapers, fetchPendingPapers, user]);
+    if (filterExamType) list = list.filter(p => p.examType === filterExamType);
+    if (filterYear) list = list.filter(p => p.year === filterYear);
+    return list;
+  }, [papers, searchQuery, filterExamType, filterYear]);
+
+  // Only re-fetch from network when filters change (not search query)
+  useEffect(() => {
+    fetchPapers();
+    if (user && user.role === 'admin') fetchPendingPapers();
+  }, [fetchPapers, fetchPendingPapers, user]);
 
   useEffect(() => {
     if (showUploadModal) {
@@ -1044,15 +1049,29 @@ export default function CommunityPage({ user }) {
             <>
               {/* Search and Filters Bento Grid */}
               <div className="pyq-filters-container">
-                <div className="pyq-search-box">
-                  <span className="search-icon">🔍</span>
-                  <input
+                <InputGroup className="pyq-search-input-group">
+                  <InputGroupAddon align="inline-start">
+                    <Search size={16} />
+                  </InputGroupAddon>
+                  <InputGroupInput
                     type="text"
                     placeholder="Search course code (e.g. MAT3002) or title..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    autoComplete="off"
+                    spellCheck={false}
                   />
-                </div>
+                  {searchQuery && (
+                    <InputGroupAddon align="inline-end">
+                      <button onClick={() => setSearchQuery('')} title="Clear search">
+                        <X size={14} />
+                      </button>
+                    </InputGroupAddon>
+                  )}
+                  <InputGroupAddon align="inline-end">
+                    {filteredPapers.length} result{filteredPapers.length !== 1 ? 's' : ''}
+                  </InputGroupAddon>
+                </InputGroup>
                 
                 <div className="pyq-filter-dropdowns">
                   <select
@@ -1143,20 +1162,20 @@ export default function CommunityPage({ user }) {
 
               {/* Public Papers List */}
               <div className="pyq-list-section">
-                <h3>Available Question Papers ({papers.length})</h3>
+                <h3>Available Question Papers ({filteredPapers.length})</h3>
                 {loading ? (
                   <div className="pyq-loading-state">
                     <div className="aurora-spinner" />
                     <p>Loading papers...</p>
                   </div>
-                ) : papers.length === 0 ? (
+                ) : filteredPapers.length === 0 ? (
                   <div className="pyq-empty-state">
                     <span>📂</span>
-                    <p>No papers found matching the selected criteria.</p>
-                    <p className="subtitle">Be the first to share one!</p>
+                    <p>{searchQuery ? `No papers match "${searchQuery}".` : 'No papers found matching the selected criteria.'}</p>
+                    <p className="subtitle">{searchQuery ? 'Try a different search term.' : 'Be the first to share one!'}</p>
                   </div>
                 ) : (() => {
-                  const grouped = papers.reduce((acc, paper) => {
+                  const grouped = filteredPapers.reduce((acc, paper) => {
                     const code = (paper.courseCode || '').trim().toUpperCase();
                     if (!code) return acc;
                     if (!acc[code]) {
