@@ -1,0 +1,376 @@
+/* ── AppSidebar — shadcn/ui visual language, vanilla CSS ── */
+
+:root {
+  --sidebar-width: 240px;
+  --sidebar-width-collapsed: 60px;
+  --sidebar-bg: hsl(240 8% 6%);
+  --sidebar-border: hsl(240 6% 14%);
+  --sidebar-item-hover: hsl(240 8% 11%);
+  --sidebar-item-active-bg: hsl(250 89% 65% / 0.12);
+  --sidebar-item-active-color: hsl(250 89% 72%);
+  --sidebar-text: hsl(240 5% 70%);
+  --sidebar-text-muted: hsl(240 4% 46%);
+  --sidebar-radius: 8px;
+  --sidebar-transition: 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Shell ── */
+.app-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100dvh;
+  width: var(--sidebar-width);
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
+  display: flex;
+  flex-direction: column;
+  z-index: 200;
+  transition: width var(--sidebar-transition);
+  overflow: hidden;
+}
+
+.app-sidebar.collapsed {
+  width: var(--sidebar-width-collapsed);
+}
+
+/* ── Header ── */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 0.75rem 0.75rem;
+  flex-shrink: 0;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.sidebar-brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, hsl(250 89% 65%), hsl(185 85% 55%));
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.sidebar-brand-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  color: hsl(var(--text-primary, 210 20% 98%));
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar-collapse-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--sidebar-text-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--sidebar-transition), color var(--sidebar-transition);
+}
+
+.sidebar-collapse-btn:hover {
+  background: var(--sidebar-item-hover);
+  color: var(--sidebar-text);
+}
+
+/* ── User block ── */
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.5rem 0.75rem;
+  flex-shrink: 0;
+}
+
+.sidebar-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: hsl(250 89% 65% / 0.2);
+  border: 1px solid hsl(250 89% 65% / 0.3);
+  color: hsl(250 89% 72%);
+  font-size: 0.8rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sidebar-user-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sidebar-user-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: hsl(var(--text-primary, 210 20% 98%));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-user-role {
+  font-size: 0.7rem;
+  color: var(--sidebar-text-muted);
+  text-transform: capitalize;
+}
+
+/* ── Divider ── */
+.sidebar-divider {
+  height: 1px;
+  background: var(--sidebar-border);
+  margin: 0.25rem 0;
+  flex-shrink: 0;
+}
+
+/* ── Nav ── */
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.25rem 0.5rem;
+  scrollbar-width: none;
+}
+
+.sidebar-nav::-webkit-scrollbar { display: none; }
+
+.sidebar-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-nav--secondary {
+  flex: 0;
+  padding-bottom: 0.25rem;
+}
+
+.sidebar-nav-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.6rem;
+  border: none;
+  border-radius: var(--sidebar-radius);
+  background: transparent;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: var(--font-body, 'Inter', sans-serif);
+  font-weight: 500;
+  text-align: left;
+  transition: background var(--sidebar-transition), color var(--sidebar-transition);
+  position: relative;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar-nav-item:hover {
+  background: var(--sidebar-item-hover);
+  color: hsl(var(--text-primary, 210 20% 98%));
+}
+
+.sidebar-nav-item.active {
+  background: var(--sidebar-item-active-bg);
+  color: var(--sidebar-item-active-color);
+}
+
+.sidebar-nav-icon {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.sidebar-nav-item.active .sidebar-nav-icon {
+  opacity: 1;
+}
+
+.sidebar-nav-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-nav-pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sidebar-item-active-color);
+  flex-shrink: 0;
+}
+
+/* Install button accent */
+.sidebar-nav-item--install {
+  color: hsl(var(--secondary, 185 85% 55%));
+}
+
+.sidebar-nav-item--install:hover {
+  background: hsl(185 85% 55% / 0.1);
+  color: hsl(185 85% 65%);
+}
+
+/* ── Footer ── */
+.sidebar-footer {
+  padding: 0.75rem 0.75rem 1rem;
+  flex-shrink: 0;
+  border-top: 1px solid var(--sidebar-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sidebar-sync {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--sidebar-text-muted);
+  font-size: 0.72rem;
+  padding: 0 0.1rem;
+}
+
+.sidebar-sync-label {
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar-logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border: none;
+  border-radius: var(--sidebar-radius);
+  background: transparent;
+  color: hsl(0 70% 65%);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-family: var(--font-body, 'Inter', sans-serif);
+  font-weight: 500;
+  width: 100%;
+  text-align: left;
+  transition: background var(--sidebar-transition), color var(--sidebar-transition);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar-logout-btn:hover {
+  background: hsl(0 70% 65% / 0.1);
+  color: hsl(0 70% 72%);
+}
+
+/* ── Spin animation for sync loader ── */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Mobile hamburger ── */
+.sidebar-mobile-trigger {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 300;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--sidebar-border);
+  background: var(--sidebar-bg);
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0;
+}
+
+.sidebar-mobile-trigger span {
+  width: 16px;
+  height: 1.5px;
+  background: var(--sidebar-text);
+  border-radius: 2px;
+  display: block;
+}
+
+/* Mobile sidebar slides in from left */
+.app-sidebar.mobile {
+  transform: translateX(-100%);
+  width: var(--sidebar-width);
+  transition: transform var(--sidebar-transition);
+  box-shadow: 8px 0 32px rgba(0, 0, 0, 0.5);
+}
+
+.app-sidebar.mobile.open {
+  transform: translateX(0);
+}
+
+/* Backdrop */
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 199;
+  backdrop-filter: blur(2px);
+}
+
+/* ── Main content offset ── */
+/* Applied to body/root — sidebar pushes content on desktop */
+body.sidebar-open .main-content {
+  margin-left: var(--sidebar-width);
+  transition: margin-left var(--sidebar-transition);
+}
+
+body.sidebar-collapsed .main-content {
+  margin-left: var(--sidebar-width-collapsed);
+  transition: margin-left var(--sidebar-transition);
+}
+
+@media (max-width: 767px) {
+  body.sidebar-open .main-content,
+  body.sidebar-collapsed .main-content {
+    margin-left: 0;
+  }
+}
+
+/* ── Light mode ── */
+:root.light-theme {
+  --sidebar-bg: hsl(220 14% 96%);
+  --sidebar-border: hsl(220 14% 88%);
+  --sidebar-item-hover: hsl(220 14% 91%);
+  --sidebar-item-active-bg: hsl(250 72% 48% / 0.1);
+  --sidebar-item-active-color: hsl(250 72% 48%);
+  --sidebar-text: hsl(230 10% 35%);
+  --sidebar-text-muted: hsl(230 8% 55%);
+}
