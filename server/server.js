@@ -1033,28 +1033,60 @@ if (MONGODB_URI) {
       } catch (e) {
         console.error("Error seeding papers to MongoDB:", e.message);
       }
-      // Sync local users to MongoDB on startup to recover any unsaved profile/verification state
+      // Sync local users to MongoDB on startup — validates each record before writing
       try {
         if (fs.existsSync(USERS_FILE)) {
-          const localUsers = JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8')) || {};
+          const rawContent = fs.readFileSync(USERS_FILE, 'utf-8');
+          const localUsers = JSON.parse(rawContent) || {};
+          const BLOCKED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
           let syncedCount = 0;
           for (const email of Object.keys(localUsers)) {
+            // Skip prototype-pollution keys
+            if (BLOCKED_KEYS.has(email)) continue;
             const userData = localUsers[email];
-            if (userData && typeof email === 'string') {
-              const lowerEmail = email.toLowerCase().trim();
-              const updateData = { ...userData };
-              delete updateData._id;
-              
-              await db.collection('users').updateOne(
-                { email: lowerEmail },
-                { $set: updateData },
-                { upsert: true }
-              );
-              syncedCount++;
+            if (!userData || typeof email !== 'string') continue;
+
+            // Security: only migrate records with a valid structure
+            if (
+              typeof userData.passwordHash !== 'string' ||
+              typeof userData.salt !== 'string' ||
+              userData.passwordHash.length < 32
+            ) {
+              console.warn(`[Sync] Skipping malformed/incomplete user record for: ${email}`);
+              continue;
             }
+
+            const lowerEmail = email.toLowerCase().trim();
+            if (BLOCKED_KEYS.has(lowerEmail)) continue;
+
+            // Only migrate fields we explicitly trust
+            const safeData = {
+              email: lowerEmail,
+              name: typeof userData.name === 'string' ? userData.name.substring(0, 200) : '',
+              passwordHash: userData.passwordHash,
+              salt: userData.salt,
+              verified: userData.verified === true,
+              role: ['admin', 'user', 'club_manager'].includes(userData.role) ? userData.role : 'user',
+              isVitBhopal: userData.isVitBhopal === true,
+              registrationNumber: typeof userData.registrationNumber === 'string' ? userData.registrationNumber : undefined,
+              program: typeof userData.program === 'string' ? userData.program : undefined,
+              semester: userData.semester,
+              courses: Array.isArray(userData.courses) ? userData.courses : undefined,
+              timetable: userData.timetable,
+              createdAt: userData.createdAt,
+            };
+            // Remove undefined keys
+            Object.keys(safeData).forEach(k => safeData[k] === undefined && delete safeData[k]);
+
+            await db.collection('users').updateOne(
+              { email: lowerEmail },
+              { $set: safeData },
+              { upsert: true }
+            );
+            syncedCount++;
           }
           if (syncedCount > 0) {
-            console.log(`[Sync] Successfully synced/recovered ${syncedCount} users from users.json to MongoDB.`);
+            console.log(`[Sync] Successfully validated and synced ${syncedCount} users from users.json to MongoDB.`);
           }
         }
       } catch (e) {
@@ -1402,32 +1434,12 @@ const findUserByEmail = async (email) => {
         }
         return user;
       }
-      // Not found in MongoDB — check local file and auto-sync if found
-      const users = loadUsers();
-      if (Object.prototype.hasOwnProperty.call(users, lowerEmail)) {
-        const localUser = users[lowerEmail];
-        if (localUser && localUser !== Object.prototype) {
-          // Auto-migrate user from local file to MongoDB
-          try {
-            const syncData = { ...localUser };
-            delete syncData._id;
-            await db.collection('users').updateOne(
-              { email: lowerEmail },
-              { $set: syncData },
-              { upsert: true }
-            );
-            console.log(`[Auto-Sync] Migrated user ${lowerEmail} from local file to MongoDB.`);
-          } catch (syncErr) {
-            console.error(`[Auto-Sync] Failed to migrate ${lowerEmail}:`, syncErr.message);
-          }
-          return localUser;
-        }
-      }
-      return null;
+      // User not found in MongoDB — fall through to local file (read-only fallback, no write)
     } catch (err) {
       console.error("MongoDB findUserByEmail error, falling back to file:", err);
     }
   }
+  // Local file fallback — READ ONLY, never used to write to MongoDB here
   const users = loadUsers();
   if (Object.prototype.hasOwnProperty.call(users, lowerEmail)) {
     const user = users[lowerEmail];
