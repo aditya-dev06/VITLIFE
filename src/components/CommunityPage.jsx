@@ -162,8 +162,11 @@ const extractTextFromPDF = async (arrayBuffer, tesseractWorker) => {
     const textContent = await page.getTextContent();
     const pageText = textContent.items.map(item => item.str).join(' ');
     
-    // If the digital text is too short, we fall back to rendering the page to a canvas and doing OCR!
-    if (pageText.trim().length < 20 && tesseractWorker) {
+    // Fall back to OCR if digital text is sparse (< 300 chars) or does not contain a course code pattern
+    const hasCourseCode = /\b[a-zA-Z]{3,4}\d{3,4}\b/.test(pageText);
+    const isSparse = pageText.trim().length < 300;
+    
+    if ((isSparse || !hasCourseCode) && tesseractWorker) {
       try {
         const scale = 1.5;
         const viewport = page.getViewport({ scale });
@@ -180,10 +183,14 @@ const extractTextFromPDF = async (arrayBuffer, tesseractWorker) => {
         const canvasBase64 = canvas.toDataURL('image/jpeg', 0.85);
         const ret = await tesseractWorker.recognize(canvasBase64);
         if (ret.data && ret.data.text) {
-          combinedText += ret.data.text + '\n';
+          // Combine both for maximum metadata matching accuracy
+          combinedText += pageText + '\n' + ret.data.text + '\n';
+        } else {
+          combinedText += pageText + '\n';
         }
       } catch (ocrErr) {
         console.warn(`OCR fallback failed for PDF page ${i}:`, ocrErr);
+        combinedText += pageText + '\n';
       }
     } else {
       combinedText += pageText + '\n';

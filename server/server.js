@@ -3632,11 +3632,18 @@ app.post('/api/papers', optionalAuthenticate, async (req, res) => {
       };
 
       const existingPapers = await getPapers();
+      const targetCode = courseCode.trim().toUpperCase();
+      const targetExamType = examType.trim();
+      const targetYear = year.trim();
+
       for (const p of existingPapers) {
-        if (p.fullText) {
+        if (p.fullText && 
+            p.courseCode === targetCode && 
+            p.examType === targetExamType && 
+            p.year === targetYear) {
           const sim = getSimilarity(fullText, p.fullText);
           if (sim >= 0.75) {
-            return res.status(400).json({ error: 'This question paper already exists in our database.' });
+            return res.status(400).json({ error: `The question paper for ${targetCode} (${targetExamType} - ${targetYear}) already exists in our database.` });
           }
         }
       }
