@@ -1925,12 +1925,25 @@ const saveOpportunities = async (opportunitiesData) => {
 };
 
 // ========== CLUBS HELPERS ==========
-const getClubs = async () => {
+let cachedClubs = null;
+let cachedClubsTime = 0;
+const clearClubsCache = () => { cachedClubs = null; cachedClubsTime = 0; };
+
+const getClubs = async (forceRefresh = false) => {
+  const now = Date.now();
+  if (!forceRefresh && cachedClubs && (now - cachedClubsTime < 300000)) {
+    return cachedClubs;
+  }
+  let clubs = null;
   if (dbConnectingPromise) await dbConnectingPromise;
   if (db) {
     try {
-      const clubs = await db.collection('clubs').find({}).toArray();
-      if (clubs && clubs.length > 0) return clubs;
+      clubs = await db.collection('clubs').find({}).toArray();
+      if (clubs && clubs.length > 0) {
+        cachedClubs = clubs;
+        cachedClubsTime = now;
+        return clubs;
+      }
     } catch (err) {
       console.error("MongoDB getClubs error, falling back to file:", err);
     }
@@ -1938,11 +1951,15 @@ const getClubs = async () => {
   if (!fs.existsSync(CLUBS_FILE)) return [];
   try {
     const data = JSON.parse(fs.readFileSync(CLUBS_FILE, 'utf-8'));
-    return data.clubs || [];
+    clubs = data.clubs || [];
+    cachedClubs = clubs;
+    cachedClubsTime = now;
+    return clubs;
   } catch (e) { return []; }
 };
 
 const saveClubs = async (clubs) => {
+  clearClubsCache();
   if (dbConnectingPromise) await dbConnectingPromise;
   if (db) {
     try {
@@ -1966,6 +1983,7 @@ const saveClubs = async (clubs) => {
 };
 
 const deleteClub = async (clubId) => {
+  clearClubsCache();
   if (typeof clubId !== 'string') return;
   // Delete from MongoDB
   if (dbConnectingPromise) await dbConnectingPromise;
@@ -2048,7 +2066,15 @@ const autoUnpinEndedEvents = async (eventsList) => {
 };
 
 // ========== EVENTS HELPERS ==========
-const getEvents = async (categoryFilter) => {
+let cachedEvents = null;
+let cachedEventsTime = 0;
+const clearEventsCache = () => { cachedEvents = null; cachedEventsTime = 0; };
+
+const getEvents = async (categoryFilter, forceRefresh = false) => {
+  const now = Date.now();
+  if (!forceRefresh && !categoryFilter && cachedEvents && (now - cachedEventsTime < 300000)) {
+    return cachedEvents;
+  }
   if (dbConnectingPromise) await dbConnectingPromise;
   let events = [];
   if (db) {
@@ -2056,7 +2082,13 @@ const getEvents = async (categoryFilter) => {
       const category = (typeof categoryFilter === 'string') ? categoryFilter : null;
       const query = category ? { category } : {};
       events = await db.collection('events').find(query).sort({ date: 1 }).toArray();
-      if (events.length > 0) return events;
+      if (events.length > 0) {
+        if (!categoryFilter) {
+          cachedEvents = events;
+          cachedEventsTime = now;
+        }
+        return events;
+      }
     } catch (err) {
       console.error("MongoDB getEvents error, falling back to file:", err);
     }
@@ -2066,7 +2098,12 @@ const getEvents = async (categoryFilter) => {
     const data = JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf-8'));
     events = data.events || [];
     if (categoryFilter) events = events.filter(e => e.category === categoryFilter);
-    return events.sort((a, b) => new Date(a.date) - new Date(b.date));
+    events = events.sort((a, b) => new Date(a.date) - new Date(b.date));
+    if (!categoryFilter) {
+      cachedEvents = events;
+      cachedEventsTime = now;
+    }
+    return events;
   } catch (e) { return []; }
 };
 
