@@ -891,8 +891,8 @@ const sendMailHelper = async (to, subject, text, html) => {
       from: `"VIT Life Support" <${smtpUser}>`,
       to,
       subject,
-      text,
-      html
+      text
+      // html parameter is omitted to ensure deliverability to strict organization/university email filters
     });
     console.log(`Email sent successfully to ${to}`);
     return true;
