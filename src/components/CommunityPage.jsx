@@ -718,39 +718,82 @@ export default function CommunityPage({ user }) {
                         </div>
                         
                         <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-                          <a
-                            href={paper.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="paper-btn download"
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                              margin: 0,
-                              padding: '0.5rem 1.15rem',
-                              fontSize: '0.8rem',
-                              borderRadius: '10px',
-                              fontWeight: '700',
-                              background: 'linear-gradient(135deg, hsl(var(--primary)), #4f46e5)',
-                              border: 'none',
-                              color: '#fff',
-                              boxShadow: '0 4px 12px hsla(var(--primary) / 0.25)',
-                              textDecoration: 'none',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.4rem',
-                              transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.transform = 'translateY(-1px)';
-                              e.currentTarget.style.boxShadow = '0 6px 16px hsla(var(--primary) / 0.4)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.transform = 'none';
-                              e.currentTarget.style.boxShadow = '0 4px 12px hsla(var(--primary) / 0.25)';
-                            }}
-                          >
-                            📖 Open PDF
-                          </a>
+                          {(() => {
+                            const urls = getPaperUrls(paper.url);
+                            if (urls.length > 1) {
+                              return (
+                                <button
+                                  className="paper-btn download"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPreviewPaper(paper);
+                                  }}
+                                  style={{
+                                    margin: 0,
+                                    padding: '0.5rem 1.15rem',
+                                    fontSize: '0.8rem',
+                                    borderRadius: '10px',
+                                    fontWeight: '700',
+                                    background: 'linear-gradient(135deg, hsl(var(--primary)), #4f46e5)',
+                                    border: 'none',
+                                    color: '#fff',
+                                    boxShadow: '0 4px 12px hsla(var(--primary) / 0.25)',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.4rem',
+                                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(-1px)';
+                                    e.currentTarget.style.boxShadow = '0 6px 16px hsla(var(--primary) / 0.4)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.transform = 'none';
+                                    e.currentTarget.style.boxShadow = '0 4px 12px hsla(var(--primary) / 0.25)';
+                                  }}
+                                >
+                                  📖 View Pages ({urls.length})
+                                </button>
+                              );
+                            } else {
+                              return (
+                                <a
+                                  href={urls[0] || '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="paper-btn download"
+                                  onClick={(e) => e.stopPropagation()}
+                                  style={{
+                                    margin: 0,
+                                    padding: '0.5rem 1.15rem',
+                                    fontSize: '0.8rem',
+                                    borderRadius: '10px',
+                                    fontWeight: '700',
+                                    background: 'linear-gradient(135deg, hsl(var(--primary)), #4f46e5)',
+                                    border: 'none',
+                                    color: '#fff',
+                                    boxShadow: '0 4px 12px hsla(var(--primary) / 0.25)',
+                                    textDecoration: 'none',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.4rem',
+                                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(-1px)';
+                                    e.currentTarget.style.boxShadow = '0 6px 16px hsla(var(--primary) / 0.4)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.transform = 'none';
+                                    e.currentTarget.style.boxShadow = '0 4px 12px hsla(var(--primary) / 0.25)';
+                                  }}
+                                >
+                                  📖 Open Paper
+                                </a>
+                              );
+                            }
+                          })()}
                           {user && user.role === 'admin' && (
                             <button
                               className="paper-btn delete"
@@ -864,9 +907,13 @@ export default function CommunityPage({ user }) {
                           )}
                         </p>
                         <div className="moderation-actions">
-                          <a href={paper.url} target="_blank" rel="noopener noreferrer" className="mod-action-btn view">
+                          <button
+                            onClick={() => setPreviewPaper(paper)}
+                            className="mod-action-btn view"
+                            style={{ cursor: 'pointer' }}
+                          >
                             🔍 View Doc
-                          </a>
+                          </button>
                           <button onClick={() => handleApprovePaper(paper._id)} className="mod-action-btn approve">
                             ✅ Approve
                           </button>
