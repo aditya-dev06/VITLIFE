@@ -212,6 +212,27 @@ const uploadsLimiter = rateLimit({
 
 app.use('/api', apiLimiter);
 
+// Serve SEO sitemap and robots.txt explicitly with correct headers if handled by Node server
+app.get('/sitemap.xml', (req, res) => {
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  const sitemapPath = path.join(path.dirname(__dirname), 'public', 'sitemap.xml');
+  if (fs.existsSync(sitemapPath)) {
+    return res.sendFile(sitemapPath);
+  }
+  return res.status(404).send('Sitemap not found');
+});
+
+app.get('/robots.txt', (req, res) => {
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  const robotsPath = path.join(path.dirname(__dirname), 'public', 'robots.txt');
+  if (fs.existsSync(robotsPath)) {
+    return res.sendFile(robotsPath);
+  }
+  return res.status(404).send('Robots.txt not found');
+});
+
 const DATA_DIR = path.join(__dirname, 'data');
 const OPPORTUNITIES_FILE = path.join(DATA_DIR, 'opportunities.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');

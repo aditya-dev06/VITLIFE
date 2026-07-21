@@ -1,5 +1,5 @@
-const CACHE_NAME = 'cds-hub-static-cache-v4';
-const API_CACHE_NAME = 'cds-hub-api-cache-v4';
+const CACHE_NAME = 'cds-hub-static-cache-v5';
+const API_CACHE_NAME = 'cds-hub-api-cache-v5';
 
 // Sensitive API paths that must NEVER be cached
 const SENSITIVE_API_PATHS = [
@@ -62,6 +62,17 @@ self.addEventListener('fetch', event => {
   }
 
   const requestUrl = new URL(event.request.url);
+
+  // Bypass Service Worker for SEO assets, sitemaps, robots.txt, and Google verification files
+  if (
+    requestUrl.pathname === '/sitemap.xml' ||
+    requestUrl.pathname === '/robots.txt' ||
+    requestUrl.pathname === '/llms.txt' ||
+    requestUrl.pathname.startsWith('/google') ||
+    requestUrl.pathname.endsWith('.xml')
+  ) {
+    return; // Let network handle SEO & sitemap directly
+  }
 
   // Handle Backend API JSON requests
   if (requestUrl.pathname.startsWith('/api/')) {
