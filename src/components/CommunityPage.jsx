@@ -3,13 +3,24 @@ import { useState, useEffect, useCallback } from 'react';
 const EXAM_TYPES = ['MTE', 'TEE', 'CAT-1', 'CAT-2', 'FAT'];
 const ACADEMIC_YEARS = ['2023-24', '2024-25', '2025-26'];
 
+const getPaperUrls = (url) => {
+  if (!url) return [];
+  if (Array.isArray(url)) return url;
+  if (typeof url === 'string') {
+    if (url.includes(',')) {
+      return url.split(',').map(u => u.trim()).filter(Boolean);
+    }
+    return [url];
+  }
+  return [];
+};
+
 const isImageUrl = (url) => {
   if (!url) return false;
-  if (Array.isArray(url)) {
-    return url.length > 0 && url.every(u => isImageUrl(u));
-  }
+  const urls = getPaperUrls(url);
+  if (urls.length === 0) return false;
   const imageRegex = /\.(jpg|jpeg|png|webp|gif)(\?|#|$)/i;
-  return imageRegex.test(url) || url.includes('/image/upload/');
+  return urls.every(u => imageRegex.test(u) || u.includes('/image/upload/'));
 };
 
 const loadTesseract = () => {
@@ -1095,43 +1106,50 @@ export default function CommunityPage({ user }) {
               border: '1px solid rgba(255,255,255,0.08)',
               boxShadow: '0 10px 30px -10px rgba(0,0,0,0.5)'
             }}>
-              {Array.isArray(previewPaper.url) ? (
-                previewPaper.url.map((url, idx) => (
-                  <a
-                    key={idx}
-                    href={url}
-                    download={`paper_page_${idx + 1}.jpg`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="paper-btn download"
-                    style={{ margin: 0, padding: '0.4rem 0.85rem', fontSize: '0.75rem', borderRadius: '20px', fontWeight: '600' }}
-                  >
-                    📥 Page {idx + 1}
-                  </a>
-                ))
-              ) : (
-                <>
-                  <a
-                    href={previewPaper.url}
-                    download
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="paper-btn download"
-                    style={{ margin: 0, padding: '0.4rem 0.85rem', fontSize: '0.75rem', borderRadius: '20px', fontWeight: '600' }}
-                  >
-                    📥 Download
-                  </a>
-                  <a
-                    href={previewPaper.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="paper-btn preview"
-                    style={{ margin: 0, padding: '0.4rem 0.85rem', fontSize: '0.75rem', borderRadius: '20px', fontWeight: '600' }}
-                  >
-                    ↗️ Open Tab
-                  </a>
-                </>
-              )}
+              {(() => {
+                const urls = getPaperUrls(previewPaper.url);
+                if (urls.length > 1) {
+                  return urls.map((url, idx) => (
+                    <a
+                      key={idx}
+                      href={url}
+                      download={`paper_page_${idx + 1}.jpg`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="paper-btn download"
+                      style={{ margin: 0, padding: '0.4rem 0.85rem', fontSize: '0.75rem', borderRadius: '20px', fontWeight: '600' }}
+                    >
+                      📥 Page {idx + 1}
+                    </a>
+                  ));
+                } else if (urls.length === 1) {
+                  const singleUrl = urls[0];
+                  return (
+                    <>
+                      <a
+                        href={singleUrl}
+                        download
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="paper-btn download"
+                        style={{ margin: 0, padding: '0.4rem 0.85rem', fontSize: '0.75rem', borderRadius: '20px', fontWeight: '600' }}
+                      >
+                        📥 Download
+                      </a>
+                      <a
+                        href={singleUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="paper-btn preview"
+                        style={{ margin: 0, padding: '0.4rem 0.85rem', fontSize: '0.75rem', borderRadius: '20px', fontWeight: '600' }}
+                      >
+                        ↗️ Open Tab
+                      </a>
+                    </>
+                  );
+                }
+                return null;
+              })()}
 
               {/* Conditional Zoom & Rotate buttons for image preview */}
               {isImageUrl(previewPaper.url) && (
@@ -1170,7 +1188,7 @@ export default function CommunityPage({ user }) {
                 (() => {
                   const isLandscape = window.innerWidth > window.innerHeight;
                   const isHorizontalLayout = isLandscape || rotation === 90 || rotation === 270;
-                  const imageUrls = Array.isArray(previewPaper.url) ? previewPaper.url : [previewPaper.url];
+                  const imageUrls = getPaperUrls(previewPaper.url);
                   return (
                     <div
                       className="preview-media-viewport"
@@ -1228,7 +1246,7 @@ export default function CommunityPage({ user }) {
               ) : (
                 <iframe
                   title="Paper Preview"
-                  src={previewPaper.url}
+                  src={getPaperUrls(previewPaper.url)[0] || ''}
                   width="100%"
                   height="100%"
                   style={{ border: 'none' }}
