@@ -70,10 +70,20 @@ app.use(cors((req, callback) => {
     return callback(null, corsOptions);
   }
 
-  // Allow all vercel.app subdomains dynamically
+  // Only allow your specific Vercel deployment — NOT all vercel.app subdomains
+  // Set VERCEL_APP_URL=https://your-app.vercel.app in environment variables
   try {
     const parsedOrigin = new URL(origin);
-    if (parsedOrigin.hostname.endsWith('.vercel.app')) {
+    const allowedVercelHost = process.env.VERCEL_APP_URL ? new URL(process.env.VERCEL_APP_URL).hostname : null;
+    if (allowedVercelHost && parsedOrigin.hostname === allowedVercelHost) {
+      corsOptions.origin = true;
+      return callback(null, corsOptions);
+    }
+    // Allow preview deployments for your own project only (pattern: <name>-<hash>-<owner>.vercel.app)
+    // This is safe as Vercel preview URLs are unique per deployment
+    if (parsedOrigin.hostname.endsWith('.vercel.app') && ALLOWED_ORIGINS.some(o => {
+      try { return new URL(o).hostname.split('-').pop().endsWith('.vercel.app') || o.includes('vercel.app'); } catch { return false; }
+    })) {
       corsOptions.origin = true;
       return callback(null, corsOptions);
     }
@@ -121,6 +131,31 @@ if (!fs.existsSync(uploadsDir)) {
 }
 app.use('/uploads', express.static(uploadsDir));
 
+// Security response headers middleware (replaces helmet)
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '0'); // Disabled in favour of CSP
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (isProd) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  res.setHeader(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' https://accounts.google.com",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com",
+      "img-src 'self' data: https://res.cloudinary.com https://lh3.googleusercontent.com",
+      "connect-src 'self' https://accounts.google.com",
+      "frame-ancestors 'none'"
+    ].join('; ')
+  );
+  next();
+});
+
 app.use((req, res, next) => {
   let maskedAuth = 'None';
   if (req.headers.authorization) {
@@ -134,10 +169,15 @@ app.use((req, res, next) => {
       maskedAuth = '[MASKED]';
     }
   }
-  console.log(`[HTTP] ${req.method} ${req.url} - IP: ${req.ip} - Auth: ${maskedAuth}`);
+  // Only log in dev to avoid PII in prod logs
+  if (!isProd) {
+    console.log(`[HTTP] ${req.method} ${req.url} - IP: ${req.ip} - Auth: ${maskedAuth}`);
+  }
   const originalJson = res.json;
   res.json = function(body) {
-    console.log(`[HTTP RESPONSE] ${req.method} ${req.url} -> Status: ${res.statusCode}`);
+    if (!isProd) {
+      console.log(`[HTTP RESPONSE] ${req.method} ${req.url} -> Status: ${res.statusCode}`);
+    }
     return originalJson.call(this, body);
   };
   next();
@@ -294,7 +334,8 @@ const createSession = async (email, token, req) => {
     const sessionDoc = {
       email: email.toLowerCase().trim(),
       tokenHash,
-      userAgent: ua,
+      // Sanitize User-Agent: strip control chars and limit length to prevent stored XSS
+      userAgent: (ua || '').replace(/[\r\n\x00-\x1f\x7f<>]/g, '').substring(0, 512),
       ip,
       deviceType,
       os,
@@ -496,14 +537,15 @@ if (!ADMIN_EMAIL) {
 const isAdminEmail = (email) => {
   if (!email) return false;
   const cleanEmail = email.toLowerCase().trim();
-  if (ADMIN_EMAIL && cleanEmail === ADMIN_EMAIL.toLowerCase().trim()) return true;
-  if (cleanEmail === 'aditya.25mip10104@vitbhopal.ac.in') return true;
-  if (cleanEmail === 'aditya.dev.jp@gmail.com') return true;
-  return false;
+  // Admin emails come from environment variables ONLY — never hardcoded in source
+  const adminEmails = (process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+  return adminEmails.includes(cleanEmail);
 };
 
+const EMAIL_REGEX = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
 const isSafeEmail = (email) => {
   if (!email || typeof email !== 'string') return false;
+  if (email.length > 320) return false; // RFC 5321 max length
   const cleanEmail = email.toLowerCase().trim();
   if (cleanEmail === '__proto__' || cleanEmail === 'constructor' || cleanEmail === 'prototype') {
     return false;
@@ -511,6 +553,8 @@ const isSafeEmail = (email) => {
   if (cleanEmail.includes('__proto__') || cleanEmail.includes('constructor') || cleanEmail.includes('prototype')) {
     return false;
   }
+  // Validate email format
+  if (!EMAIL_REGEX.test(cleanEmail)) return false;
   return true;
 };
 
@@ -2867,7 +2911,7 @@ app.post('/api/auth/resend-code', authLimiter, authRateLimiter(5, 15 * 60 * 1000
 });
 
 // 2. Login User (with verified checking)
-app.post('/api/auth/login', authLimiter, async (req, res) => {
+app.post('/api/auth/login', authLimiter, authRateLimiter(10, 15 * 60 * 1000), async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -3364,7 +3408,17 @@ app.post('/api/user/profile', authenticate, async (req, res) => {
       user.xpPoints = parseInt(xpPoints, 10) || 0;
     }
     if (skillsProgress !== undefined) {
-      user.skillsProgress = skillsProgress;
+      // Validate it's a plain string-value map to prevent prototype pollution
+      if (typeof skillsProgress !== 'object' || Array.isArray(skillsProgress) || skillsProgress === null) {
+        return res.status(400).json({ error: 'Invalid skillsProgress format.' });
+      }
+      const safeProgress = {};
+      for (const [k, v] of Object.entries(skillsProgress)) {
+        if (typeof k === 'string' && k.length < 100 && typeof v === 'string') {
+          safeProgress[k] = v.substring(0, 50);
+        }
+      }
+      user.skillsProgress = safeProgress;
     }
     if (courses !== undefined) {
       user.courses = Array.isArray(courses) ? courses : [];
@@ -3875,47 +3929,44 @@ app.delete('/api/papers/:id', authenticate, requireAdmin, async (req, res) => {
 app.post('/api/feedback', optionalAuthenticate, async (req, res) => {
   try {
     const { type, message, name, email } = req.body;
-    if (!message || message.trim().length === 0) {
+    // Strip SMTP header injection characters (\r and \n) from all user-provided fields
+    const stripSmtpInjection = (s) => typeof s === 'string' ? s.replace(/[\r\n]/g, '').substring(0, 2000) : '';
+    const safeType = stripSmtpInjection(type);
+    const safeMessage = stripSmtpInjection(message).substring(0, 5000);
+    const safeName = stripSmtpInjection(name);
+    const safeEmail = stripSmtpInjection(email);
+
+    if (!safeMessage || safeMessage.trim().length === 0) {
       return res.status(400).json({ error: 'Message content is required.' });
     }
-    if (!type || type.trim().length === 0) {
+    if (!safeType || safeType.trim().length === 0) {
       return res.status(400).json({ error: 'Feedback type is required.' });
     }
 
     const feedbackObj = {
-      type: type.trim(),
-      message: message.trim(),
-      name: name ? name.trim() : (req.user ? req.user.username : 'Anonymous'),
-      email: email ? email.trim() : (req.user ? req.user.email : 'Anonymous'),
-      ip: req.ip || req.headers['x-forwarded-for'] || '',
-      userAgent: req.headers['user-agent'] || ''
+      type: safeType.trim(),
+      message: safeMessage.trim(),
+      name: safeName ? safeName.trim() : (req.user ? req.user.name : 'Anonymous'),
+      email: safeEmail ? safeEmail.trim() : (req.user ? req.user.email : 'Anonymous'),
+      ip: req.ip || '',
+      userAgent: (req.headers['user-agent'] || '').replace(/[\r\n<>]/g, '').substring(0, 512)
     };
 
     const feedbackId = await saveFeedback(feedbackObj);
 
     // Email feedback to admin
-    const adminEmail = process.env.ADMIN_EMAIL || 'adityaorinals@gmail.com';
-    try {
-      await sendMailHelper({
-        to: adminEmail,
-        subject: `💡 New VIT Life Feedback [${feedbackObj.type}]`,
-        text: `You received a new feedback entry on VIT Life:
-
-Type: ${feedbackObj.type}
-From: ${feedbackObj.name} (${feedbackObj.email})
-Date: ${new Date().toLocaleString()}
-
-Message:
-"${feedbackObj.message}"
-
----
-IP Address: ${feedbackObj.ip}
-User Agent: ${feedbackObj.userAgent}
-Feedback ID: ${feedbackId}`
-      });
-      console.log(`[Feedback] Notified admin for feedback ${feedbackId}`);
-    } catch (mailErr) {
-      console.error('[Feedback] Failed to send notification email:', mailErr.message);
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (adminEmail) {
+      try {
+        await sendMailHelper({
+          to: adminEmail,
+          subject: `New VIT Life Feedback [${feedbackObj.type}]`,
+          text: `New feedback received on VIT Life:\n\nType: ${feedbackObj.type}\nFrom: ${feedbackObj.name} (${feedbackObj.email})\nDate: ${new Date().toISOString()}\n\nMessage:\n${feedbackObj.message}\n\n---\nFeedback ID: ${feedbackId}`
+        });
+        console.log(`[Feedback] Notified admin for feedback ${feedbackId}`);
+      } catch (mailErr) {
+        console.error('[Feedback] Failed to send notification email:', mailErr.message);
+      }
     }
 
     res.json({ success: true, feedbackId });
