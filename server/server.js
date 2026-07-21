@@ -1402,6 +1402,28 @@ const findUserByEmail = async (email) => {
         }
         return user;
       }
+      // Not found in MongoDB — check local file and auto-sync if found
+      const users = loadUsers();
+      if (Object.prototype.hasOwnProperty.call(users, lowerEmail)) {
+        const localUser = users[lowerEmail];
+        if (localUser && localUser !== Object.prototype) {
+          // Auto-migrate user from local file to MongoDB
+          try {
+            const syncData = { ...localUser };
+            delete syncData._id;
+            await db.collection('users').updateOne(
+              { email: lowerEmail },
+              { $set: syncData },
+              { upsert: true }
+            );
+            console.log(`[Auto-Sync] Migrated user ${lowerEmail} from local file to MongoDB.`);
+          } catch (syncErr) {
+            console.error(`[Auto-Sync] Failed to migrate ${lowerEmail}:`, syncErr.message);
+          }
+          return localUser;
+        }
+      }
+      return null;
     } catch (err) {
       console.error("MongoDB findUserByEmail error, falling back to file:", err);
     }
