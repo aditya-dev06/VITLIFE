@@ -282,7 +282,7 @@ const getRegNumberAndProgram = (emailStr) => {
 /* ═══════════════════════════════════════════════════════════════
    AUTH COMPONENT — Aurora Gateway Login Page
    ═══════════════════════════════════════════════════════════════ */
-const Auth = ({ onLoginSuccess, theme, setTheme }) => {
+const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
   // ── Authentication State ──
   const [authState, setAuthState] = useState(() => {
     return sessionStorage.getItem('authState') || 'login';
@@ -1224,6 +1224,30 @@ const Auth = ({ onLoginSuccess, theme, setTheme }) => {
             </motion.div>
           </AnimatePresence>
         </div>
+        {onShowFeedback && (
+          <div style={{ marginTop: '1.25rem', textAlign: 'center', position: 'relative', zIndex: 10 }}>
+            <button
+              onClick={onShowFeedback}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'hsl(var(--text-muted))',
+                fontSize: '0.85rem',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                textDecoration: 'underline',
+                transition: 'color 0.2s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.color = 'hsl(var(--primary))'}
+              onMouseLeave={(e) => e.currentTarget.style.color = 'hsl(var(--text-muted))'}
+            >
+              💬 Facing issues or have suggestions? Give Feedback
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

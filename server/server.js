@@ -183,6 +183,7 @@ const RECRUITMENTS_FILE = path.join(DATA_DIR, 'recruitments.json');
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const ACTIVITY_LOGS_FILE = path.join(DATA_DIR, 'activity_logs.json');
 const PAPERS_FILE = path.join(DATA_DIR, 'papers.json');
+const FEEDBACK_FILE = path.join(DATA_DIR, 'feedback.json');
 
 // Active Sessions Management
 const MAX_SESSIONS_PER_USER = 10;
@@ -1580,6 +1581,32 @@ const deletePaper = async (id) => {
       fs.writeFileSync(PAPERS_FILE, JSON.stringify(list, null, 2), 'utf-8');
     } catch (e) {}
   }
+};
+
+const saveFeedback = async (feedbackObj) => {
+  const id = `fb_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  const feedbackDoc = { _id: id, createdAt: new Date().toISOString(), ...feedbackObj };
+  
+  if (dbConnectingPromise) {
+    await dbConnectingPromise;
+  }
+  if (db) {
+    try {
+      await db.collection('feedback').insertOne(feedbackDoc);
+      return id;
+    } catch (err) {
+      console.error("MongoDB saveFeedback error, falling back to file:", err);
+    }
+  }
+  let list = [];
+  if (fs.existsSync(FEEDBACK_FILE)) {
+    try {
+      list = JSON.parse(fs.readFileSync(FEEDBACK_FILE, 'utf-8')) || [];
+    } catch (e) {}
+  }
+  list.push(feedbackDoc);
+  fs.writeFileSync(FEEDBACK_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  return id;
 };
 
 const syncPassVitianPapers = async () => {
@@ -3776,6 +3803,82 @@ app.delete('/api/papers/:id', authenticate, requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('DELETE /api/papers/:id error:', error);
     res.status(500).json({ error: 'Failed to delete paper.' });
+  }
+});
+
+// ================= FEEDBACK ROUTES =================
+
+// 1. POST Route: Submit Feedback
+app.post('/api/feedback', optionalAuthenticate, async (req, res) => {
+  try {
+    const { type, message, name, email } = req.body;
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({ error: 'Message content is required.' });
+    }
+    if (!type || type.trim().length === 0) {
+      return res.status(400).json({ error: 'Feedback type is required.' });
+    }
+
+    const feedbackObj = {
+      type: type.trim(),
+      message: message.trim(),
+      name: name ? name.trim() : (req.user ? req.user.username : 'Anonymous'),
+      email: email ? email.trim() : (req.user ? req.user.email : 'Anonymous'),
+      ip: req.ip || req.headers['x-forwarded-for'] || '',
+      userAgent: req.headers['user-agent'] || ''
+    };
+
+    const feedbackId = await saveFeedback(feedbackObj);
+
+    // Email feedback to admin
+    const adminEmail = process.env.ADMIN_EMAIL || 'adityaorinals@gmail.com';
+    try {
+      await sendMailHelper({
+        to: adminEmail,
+        subject: `💡 New VIT Life Feedback [${feedbackObj.type}]`,
+        text: `You received a new feedback entry on VIT Life:
+
+Type: ${feedbackObj.type}
+From: ${feedbackObj.name} (${feedbackObj.email})
+Date: ${new Date().toLocaleString()}
+
+Message:
+"${feedbackObj.message}"
+
+---
+IP Address: ${feedbackObj.ip}
+User Agent: ${feedbackObj.userAgent}
+Feedback ID: ${feedbackId}`
+      });
+      console.log(`[Feedback] Notified admin for feedback ${feedbackId}`);
+    } catch (mailErr) {
+      console.error('[Feedback] Failed to send notification email:', mailErr.message);
+    }
+
+    res.json({ success: true, feedbackId });
+  } catch (err) {
+    console.error('POST /api/feedback error:', err);
+    res.status(500).json({ error: 'Failed to submit feedback. Please try again.' });
+  }
+});
+
+// 2. GET Route: List Feedback (Admin Only)
+app.get('/api/feedback', authenticate, requireAdmin, async (req, res) => {
+  try {
+    if (dbConnectingPromise) {
+      await dbConnectingPromise;
+    }
+    let list = [];
+    if (db) {
+      list = await db.collection('feedback').find({}).sort({ createdAt: -1 }).toArray();
+    } else if (fs.existsSync(FEEDBACK_FILE)) {
+      list = JSON.parse(fs.readFileSync(FEEDBACK_FILE, 'utf-8')) || [];
+      list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+    res.json({ feedback: list });
+  } catch (err) {
+    console.error('GET /api/feedback error:', err);
+    res.status(500).json({ error: 'Failed to retrieve feedback.' });
   }
 });
 

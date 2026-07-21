@@ -16,6 +16,7 @@ const Auth = lazy(() => import('./components/Auth'));
 const TermsAndConditions = lazy(() => import('./components/TermsAndConditions'));
 const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
 const CommunityPage = lazy(() => import('./components/CommunityPage'));
+const FeedbackModal = lazy(() => import('./components/FeedbackModal'));
 
 // Global fetch interceptor to catch 401/403 responses and trigger logouts (HMR-safe)
 if (!window.fetch.__isWrapped) {
@@ -63,6 +64,7 @@ function App() {
   const [navHidden, setNavHidden] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const [showAboutUs, setShowAboutUs] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const [showMobileProfileSheet, setShowMobileProfileSheet] = useState(false);
   const [theme, setTheme] = useState(localStorage.getItem('ds_ai_theme') || 'dark');
   const [installPrompt, setInstallPrompt] = useState(null); // PWA install prompt
@@ -670,7 +672,7 @@ function App() {
           <h2>Loading Secure Authentication...</h2>
         </div>
       }>
-        <Auth onLoginSuccess={handleLoginSuccess} theme={theme} setTheme={setTheme} />
+        <Auth onLoginSuccess={handleLoginSuccess} theme={theme} setTheme={setTheme} onShowFeedback={() => setShowFeedback(true)} />
       </Suspense>
     );
   }
@@ -735,6 +737,11 @@ function App() {
                 </button>
               </li>
             )}
+            <li className="nav-item">
+              <button onClick={() => { setShowFeedback(true); setMobileMenuOpen(false); }}>
+                💬 Give Feedback
+              </button>
+            </li>
             {/* Mobile-only navigation links */}
             <li className="nav-item mobile-only-nav-item">
               <button onClick={() => { setShowAboutUs(true); setMobileMenuOpen(false); }}>
@@ -1068,6 +1075,12 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+      {showFeedback && (
+        <FeedbackModal
+          user={user}
+          onClose={() => setShowFeedback(false)}
+        />
       )}
       {/* Mobile Bottom Navigation (Dock) */}
       {(() => {
