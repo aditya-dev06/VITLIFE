@@ -37,6 +37,83 @@ const loadTesseract = () => {
   });
 };
 
+const loadJsPDF = () => {
+  return new Promise((resolve, reject) => {
+    if (window.jspdf) {
+      resolve(window.jspdf);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    script.onload = () => resolve(window.jspdf);
+    script.onerror = (err) => reject(new Error('Failed to load PDF engine.'));
+    document.head.appendChild(script);
+  });
+};
+
+const getImageDimensions = (base64) => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64;
+    img.onload = () => {
+      resolve({ width: img.width, height: img.height });
+    };
+    img.onerror = () => {
+      resolve({ width: 800, height: 1130 }); // Default A4 ratio fallback
+    };
+  });
+};
+
+const convertImagesToPDF = async (base64Images) => {
+  await loadJsPDF();
+  const { jsPDF } = window.jspdf;
+  
+  // Create a new PDF document. Default is A4 size.
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'px',
+    format: 'a4'
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  for (let i = 0; i < base64Images.length; i++) {
+    const base64 = base64Images[i];
+    
+    // Add page if it is not the first one
+    if (i > 0) {
+      doc.addPage();
+    }
+
+    try {
+      const dimensions = await getImageDimensions(base64);
+      const ratio = dimensions.width / dimensions.height;
+      
+      let imgWidth = pageWidth;
+      let imgHeight = pageWidth / ratio;
+      
+      if (imgHeight > pageHeight) {
+        imgHeight = pageHeight;
+        imgWidth = pageHeight * ratio;
+      }
+      
+      // Center the image on the page
+      const x = (pageWidth - imgWidth) / 2;
+      const y = (pageHeight - imgHeight) / 2;
+      
+      doc.addImage(base64, 'JPEG', x, y, imgWidth, imgHeight);
+    } catch (err) {
+      console.error('Failed to add image to PDF:', err);
+      // Fallback: add image at full page dimensions
+      doc.addImage(base64, 'JPEG', 0, 0, pageWidth, pageHeight);
+    }
+  }
+
+  // Generate base64 DataURL of the compiled PDF
+  return doc.output('datauristring');
+};
+
 const parsePaperText = (text, existingPapers) => {
   const result = {};
   
@@ -356,14 +433,25 @@ export default function CommunityPage({ user }) {
       const yearVal = detected.year || '2024-25';
       const semesterVal = detected.semester || '1';
 
+      // 4. If we uploaded images, compile them client-side into a single PDF
+      let finalFileData = fileDataArr.length === 1 ? fileDataArr[0] : fileDataArr;
+      let finalFileNameVal = fileNameArr.length === 1 ? fileNameArr[0] : fileNameArr;
+
+      if (hasImages) {
+        setSuccess('📄 Compiling pages into a single PDF...');
+        finalFileData = await convertImagesToPDF(fileDataArr);
+        const codeClean = courseCodeVal !== 'UNKNOWN' ? courseCodeVal.toLowerCase() : 'paper';
+        finalFileNameVal = `${codeClean}_scanned_${Date.now()}.pdf`;
+      }
+
       const payload = {
         courseCode: courseCodeVal,
         courseTitle: courseTitleVal,
         examType: examTypeVal,
         year: yearVal,
         semester: semesterVal,
-        fileData: fileDataArr.length === 1 ? fileDataArr[0] : fileDataArr,
-        fileName: fileNameArr.length === 1 ? fileNameArr[0] : fileNameArr,
+        fileData: finalFileData,
+        fileName: finalFileNameVal,
         fullText: fullTextCombined
       };
 
