@@ -1633,29 +1633,46 @@ const getOpportunities = async () => {
   }
 };
 
-const getPapers = async () => {
+let cachedPapers = null;
+let cachedPapersTime = 0;
+const PAPERS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const clearPapersCache = () => {
+  cachedPapers = null;
+  cachedPapersTime = 0;
+};
+
+const getPapers = async (forceRefresh = false) => {
+  const now = Date.now();
+  if (!forceRefresh && cachedPapers && (now - cachedPapersTime < PAPERS_CACHE_TTL)) {
+    return cachedPapers;
+  }
+  let result = null;
   if (dbConnectingPromise) {
     await dbConnectingPromise;
   }
   if (db) {
     try {
       const papers = await db.collection('papers').find().toArray();
-      return papers || [];
+      if (papers && papers.length > 0) result = papers;
     } catch (err) {
       console.error("MongoDB getPapers error, falling back to file:", err);
     }
   }
-  if (!fs.existsSync(PAPERS_FILE)) {
-    fs.writeFileSync(PAPERS_FILE, JSON.stringify([], null, 2), 'utf-8');
+  if (!result && fs.existsSync(PAPERS_FILE)) {
+    try {
+      result = JSON.parse(fs.readFileSync(PAPERS_FILE, 'utf-8')) || [];
+    } catch (e) {
+      result = [];
+    }
   }
-  try {
-    return JSON.parse(fs.readFileSync(PAPERS_FILE, 'utf-8')) || [];
-  } catch (e) {
-    return [];
-  }
+  cachedPapers = result || [];
+  cachedPapersTime = now;
+  return cachedPapers;
 };
 
 const savePaper = async (id, paperObj) => {
+  clearPapersCache();
   if (dbConnectingPromise) {
     await dbConnectingPromise;
   }
@@ -1683,6 +1700,7 @@ const savePaper = async (id, paperObj) => {
 };
 
 const deletePaper = async (id) => {
+  clearPapersCache();
   if (dbConnectingPromise) {
     await dbConnectingPromise;
   }
@@ -1698,6 +1716,10 @@ const deletePaper = async (id) => {
     try {
       let list = JSON.parse(fs.readFileSync(PAPERS_FILE, 'utf-8')) || [];
       list = list.filter(p => p._id !== id);
+      fs.writeFileSync(PAPERS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+    } catch (e) {}
+  }
+};
       fs.writeFileSync(PAPERS_FILE, JSON.stringify(list, null, 2), 'utf-8');
     } catch (e) {}
   }

@@ -351,6 +351,52 @@ export default function CommunityPage({ user }) {
 
   const [selectedCourseCode, setSelectedCourseCode] = useState(null);
 
+  // Chunked loading / progressive rendering state (24 courses per chunk)
+  const [visibleChunkCount, setVisibleChunkCount] = useState(24);
+  const sentinelRef = useRef(null);
+
+  // Reset chunk count whenever search query or filters change
+  useEffect(() => {
+    setVisibleChunkCount(24);
+  }, [searchQuery, filterExamType, filterYear, activeSubTab]);
+
+  // Derived course groups (memoized for high performance)
+  const courseGroups = useMemo(() => {
+    const grouped = filteredPapers.reduce((acc, paper) => {
+      const code = (paper.courseCode || '').trim().toUpperCase();
+      if (!code) return acc;
+      if (!acc[code]) {
+        acc[code] = {
+          courseCode: code,
+          courseTitle: paper.courseTitle || code,
+          department: paper.department,
+          semester: paper.semester,
+          papersList: []
+        };
+      }
+      acc[code].papersList.push(paper);
+      return acc;
+    }, {});
+    return Object.values(grouped);
+  }, [filteredPapers]);
+
+  const visibleCourseGroups = useMemo(() => {
+    return courseGroups.slice(0, visibleChunkCount);
+  }, [courseGroups, visibleChunkCount]);
+
+  // IntersectionObserver to auto-load next chunk when scrolling near end
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && visibleChunkCount < courseGroups.length) {
+        setVisibleChunkCount(prev => prev + 24);
+      }
+    }, { threshold: 0.1 });
+
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [visibleChunkCount, courseGroups.length]);
+
   // Derived selected course group
   const selectedCourseGroup = (() => {
     if (!selectedCourseCode) return null;
@@ -1168,33 +1214,16 @@ export default function CommunityPage({ user }) {
                     <div className="aurora-spinner" />
                     <p>Loading papers...</p>
                   </div>
-                ) : filteredPapers.length === 0 ? (
+                ) : courseGroups.length === 0 ? (
                   <div className="pyq-empty-state">
                     <span>📂</span>
                     <p>{searchQuery ? `No papers match "${searchQuery}".` : 'No papers found matching the selected criteria.'}</p>
                     <p className="subtitle">{searchQuery ? 'Try a different search term.' : 'Be the first to share one!'}</p>
                   </div>
-                ) : (() => {
-                  const grouped = filteredPapers.reduce((acc, paper) => {
-                    const code = (paper.courseCode || '').trim().toUpperCase();
-                    if (!code) return acc;
-                    if (!acc[code]) {
-                      acc[code] = {
-                        courseCode: code,
-                        courseTitle: paper.courseTitle || code,
-                        department: paper.department,
-                        semester: paper.semester,
-                        papersList: []
-                      };
-                    }
-                    acc[code].papersList.push(paper);
-                    return acc;
-                  }, {});
-                  const courseGroups = Object.values(grouped);
-
-                  return (
+                ) : (
+                  <>
                     <div className="pyq-papers-grid">
-                      {courseGroups.map(group => (
+                      {visibleCourseGroups.map(group => (
                         <div
                           key={group.courseCode}
                           className="pyq-paper-card"
@@ -1226,8 +1255,37 @@ export default function CommunityPage({ user }) {
                         </div>
                       ))}
                     </div>
-                  );
-                })()}
+
+                    {/* Infinite Scroll Sentinel & Chunk Load Trigger */}
+                    {visibleChunkCount < courseGroups.length && (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', marginTop: '2rem', marginBottom: '1.5rem' }}>
+                        <div ref={sentinelRef} style={{ height: '20px', width: '100%' }} />
+                        <button
+                          className="pyq-load-more-btn"
+                          onClick={() => setVisibleChunkCount(prev => prev + 24)}
+                          style={{
+                            padding: '0.65rem 1.6rem',
+                            borderRadius: '12px',
+                            background: 'linear-gradient(135deg, hsla(var(--primary) / 0.15), hsla(var(--primary) / 0.05))',
+                            border: '1px solid hsla(var(--primary) / 0.3)',
+                            color: 'hsl(var(--primary))',
+                            fontWeight: '700',
+                            fontSize: '0.85rem',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            transition: 'all 0.2s ease',
+                            boxShadow: '0 4px 16px hsla(var(--primary) / 0.12)'
+                          }}
+                        >
+                          <span>Show More Courses ({courseGroups.length - visibleChunkCount} remaining)</span>
+                          <span>↓</span>
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </>
           )}
