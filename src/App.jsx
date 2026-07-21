@@ -18,6 +18,7 @@ const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
 import CommunityPage from './components/CommunityPage';
 import FeedbackModal from './components/FeedbackModal';
 import AppSidebar from './components/AppSidebar';
+import { useTheme } from './components/theme-provider';
 
 // Global fetch interceptor to catch 401/403 responses and trigger logouts (HMR-safe)
 if (!window.fetch.__isWrapped) {
@@ -84,7 +85,7 @@ function App() {
   const [showAboutUs, setShowAboutUs] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [showMobileProfileSheet, setShowMobileProfileSheet] = useState(false);
-  const [theme, setTheme] = useState(localStorage.getItem('ds_ai_theme') || 'dark');
+  const { theme, setTheme } = useTheme();
   const [installPrompt, setInstallPrompt] = useState(null); // PWA install prompt
   const [highlightedEventId, setHighlightedEventId] = useState(null);
   const [guideVisible, setGuideVisible] = useState(false);
@@ -176,19 +177,6 @@ function App() {
     if (outcome === 'accepted') setInstallPrompt(null);
   };
 
-  useEffect(() => {
-    const root = document.documentElement;
-    const body = document.body;
-    if (theme === 'light') {
-      root.classList.add('light-theme');
-      body.classList.add('light-theme');
-    } else {
-      root.classList.remove('light-theme');
-      body.classList.remove('light-theme');
-    }
-    localStorage.setItem('theme', theme);
-    localStorage.setItem('ds_ai_theme', theme);
-  }, [theme]);
 
   useEffect(() => {
     const handleScroll = () => {

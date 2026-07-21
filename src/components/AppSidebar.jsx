@@ -19,6 +19,7 @@ import {
   Sun,
   Moon,
 } from 'lucide-react';
+import { useTheme } from './theme-provider';
 import './AppSidebar.css';
 
 const GithubIcon = ({ size = 18, className = '' }) => (
@@ -47,10 +48,9 @@ export default function AppSidebar({
   onFeedback,
   onAboutUs,
   onLogout,
-  theme,
-  onToggleTheme,
   onEditProfile,
 }) {
+  const { theme, setTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -200,15 +200,13 @@ export default function AppSidebar({
                     )}
                   </>
                 )}
-                {onToggleTheme && (
-                  <button
-                    className="sidebar-user-btn"
-                    onClick={onToggleTheme}
-                    title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
-                  >
-                    {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-                  </button>
-                )}
+                <button
+                  className="sidebar-user-btn"
+                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                  title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+                >
+                  {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+                </button>
                 {!user.isGuest && (
                   <button
                     className="sidebar-user-btn sidebar-user-btn--logout"
@@ -299,26 +297,24 @@ export default function AppSidebar({
                 </button>
               </li>
             )}
-            {onToggleTheme && (
-              <li>
-                <button
-                  className="sidebar-nav-item"
-                  onClick={onToggleTheme}
-                  title={!isOpen ? `Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode` : undefined}
-                >
-                  {theme === 'dark' ? (
-                    <Sun size={18} className="sidebar-nav-icon" />
-                  ) : (
-                    <Moon size={18} className="sidebar-nav-icon" />
-                  )}
-                  {isOpen && (
-                    <span className="sidebar-nav-label">
-                      {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-                    </span>
-                  )}
-                </button>
-              </li>
-            )}
+            <li>
+              <button
+                className="sidebar-nav-item"
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                title={!isOpen ? `Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode` : undefined}
+              >
+                {theme === 'dark' ? (
+                  <Sun size={18} className="sidebar-nav-icon" />
+                ) : (
+                  <Moon size={18} className="sidebar-nav-icon" />
+                )}
+                {isOpen && (
+                  <span className="sidebar-nav-label">
+                    {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                  </span>
+                )}
+              </button>
+            </li>
             {installPrompt && (
               <li>
                 <button
