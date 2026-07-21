@@ -161,24 +161,7 @@ export default function CommunityPage({ user }) {
 
 
 
-  // PDF Preview Modal State
-  const [previewPaper, setPreviewPaper] = useState(null);
   const [selectedCourseCode, setSelectedCourseCode] = useState(null);
-
-  // Pinch-to-zoom / Gesture zoom state for paper preview
-  const [zoomScale, setZoomScale] = useState(1);
-  const [zoomOffset, setZoomOffset] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [rotation, setRotation] = useState(0); // 0, 90, 180, 270 degrees
-
-  const handleSetPreviewPaper = (paper) => {
-    setZoomScale(1);
-    setZoomOffset({ x: 0, y: 0 });
-    setIsDragging(false);
-    setRotation(0);
-    setPreviewPaper(paper);
-  };
 
   // Derived selected course group
   const selectedCourseGroup = (() => {
@@ -280,7 +263,7 @@ export default function CommunityPage({ user }) {
   }, [searchQuery, filterExamType, filterYear, fetchPapers, fetchPendingPapers, user]);
 
   useEffect(() => {
-    if (previewPaper || showUploadModal) {
+    if (showUploadModal) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -288,7 +271,7 @@ export default function CommunityPage({ user }) {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [previewPaper, showUploadModal]);
+  }, [showUploadModal]);
 
   const handleUploadSubmit = async (e) => {
     e.preventDefault();
@@ -720,79 +703,47 @@ export default function CommunityPage({ user }) {
                         <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
                           {(() => {
                             const urls = getPaperUrls(paper.url);
-                            if (urls.length > 1) {
-                              return (
-                                <button
-                                  className="paper-btn download"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setPreviewPaper(paper);
-                                  }}
-                                  style={{
-                                    margin: 0,
-                                    padding: '0.5rem 1.15rem',
-                                    fontSize: '0.8rem',
-                                    borderRadius: '10px',
-                                    fontWeight: '700',
-                                    background: 'linear-gradient(135deg, hsl(var(--primary)), #4f46e5)',
-                                    border: 'none',
-                                    color: '#fff',
-                                    boxShadow: '0 4px 12px hsla(var(--primary) / 0.25)',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '0.4rem',
-                                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    e.currentTarget.style.transform = 'translateY(-1px)';
-                                    e.currentTarget.style.boxShadow = '0 6px 16px hsla(var(--primary) / 0.4)';
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.currentTarget.style.transform = 'none';
-                                    e.currentTarget.style.boxShadow = '0 4px 12px hsla(var(--primary) / 0.25)';
-                                  }}
-                                >
-                                  📖 View Pages ({urls.length})
-                                </button>
-                              );
-                            } else {
-                              return (
-                                <a
-                                  href={urls[0] || '#'}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="paper-btn download"
-                                  onClick={(e) => e.stopPropagation()}
-                                  style={{
-                                    margin: 0,
-                                    padding: '0.5rem 1.15rem',
-                                    fontSize: '0.8rem',
-                                    borderRadius: '10px',
-                                    fontWeight: '700',
-                                    background: 'linear-gradient(135deg, hsl(var(--primary)), #4f46e5)',
-                                    border: 'none',
-                                    color: '#fff',
-                                    boxShadow: '0 4px 12px hsla(var(--primary) / 0.25)',
-                                    textDecoration: 'none',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '0.4rem',
-                                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    e.currentTarget.style.transform = 'translateY(-1px)';
-                                    e.currentTarget.style.boxShadow = '0 6px 16px hsla(var(--primary) / 0.4)';
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.currentTarget.style.transform = 'none';
-                                    e.currentTarget.style.boxShadow = '0 4px 12px hsla(var(--primary) / 0.25)';
-                                  }}
-                                >
-                                  📖 Open Paper
-                                </a>
-                              );
-                            }
+                            return (
+                              <a
+                                href={urls[0] || '#'}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="paper-btn download"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // Open any subsequent pages in new tabs
+                                  for (let i = 1; i < urls.length; i++) {
+                                    window.open(urls[i], '_blank');
+                                  }
+                                }}
+                                style={{
+                                  margin: 0,
+                                  padding: '0.5rem 1.15rem',
+                                  fontSize: '0.8rem',
+                                  borderRadius: '10px',
+                                  fontWeight: '700',
+                                  background: 'linear-gradient(135deg, hsl(var(--primary)), #4f46e5)',
+                                  border: 'none',
+                                  color: '#fff',
+                                  boxShadow: '0 4px 12px hsla(var(--primary) / 0.25)',
+                                  textDecoration: 'none',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.4rem',
+                                  transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.transform = 'translateY(-1px)';
+                                  e.currentTarget.style.boxShadow = '0 6px 16px hsla(var(--primary) / 0.4)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.transform = 'none';
+                                  e.currentTarget.style.boxShadow = '0 4px 12px hsla(var(--primary) / 0.25)';
+                                }}
+                              >
+                                📖 Open Paper {urls.length > 1 ? `(${urls.length} Pages)` : ''}
+                              </a>
+                            );
                           })()}
                           {user && user.role === 'admin' && (
                             <button
@@ -907,13 +858,26 @@ export default function CommunityPage({ user }) {
                           )}
                         </p>
                         <div className="moderation-actions">
-                          <button
-                            onClick={() => setPreviewPaper(paper)}
-                            className="mod-action-btn view"
-                            style={{ cursor: 'pointer' }}
-                          >
-                            🔍 View Doc
-                          </button>
+                          {(() => {
+                            const urls = getPaperUrls(paper.url);
+                            return (
+                              <a
+                                href={urls[0] || '#'}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mod-action-btn view"
+                                onClick={(e) => {
+                                  // Open any subsequent pages in new tabs
+                                  for (let i = 1; i < urls.length; i++) {
+                                    window.open(urls[i], '_blank');
+                                  }
+                                }}
+                                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                              >
+                                🔍 View Doc {urls.length > 1 ? `(${urls.length})` : ''}
+                              </a>
+                            );
+                          })()}
                           <button onClick={() => handleApprovePaper(paper._id)} className="mod-action-btn approve">
                             ✅ Approve
                           </button>
@@ -1109,200 +1073,7 @@ export default function CommunityPage({ user }) {
 
 
 
-      {/* ── PDF PREVIEW MODAL ── */}
-      {previewPaper && (
-        <div className="aurora-modal-overlay" onClick={() => handleSetPreviewPaper(null)} style={{ padding: 0, zIndex: 99999 }}>
-          <div className="aurora-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '100vw', width: '100vw', height: '100vh', maxHeight: '100vh', display: 'flex', flexDirection: 'column', borderRadius: '0px', border: 'none', background: '#0b0f19', position: 'relative' }}>
-            
-            {/* Absolute Red Close Button on Top Right with text-shadow for extreme visibility */}
-            <button
-              className="aurora-modal-close"
-              onClick={() => handleSetPreviewPaper(null)}
-              style={{
-                position: 'absolute',
-                top: '1.25rem',
-                right: '1.25rem',
-                zIndex: 100000,
-                fontSize: '2.5rem',
-                color: '#ef4444',
-                textShadow: '0 2px 10px rgba(0,0,0,0.9)',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                margin: 0
-              }}
-            >
-              ×
-            </button>
 
-            {/* Float-in Translucent Bottom Control Dock */}
-            <div style={{
-              position: 'absolute',
-              bottom: '1.5rem',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 100000,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.85rem',
-              background: 'rgba(15, 23, 42, 0.65)',
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
-              padding: '0.6rem 1.25rem',
-              borderRadius: '30px',
-              border: '1px solid rgba(255,255,255,0.08)',
-              boxShadow: '0 10px 30px -10px rgba(0,0,0,0.5)'
-            }}>
-              {(() => {
-                const urls = getPaperUrls(previewPaper.url);
-                if (urls.length > 1) {
-                  return urls.map((url, idx) => (
-                    <a
-                      key={idx}
-                      href={url}
-                      download={`paper_page_${idx + 1}.jpg`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="paper-btn download"
-                      style={{ margin: 0, padding: '0.4rem 0.85rem', fontSize: '0.75rem', borderRadius: '20px', fontWeight: '600' }}
-                    >
-                      📥 Page {idx + 1}
-                    </a>
-                  ));
-                } else if (urls.length === 1) {
-                  const singleUrl = urls[0];
-                  return (
-                    <>
-                      <a
-                        href={singleUrl}
-                        download
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="paper-btn download"
-                        style={{ margin: 0, padding: '0.4rem 0.85rem', fontSize: '0.75rem', borderRadius: '20px', fontWeight: '600' }}
-                      >
-                        📥 Download
-                      </a>
-                      <a
-                        href={singleUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="paper-btn preview"
-                        style={{ margin: 0, padding: '0.4rem 0.85rem', fontSize: '0.75rem', borderRadius: '20px', fontWeight: '600' }}
-                      >
-                        ↗️ Open Tab
-                      </a>
-                    </>
-                  );
-                }
-                return null;
-              })()}
-
-              {/* Conditional Zoom & Rotate buttons for image preview */}
-              {isImageUrl(previewPaper.url) && (
-                <>
-                  <div style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.15)' }} />
-                  <button
-                    onClick={() => setRotation(prev => (prev + 90) % 360)}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#fff',
-                      fontSize: '0.75rem',
-                      cursor: 'pointer',
-                      fontWeight: '600',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.2rem'
-                    }}
-                    title="Rotate Paper 90 degrees"
-                  >
-                    🔄 Rotate
-                  </button>
-                  <div style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.15)' }} />
-                  <button onClick={handleZoomOut} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px' }} title="Zoom Out">➖</button>
-                  <span style={{ fontSize: '0.75rem', color: '#fff', fontWeight: '700', minWidth: '38px', textAlign: 'center' }}>
-                    {Math.round(zoomScale * 100)}%
-                  </span>
-                  <button onClick={handleZoomIn} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px' }} title="Zoom In">➕</button>
-                  <button onClick={handleZoomReset} style={{ background: 'transparent', border: 'none', color: 'hsl(var(--primary))', fontSize: '0.72rem', cursor: 'pointer', fontWeight: 'bold' }} title="Reset Zoom">Reset</button>
-                </>
-              )}
-            </div>
-            
-            <div className="pdf-preview-body" style={{ flex: 1, background: '#0b0f19', overflow: 'hidden', width: '100vw', height: '100vh' }}>
-              {isImageUrl(previewPaper.url) ? (
-                (() => {
-                  const isLandscape = window.innerWidth > window.innerHeight;
-                  const isHorizontalLayout = isLandscape || rotation === 90 || rotation === 270;
-                  const imageUrls = getPaperUrls(previewPaper.url);
-                  return (
-                    <div
-                      className="preview-media-viewport"
-                      onMouseDown={handleMouseDown}
-                      onMouseMove={handleMouseMove}
-                      onMouseUp={handleMouseUp}
-                      onMouseLeave={handleMouseUp}
-                      onTouchStart={handleTouchStart}
-                      onTouchMove={handleTouchMove}
-                      onTouchEnd={handleTouchEnd}
-                      onDoubleClick={handleDoubleClick}
-                      onWheel={handleWheel}
-                      style={{
-                        height: '100%',
-                        width: '100%',
-                        overflowX: 'hidden',
-                        overflowY: 'auto',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'flex-start',
-                        alignItems: 'center',
-                        gap: '2rem',
-                        cursor: zoomScale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default',
-                        touchAction: zoomScale === 1 ? 'pan-y' : 'none',
-                        padding: '2rem 1rem 8rem 1rem'
-                      }}
-                    >
-                      {imageUrls.map((url, idx) => (
-                        <div key={idx} style={{ position: 'relative', width: isHorizontalLayout ? '100%' : 'auto', maxWidth: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <img
-                            src={url}
-                            alt={`Page ${idx + 1}`}
-                            style={{
-                              transform: `translate(${zoomOffset.x}px, ${zoomOffset.y}px) scale(${zoomScale}) rotate(${rotation}deg)`,
-                              transformOrigin: 'center top',
-                              transition: isDragging ? 'none' : 'transform 0.12s cubic-bezier(0.16, 1, 0.3, 1)',
-                              width: isHorizontalLayout ? '100%' : 'auto',
-                              height: 'auto',
-                              maxWidth: '100%',
-                              maxHeight: isHorizontalLayout ? 'none' : '85vh',
-                              objectFit: 'contain',
-                              userSelect: 'none',
-                              pointerEvents: 'none',
-                              boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-                              borderRadius: '8px',
-                              border: '1px solid rgba(255, 255, 255, 0.05)'
-                            }}
-                          />
-                          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.72rem', marginTop: '0.50rem', fontWeight: 600 }}>Page {idx + 1} of {imageUrls.length}</span>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()
-              ) : (
-                <iframe
-                  title="Paper Preview"
-                  src={getPaperUrls(previewPaper.url)[0] || ''}
-                  width="100%"
-                  height="100%"
-                  style={{ border: 'none' }}
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
