@@ -110,8 +110,13 @@ const convertImagesToPDF = async (base64Images) => {
     }
   }
 
-  // Generate base64 DataURL of the compiled PDF
-  return doc.output('datauristring');
+  // Generate standard base64 DataURL of the compiled PDF from blob to avoid extra filename parameter in header
+  const pdfBlob = doc.output('blob');
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.readAsDataURL(pdfBlob);
+  });
 };
 
 const parsePaperText = (text, existingPapers) => {
