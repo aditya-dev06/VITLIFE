@@ -1030,6 +1030,9 @@ if (MONGODB_URI) {
             console.log(`Seeded ${seeds.length} papers to MongoDB Atlas.`);
           }
         }
+      } catch (e) {
+        console.error("Error seeding papers to MongoDB:", e.message);
+      }
       // Sync local users to MongoDB on startup to recover any unsaved profile/verification state
       try {
         if (fs.existsSync(USERS_FILE)) {
