@@ -3556,10 +3556,44 @@ app.get('/api/papers/moderation', authenticate, requireAdmin, async (req, res) =
 // 3. POST /api/papers - Upload a new paper (Authenticated & Guests)
 app.post('/api/papers', optionalAuthenticate, async (req, res) => {
   try {
-    const { courseCode, courseTitle, department, examType, year, semester, url, fileData, fileName, examDate } = req.body;
+    const { courseCode, courseTitle, department, examType, year, semester, url, fileData, fileName, examDate, fullText } = req.body;
 
     if (!courseCode || !courseTitle || !examType || !year || !semester) {
       return res.status(400).json({ error: 'All fields (courseCode, courseTitle, examType, year, semester) are required.' });
+    }
+
+    // Duplicate check using fullText if provided
+    if (fullText) {
+      const getSimilarity = (text1, text2) => {
+        if (!text1 || !text2) return 0;
+        const cleanWords = (text) => {
+          return text.toLowerCase()
+            .replace(/[^a-z0-9\s]/g, '')
+            .split(/\s+/)
+            .filter(w => w.length > 2);
+        };
+        const words1 = new Set(cleanWords(text1));
+        const words2 = new Set(cleanWords(text2));
+        if (words1.size === 0 || words2.size === 0) return 0;
+        let intersectionCount = 0;
+        for (const w of words1) {
+          if (words2.has(w)) {
+            intersectionCount++;
+          }
+        }
+        const unionSize = words1.size + words2.size - intersectionCount;
+        return intersectionCount / unionSize;
+      };
+
+      const existingPapers = await getPapers();
+      for (const p of existingPapers) {
+        if (p.fullText) {
+          const sim = getSimilarity(fullText, p.fullText);
+          if (sim >= 0.75) {
+            return res.status(400).json({ error: 'This question paper already exists in our database.' });
+          }
+        }
+      }
     }
 
     let fileUrl = url || '';
@@ -3664,6 +3698,7 @@ app.post('/api/papers', optionalAuthenticate, async (req, res) => {
       semester: parseInt(semester, 10) || 1,
       url: Array.isArray(fileUrl) ? fileUrl.map(u => u.trim()) : fileUrl.trim(),
       examDate: examDate ? examDate.trim() : null,
+      fullText: fullText ? fullText.trim() : '',
       uploadedBy: req.user ? req.user.email : 'Community',
       uploaderIp: uploaderIp,
       status: isAdmin ? 'approved' : 'pending',

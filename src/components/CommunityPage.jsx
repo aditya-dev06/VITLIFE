@@ -284,69 +284,94 @@ export default function CommunityPage({ user }) {
     setError('');
     setSuccess('');
 
-    if (!courseCode || !courseTitle) {
-      setError('Please fill in all required fields.');
+    if (!selectedFiles || selectedFiles.length === 0) {
+      setError('Please select at least one file to upload.');
       return;
     }
 
     setUploadLoading(true);
     try {
       const token = localStorage.getItem('ds_ai_token');
-      const payload = {
-        courseCode,
-        courseTitle,
-        examType: uploadExamType,
-        year: uploadYear,
-        semester: uploadSemester,
-        examDate: uploadExamDate || null
-      };
+      
+      const fileDataArr = [];
+      const fileNameArr = [];
+      let fullTextCombined = '';
 
-      if (uploadMethod === 'file') {
-        if (!selectedFiles || selectedFiles.length === 0) {
-          throw new Error('Please select at least one file to upload.');
+      // 1. Load OCR worker if images are uploaded
+      let Tesseract = null;
+      let worker = null;
+      const hasImages = selectedFiles.some(f => f.type.startsWith('image/'));
+      if (hasImages) {
+        Tesseract = await loadTesseract();
+        worker = await Tesseract.createWorker('eng');
+      }
+
+      // 2. Process each file
+      for (const file of selectedFiles) {
+        // PDF size check (Vercel payload limit is 4.5MB; base64 adds ~33% overhead)
+        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+          if (file.size > 3.3 * 1024 * 1024) {
+            throw new Error(`PDF file "${file.name}" is too large (maximum 3.3MB for direct uploads). Please compress the PDF or use another file.`);
+          }
         }
 
-        const fileDataArr = [];
-        const fileNameArr = [];
+        let base64Data;
+        let finalFileName = file.name;
 
-        for (const file of selectedFiles) {
-          // PDF size check (Vercel payload limit is 4.5MB; base64 adds ~33% overhead)
-          if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-            if (file.size > 3.3 * 1024 * 1024) {
-              throw new Error(`PDF file "${file.name}" is too large (maximum 3.3MB for direct uploads due to server limits). Please compress the PDF or use the Link URL upload option instead.`);
+        if (file.type.startsWith('image/')) {
+          // Compress image client-side to fit within Vercel body limits
+          base64Data = await compressImage(file);
+          const lastDotIdx = file.name.lastIndexOf('.');
+          const baseName = lastDotIdx !== -1 ? file.name.substring(0, lastDotIdx) : 'image';
+          finalFileName = `${baseName}.jpg`;
+
+          // Run OCR to extract full text and metadata
+          if (worker) {
+            try {
+              const ret = await worker.recognize(base64Data);
+              if (ret.data && ret.data.text) {
+                fullTextCombined += ret.data.text + '\n';
+              }
+            } catch (ocrErr) {
+              console.warn('OCR page scan failed:', ocrErr);
             }
           }
-
-          let base64Data;
-          let finalFileName = file.name;
-          if (file.type.startsWith('image/')) {
-            // Compress image client-side to fit within Vercel body limits and optimize server storage
-            base64Data = await compressImage(file);
-            const lastDotIdx = file.name.lastIndexOf('.');
-            const baseName = lastDotIdx !== -1 ? file.name.substring(0, lastDotIdx) : 'image';
-            finalFileName = `${baseName}.jpg`;
-          } else {
-            const reader = new FileReader();
-            const base64Promise = new Promise((resolve, reject) => {
-              reader.onload = () => resolve(reader.result);
-              reader.onerror = (err) => reject(err);
-            });
-            reader.readAsDataURL(file);
-            base64Data = await base64Promise;
-          }
-
-          fileDataArr.push(base64Data);
-          fileNameArr.push(finalFileName);
+        } else {
+          const reader = new FileReader();
+          const base64Promise = new Promise((resolve, reject) => {
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = (err) => reject(err);
+          });
+          reader.readAsDataURL(file);
+          base64Data = await base64Promise;
         }
 
-        payload.fileData = fileDataArr.length === 1 ? fileDataArr[0] : fileDataArr;
-        payload.fileName = fileNameArr.length === 1 ? fileNameArr[0] : fileNameArr;
-      } else {
-        if (!uploadUrl) {
-          throw new Error('Please enter a document URL.');
-        }
-        payload.url = uploadUrl;
+        fileDataArr.push(base64Data);
+        fileNameArr.push(finalFileName);
       }
+
+      if (worker) {
+        await worker.terminate();
+      }
+
+      // 3. Parse combined text to extract metadata
+      const detected = parsePaperText(fullTextCombined, papers);
+      const courseCodeVal = detected.courseCode || 'UNKNOWN';
+      const courseTitleVal = detected.courseTitle || 'Scanned Question Paper';
+      const examTypeVal = detected.examType || 'MTE';
+      const yearVal = detected.year || '2024-25';
+      const semesterVal = detected.semester || '1';
+
+      const payload = {
+        courseCode: courseCodeVal,
+        courseTitle: courseTitleVal,
+        examType: examTypeVal,
+        year: yearVal,
+        semester: semesterVal,
+        fileData: fileDataArr.length === 1 ? fileDataArr[0] : fileDataArr,
+        fileName: fileNameArr.length === 1 ? fileNameArr[0] : fileNameArr,
+        fullText: fullTextCombined
+      };
 
       const headers = {
         'Content-Type': 'application/json'
@@ -364,17 +389,19 @@ export default function CommunityPage({ user }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to submit paper.');
 
-      setSuccess(data.message);
-      setCourseCode('');
-      setCourseTitle('');
-      setUploadUrl('');
+      // Clear files, close modal, and display success toast for 2 seconds
       setSelectedFiles([]);
-      setUploadExamDate('');
       setShowUploadModal(false);
+      setSuccess(`Paper for ${courseCodeVal} is in process!`);
       
+      // Auto-clear success message after 2 seconds
+      setTimeout(() => {
+        setSuccess('');
+      }, 2000);
+
       // Refresh listings
       fetchPapers();
-      if (user.role === 'admin') {
+      if (user && user.role === 'admin') {
         fetchPendingPapers();
       }
     } catch (err) {
@@ -976,158 +1003,46 @@ export default function CommunityPage({ user }) {
               </button>
             </div>
             
-            <form onSubmit={handleUploadSubmit} className="aurora-form" style={{ padding: '2rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem', maxWidth: '600px', margin: '0 auto', width: '100%' }}>
-              <div className="floating-field active">
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. MAT3002"
-                  value={courseCode}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setCourseCode(val);
-                    if (val) {
-                      const cleanCode = val.trim().toUpperCase();
-                      const match = papers.find(p => p.courseCode && p.courseCode.trim().toUpperCase() === cleanCode);
-                      if (match && match.courseTitle) {
-                        setCourseTitle(match.courseTitle);
-                      }
-                    }
-                  }}
-                  style={{ textTransform: 'uppercase' }}
-                />
-                <label className="floating-label">Course Code</label>
-              </div>
-
-              <div className="floating-field active">
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Applied Linear Algebra"
-                  value={courseTitle}
-                  onChange={(e) => setCourseTitle(e.target.value)}
-                />
-                <label className="floating-label">Course Title</label>
-              </div>
-
-              <div className="floating-field active">
-                <select value={uploadExamType} onChange={(e) => setUploadExamType(e.target.value)} className="aurora-select">
-                  {EXAM_TYPES.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </select>
-                <label className="floating-label" style={{ top: '-10px', fontSize: '0.75rem' }}>Exam Type</label>
-              </div>
-
-              <div className="floating-field active" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-                <div>
-                  <select value={uploadYear} onChange={(e) => setUploadYear(e.target.value)} className="aurora-select">
-                    {ACADEMIC_YEARS.map(y => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
-                  <label className="floating-label" style={{ top: '-10px', fontSize: '0.75rem' }}>Academic Year</label>
-                </div>
-                <div>
-                  <select value={uploadSemester} onChange={(e) => setUploadSemester(e.target.value)} className="aurora-select">
-                    {[1,2,3,4,5,6,7,8,9,10].map(s => (
-                      <option key={s} value={s.toString()}>Semester {s}</option>
-                    ))}
-                  </select>
-                  <label className="floating-label" style={{ top: '-10px', fontSize: '0.75rem' }}>Semester</label>
-                </div>
-              </div>
-
-              {/* Exam Date Field */}
-              <div className="floating-field active" style={{ marginTop: '1.25rem' }}>
-                <input
-                  type="date"
-                  placeholder="Select Exam Date"
-                  value={uploadExamDate}
-                  onChange={(e) => setUploadExamDate(e.target.value)}
-                />
-                <label className="floating-label" style={{ top: '-10px', fontSize: '0.75rem' }}>Date of Exam (Optional)</label>
-              </div>
-
-              {/* Upload Method Selector Tab */}
-              <div style={{ display: 'flex', gap: '0.25rem', margin: '1.5rem 0 1rem 0', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', padding: '0.2rem' }}>
-                <button
-                  type="button"
-                  onClick={() => setUploadMethod('file')}
-                  style={{
-                    flex: 1, padding: '0.4rem 0', borderRadius: '6px', border: 'none', cursor: 'pointer',
-                    fontSize: '0.75rem', fontWeight: '700', transition: 'all 0.2s',
-                    background: uploadMethod === 'file' ? 'hsla(var(--primary) / 0.15)' : 'transparent',
-                    color: uploadMethod === 'file' ? 'hsl(var(--primary))' : 'hsl(var(--text-muted))',
-                  }}
-                >
-                  📁 Upload File
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setUploadMethod('link')}
-                  style={{
-                    flex: 1, padding: '0.4rem 0', borderRadius: '6px', border: 'none', cursor: 'pointer',
-                    fontSize: '0.75rem', fontWeight: '700', transition: 'all 0.2s',
-                    background: uploadMethod === 'link' ? 'hsla(var(--primary) / 0.15)' : 'transparent',
-                    color: uploadMethod === 'link' ? 'hsl(var(--primary))' : 'hsl(var(--text-muted))',
-                  }}
-                >
-                  🔗 Link URL
-                </button>
-              </div>
-
-              {uploadMethod === 'file' ? (
-                 <div className="floating-field active" style={{ border: '1px dashed hsla(var(--border-glass))', padding: '1.25rem', borderRadius: '8px', background: 'rgba(255,255,255,0.01)', textAlign: 'center', position: 'relative' }}>
-                  {detectingText && (
-                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(11, 15, 25, 0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', borderRadius: '8px', zIndex: 10 }}>
-                      <span className="aurora-spinner" style={{ width: '24px', height: '24px' }} />
-                      <span style={{ fontSize: '0.8rem', color: 'hsl(var(--primary))', fontWeight: 600 }}>🔍 Reading paper details...</span>
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    accept=".pdf,image/*"
-                    multiple
-                    required
-                    onChange={async (e) => {
-                      const files = Array.from(e.target.files || []);
-                      setSelectedFiles(files);
-                      if (files.length > 0 && files[0].type.startsWith('image/')) {
-                        await handleAutoDetect(files[0]);
-                      }
-                    }}
-                    style={{ display: 'none' }}
-                    id="paper-file-upload-input"
-                  />
-                  <label htmlFor="paper-file-upload-input" style={{ cursor: 'pointer', display: 'block' }}>
-                    <span style={{ fontSize: '1.8rem', display: 'block', marginBottom: '0.5rem' }}>📤</span>
-                    <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'hsl(var(--primary))' }}>
-                      {selectedFiles.length > 0 
-                        ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`) 
-                        : 'Select File(s) from Gallery/Device'}
-                    </span>
-                    <span style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))', display: 'block', marginTop: '0.2rem' }}>
-                      Supports PDF and multiple Images
-                    </span>
-                  </label>
-                </div>
-              ) : (
-                <div className="floating-field active">
-                  <input
-                    type="url"
-                    required
-                    placeholder="https://drive.google.com/..."
-                    value={uploadUrl}
-                    onChange={(e) => setUploadUrl(e.target.value)}
-                  />
-                  <label className="floating-label">PDF / Document URL</label>
-                  <p className="aurora-form-hint">Host your file on Google Drive, OneDrive, or similar and paste the public link.</p>
+            <form onSubmit={handleUploadSubmit} className="aurora-form" style={{ padding: '2rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem', maxWidth: '600px', margin: '0 auto', width: '100%', position: 'relative' }}>
+              
+              {/* Scan and Upload Loader overlay */}
+              {uploadLoading && (
+                <div style={{ position: 'absolute', inset: 0, background: 'rgba(11, 15, 25, 0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', zIndex: 100, borderRadius: '8px' }}>
+                  <span className="aurora-spinner" style={{ width: '40px', height: '40px', borderTopColor: 'hsl(var(--primary))' }} />
+                  <span style={{ fontSize: '1rem', color: 'hsl(var(--primary))', fontWeight: 700, letterSpacing: '0.5px' }}>🔍 SCANNING PAPER DETAILS...</span>
+                  <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', textAlign: 'center', maxWidth: '80%', lineHeight: '1.4' }}>
+                    Reading full question paper and cross-checking against database to prevent duplicates. Please wait a moment.
+                  </span>
                 </div>
               )}
 
-              <button type="submit" className="aurora-submit-btn" disabled={uploadLoading} style={{ marginTop: '1.5rem' }}>
-                {uploadLoading ? <span className="aurora-spinner" /> : 'Submit Paper'}
+              {error && <div className="aurora-error" style={{ animation: 'shake 0.3s' }}>⚠️ {error}</div>}
+
+              <div className="floating-field active" style={{ border: '1px dashed hsla(var(--border-glass))', padding: '2rem 1.5rem', borderRadius: '12px', background: 'rgba(255,255,255,0.01)', textAlign: 'center' }}>
+                <input
+                  type="file"
+                  accept=".pdf,image/*"
+                  multiple
+                  required
+                  onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
+                  style={{ display: 'none' }}
+                  id="paper-file-upload-input"
+                />
+                <label htmlFor="paper-file-upload-input" style={{ cursor: 'pointer', display: 'block' }}>
+                  <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '0.8rem' }}>📤</span>
+                  <span style={{ fontSize: '0.95rem', fontWeight: '700', color: 'hsl(var(--primary))', display: 'block' }}>
+                    {selectedFiles.length > 0 
+                      ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`) 
+                      : 'Upload Question Paper'}
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', display: 'block', marginTop: '0.4rem' }}>
+                    Supports PDF and multiple Images
+                  </span>
+                </label>
+              </div>
+
+              <button type="submit" className="aurora-submit-btn" disabled={uploadLoading} style={{ marginTop: '1rem', padding: '0.75rem 1rem' }}>
+                {uploadLoading ? 'Scanning & Submitting...' : 'Upload & Auto-Fill'}
               </button>
             </form>
           </div>
