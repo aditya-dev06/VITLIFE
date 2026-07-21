@@ -482,44 +482,26 @@ export default function CommunityPage({ user }) {
     try {
       const token = localStorage.getItem('ds_ai_token');
       
-      const imageDatas = [];
-      const pdfBuffers = [];
-      let fullTextCombined = '';
+      const imageFiles = selectedFiles.filter(f => f.type.startsWith('image/'));
+      const pdfFiles = selectedFiles.filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
 
-      // 1. Initialize Tesseract worker to support image OCR & scanned PDF OCR fallbacks
+      const uploadTasks = [];
+
+      // 1. Initialize Tesseract worker
       setSuccess('⚙️ Initializing analysis engine...');
       const Tesseract = await loadTesseract();
       const worker = await Tesseract.createWorker('eng');
 
-      // 2. Process each file
-      for (let i = 0; i < selectedFiles.length; i++) {
-        const file = selectedFiles[i];
-        setSuccess(`🔍 Analyzing file ${i + 1} of ${selectedFiles.length}: ${file.name}...`);
+      // 2. Prepare Task for Images (if any images are selected, compile them into a single PDF)
+      if (imageFiles.length > 0) {
+        setSuccess(`🔍 Analyzing ${imageFiles.length} images...`);
+        const imageDatas = [];
+        let fullTextCombined = '';
 
-        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-          // PDF size check (Vercel payload limit is 4.5MB; base64 adds ~33% overhead)
-          if (file.size > 3.3 * 1024 * 1024) {
-            throw new Error(`PDF file "${file.name}" is too large (maximum 3.3MB). Please compress the PDF first.`);
-          }
-          
-          const arrayBuffer = await readAsArrayBuffer(file);
-          pdfBuffers.push(arrayBuffer);
-
-          // Extract text for auto-fill / duplicate checking
-          try {
-            const extractedText = await extractTextFromPDF(arrayBuffer, worker);
-            if (extractedText) {
-              fullTextCombined += extractedText + '\n';
-            }
-          } catch (pdfReadErr) {
-            console.warn('Failed to extract text from PDF:', pdfReadErr);
-          }
-        } else if (file.type.startsWith('image/')) {
-          // Compress image client-side to fit within Vercel body limits
+        for (const file of imageFiles) {
           const base64Data = await compressImage(file);
           imageDatas.push(base64Data);
 
-          // Run OCR to extract full text and metadata
           try {
             const ret = await worker.recognize(base64Data);
             if (ret.data && ret.data.text) {
@@ -529,100 +511,129 @@ export default function CommunityPage({ user }) {
             console.warn('OCR page scan failed:', ocrErr);
           }
         }
+
+        const detected = parsePaperText(fullTextCombined, papers);
+        const courseCodeVal = detected.courseCode || 'UNKNOWN';
+        const courseTitleVal = detected.courseTitle || 'Scanned Question Paper';
+        const examTypeVal = detected.examType || 'MTE';
+        const yearVal = detected.year || '2024-25';
+        const semesterVal = detected.semester || '1';
+
+        uploadTasks.push({
+          type: 'images',
+          fileName: `${courseCodeVal.toLowerCase()}_scanned_${Date.now()}.pdf`,
+          courseCode: courseCodeVal,
+          courseTitle: courseTitleVal,
+          examType: examTypeVal,
+          year: yearVal,
+          semester: semesterVal,
+          fullText: fullTextCombined,
+          compileFileData: async () => {
+            return await convertImagesToPDF(imageDatas);
+          }
+        });
       }
 
-      // Terminate OCR worker
+      // 3. Prepare Task for each PDF
+      for (let i = 0; i < pdfFiles.length; i++) {
+        const file = pdfFiles[i];
+        setSuccess(`🔍 Analyzing PDF ${i + 1} of ${pdfFiles.length}: ${file.name}...`);
+
+        if (file.size > 3.3 * 1024 * 1024) {
+          throw new Error(`PDF file "${file.name}" is too large (maximum 3.3MB). Please compress the PDF first.`);
+        }
+
+        const arrayBuffer = await readAsArrayBuffer(file);
+        let fullTextCombined = '';
+
+        try {
+          const extractedText = await extractTextFromPDF(arrayBuffer, worker);
+          if (extractedText) {
+            fullTextCombined = extractedText;
+          }
+        } catch (pdfReadErr) {
+          console.warn('Failed to extract text from PDF:', pdfReadErr);
+        }
+
+        const detected = parsePaperText(fullTextCombined, papers);
+        // Fallback metadata based on file name if OCR couldn't find details
+        let courseCodeVal = detected.courseCode;
+        if (!courseCodeVal) {
+          const nameCodeMatch = file.name.match(/\b([A-Z]{3,4}\d{3,4})\b/i);
+          courseCodeVal = nameCodeMatch ? nameCodeMatch[1].toUpperCase() : 'UNKNOWN';
+        }
+        const courseTitleVal = detected.courseTitle || file.name.replace(/\.[^/.]+$/, ""); // strip extension
+        const examTypeVal = detected.examType || 'MTE';
+        const yearVal = detected.year || '2024-25';
+        const semesterVal = detected.semester || '1';
+
+        uploadTasks.push({
+          type: 'pdf',
+          fileName: file.name,
+          courseCode: courseCodeVal,
+          courseTitle: courseTitleVal,
+          examType: examTypeVal,
+          year: yearVal,
+          semester: semesterVal,
+          fullText: fullTextCombined,
+          compileFileData: async () => {
+            return await readAsDataURL(file);
+          }
+        });
+      }
+
+      // Terminate worker
       await worker.terminate();
 
-      // 3. Parse combined text to extract metadata
-      const detected = parsePaperText(fullTextCombined, papers);
-      const courseCodeVal = detected.courseCode || 'UNKNOWN';
-      const courseTitleVal = detected.courseTitle || 'Scanned Question Paper';
-      const examTypeVal = detected.examType || 'MTE';
-      const yearVal = detected.year || '2024-25';
-      const semesterVal = detected.semester || '1';
+      // 4. Run all upload tasks
+      let successCount = 0;
+      for (let i = 0; i < uploadTasks.length; i++) {
+        const task = uploadTasks[i];
+        setSuccess(`🚀 Uploading paper ${i + 1} of ${uploadTasks.length}: ${task.fileName}...`);
 
-      // 4. Compile/Merge files into a single PDF
-      let finalFileData = '';
-      let finalFileNameVal = '';
+        const fileData = await task.compileFileData();
+        const payload = {
+          courseCode: task.courseCode,
+          courseTitle: task.courseTitle,
+          examType: task.examType,
+          year: task.year,
+          semester: task.semester,
+          fileData,
+          fileName: task.fileName,
+          fullText: task.fullText
+        };
 
-      if (pdfBuffers.length > 0 && imageDatas.length === 0) {
-        // ONLY PDFs
-        if (pdfBuffers.length === 1) {
-          setSuccess('📄 Preparing PDF for upload...');
-          finalFileData = await readAsDataURL(selectedFiles[0]);
-          finalFileNameVal = selectedFiles[0].name;
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const res = await fetch('/api/papers', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          successCount++;
         } else {
-          setSuccess('📄 Merging multiple PDFs...');
-          finalFileData = await mergePDFs(pdfBuffers);
-          const codeClean = courseCodeVal !== 'UNKNOWN' ? courseCodeVal.toLowerCase() : 'paper';
-          finalFileNameVal = `${codeClean}_merged_${Date.now()}.pdf`;
+          console.warn(`Failed to submit ${task.fileName}:`, data.error);
+          if (uploadTasks.length === 1) {
+            throw new Error(data.error || 'Failed to submit paper.');
+          }
         }
-      } else if (imageDatas.length > 0 && pdfBuffers.length === 0) {
-        // ONLY IMAGES
-        setSuccess('📄 Compiling pages into a single PDF...');
-        finalFileData = await convertImagesToPDF(imageDatas);
-        const codeClean = courseCodeVal !== 'UNKNOWN' ? courseCodeVal.toLowerCase() : 'paper';
-        finalFileNameVal = `${codeClean}_scanned_${Date.now()}.pdf`;
-      } else if (imageDatas.length > 0 && pdfBuffers.length > 0) {
-        // MIXED IMAGES AND PDFs
-        setSuccess('📄 Compiling images and merging with PDFs...');
-        const tempPdfBase64 = await convertImagesToPDF(imageDatas);
-        
-        // Convert base64 dataURI to ArrayBuffer
-        const base64Clean = tempPdfBase64.substring(tempPdfBase64.indexOf(',') + 1);
-        const binaryStr = atob(base64Clean);
-        const len = binaryStr.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryStr.charCodeAt(i);
-        }
-        const tempPdfBuffer = bytes.buffer;
-
-        // Merge the image PDF buffer with all uploaded PDF buffers
-        finalFileData = await mergePDFs([tempPdfBuffer, ...pdfBuffers]);
-        const codeClean = courseCodeVal !== 'UNKNOWN' ? courseCodeVal.toLowerCase() : 'paper';
-        finalFileNameVal = `${codeClean}_compiled_${Date.now()}.pdf`;
       }
 
-      setSuccess('🚀 Uploading paper in background...');
-
-      const payload = {
-        courseCode: courseCodeVal,
-        courseTitle: courseTitleVal,
-        examType: examTypeVal,
-        year: yearVal,
-        semester: semesterVal,
-        fileData: finalFileData,
-        fileName: finalFileNameVal,
-        fullText: fullTextCombined
-      };
-
-      const headers = {
-        'Content-Type': 'application/json'
-      };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      const res = await fetch('/api/papers', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to submit paper.');
-
-      // Clear files, close modal, and display success toast for 2 seconds
+      // Clear files, close modal, and display success toast
       setSelectedFiles([]);
       setShowUploadModal(false);
-      setSuccess(`Paper for ${courseCodeVal} is in process!`);
+      setSuccess(`Successfully processed ${successCount} paper(s)!`);
       
-      // Auto-clear success message after 2 seconds
+      // Auto-clear success message after 3 seconds
       setTimeout(() => {
         setSuccess('');
-      }, 2000);
+      }, 3000);
 
       // Refresh listings
       fetchPapers();
@@ -630,7 +641,8 @@ export default function CommunityPage({ user }) {
         fetchPendingPapers();
       }
     } catch (err) {
-      setError(err.message);
+      console.error(err);
+      setError(err.message || 'Failed to process uploads. Please try again.');
     } finally {
       setUploadLoading(false);
     }
