@@ -12,6 +12,79 @@ const isImageUrl = (url) => {
   return imageRegex.test(url) || url.includes('/image/upload/');
 };
 
+const loadTesseract = () => {
+  return new Promise((resolve, reject) => {
+    if (window.Tesseract) {
+      resolve(window.Tesseract);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    script.onload = () => resolve(window.Tesseract);
+    script.onerror = (err) => reject(new Error('Failed to load OCR engine.'));
+    document.head.appendChild(script);
+  });
+};
+
+const parsePaperText = (text, existingPapers) => {
+  const result = {};
+  
+  // 1. Extract Course Code (e.g. MAT3002, CSE101)
+  const codeMatch = text.match(/\b([A-Z]{3,4}\d{3,4})\b/i);
+  if (codeMatch) {
+    const code = codeMatch[1].toUpperCase();
+    result.courseCode = code;
+    
+    // Check if we can autofill the title from existing papers database
+    const match = existingPapers.find(p => p.courseCode && p.courseCode.trim().toUpperCase() === code);
+    if (match && match.courseTitle) {
+      result.courseTitle = match.courseTitle;
+    }
+  }
+
+  // 2. Extract Exam Type
+  const lowerText = text.toLowerCase();
+  if (lowerText.includes('mid term') || lowerText.includes('mte') || lowerText.includes('midterm')) {
+    result.examType = 'MTE';
+  } else if (lowerText.includes('term end') || lowerText.includes('tee') || lowerText.includes('fat') || lowerText.includes('final assessment')) {
+    result.examType = 'TEE';
+  } else if (lowerText.includes('cat 1') || lowerText.includes('cat-1')) {
+    result.examType = 'CAT-1';
+  } else if (lowerText.includes('cat 2') || lowerText.includes('cat-2')) {
+    result.examType = 'CAT-2';
+  }
+
+  // 3. Extract Academic Year (e.g., 2024-25)
+  const yearMatch = text.match(/\b(202\d)[-/](2\d)\b/);
+  if (yearMatch) {
+    result.year = `${yearMatch[1]}-${yearMatch[2]}`;
+  } else {
+    const fullYearMatch = text.match(/\b(202\d)[-/](202\d)\b/);
+    if (fullYearMatch) {
+      result.year = `${fullYearMatch[1]}-${fullYearMatch[2].substring(2)}`;
+    }
+  }
+
+  // 4. Extract Semester
+  const semMatch = text.match(/\bsem(?:ester)?\s*([0-9IVX]+)\b/i);
+  if (semMatch) {
+    const semVal = semMatch[1].toUpperCase();
+    if (semVal === 'I' || semVal === '1') result.semester = '1';
+    else if (semVal === 'II' || semVal === '2') result.semester = '2';
+    else if (semVal === 'III' || semVal === '3') result.semester = '3';
+    else if (semVal === 'IV' || semVal === '4') result.semester = '4';
+    else if (semVal === 'V' || semVal === '5') result.semester = '5';
+    else if (semVal === 'VI' || semVal === '6') result.semester = '6';
+  } else {
+    const alternateSemMatch = text.match(/\b([1-9])(?:st|nd|rd|th)?\s*sem(?:ester)?\b/i);
+    if (alternateSemMatch) {
+      result.semester = alternateSemMatch[1];
+    }
+  }
+
+  return result;
+};
+
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -73,6 +146,7 @@ export default function CommunityPage({ user }) {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploadExamDate, setUploadExamDate] = useState('');
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [detectingText, setDetectingText] = useState(false);
 
 
 
@@ -107,6 +181,37 @@ export default function CommunityPage({ user }) {
       papersList: coursePapers
     };
   })();
+
+  const handleAutoDetect = async (file) => {
+    setDetectingText(true);
+    setError('');
+    setSuccess('');
+    try {
+      const compressedBase64 = await compressImage(file);
+      const Tesseract = await loadTesseract();
+      const worker = await Tesseract.createWorker('eng');
+      const ret = await worker.recognize(compressedBase64);
+      await worker.terminate();
+      
+      const text = ret.data.text;
+      const detected = parsePaperText(text, papers);
+      
+      let filledAny = false;
+      if (detected.courseCode) { setCourseCode(detected.courseCode); filledAny = true; }
+      if (detected.courseTitle) { setCourseTitle(detected.courseTitle); filledAny = true; }
+      if (detected.examType) { setUploadExamType(detected.examType); filledAny = true; }
+      if (detected.year) { setUploadYear(detected.year); filledAny = true; }
+      if (detected.semester) { setUploadSemester(detected.semester); filledAny = true; }
+      
+      if (filledAny) {
+        setSuccess('✨ Automatically detected paper details from scan!');
+      }
+    } catch (err) {
+      console.warn('Auto-detect failed:', err);
+    } finally {
+      setDetectingText(false);
+    }
+  };
 
   const fetchPapers = useCallback(async () => {
     setLoading(true);
@@ -973,13 +1078,25 @@ export default function CommunityPage({ user }) {
               </div>
 
               {uploadMethod === 'file' ? (
-                 <div className="floating-field active" style={{ border: '1px dashed hsla(var(--border-glass))', padding: '1.25rem', borderRadius: '8px', background: 'rgba(255,255,255,0.01)', textAlign: 'center' }}>
+                 <div className="floating-field active" style={{ border: '1px dashed hsla(var(--border-glass))', padding: '1.25rem', borderRadius: '8px', background: 'rgba(255,255,255,0.01)', textAlign: 'center', position: 'relative' }}>
+                  {detectingText && (
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(11, 15, 25, 0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', borderRadius: '8px', zIndex: 10 }}>
+                      <span className="aurora-spinner" style={{ width: '24px', height: '24px' }} />
+                      <span style={{ fontSize: '0.8rem', color: 'hsl(var(--primary))', fontWeight: 600 }}>🔍 Reading paper details...</span>
+                    </div>
+                  )}
                   <input
                     type="file"
                     accept=".pdf,image/*"
                     multiple
                     required
-                    onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
+                    onChange={async (e) => {
+                      const files = Array.from(e.target.files || []);
+                      setSelectedFiles(files);
+                      if (files.length > 0 && files[0].type.startsWith('image/')) {
+                        await handleAutoDetect(files[0]);
+                      }
+                    }}
                     style={{ display: 'none' }}
                     id="paper-file-upload-input"
                   />
