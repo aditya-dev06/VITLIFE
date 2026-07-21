@@ -3662,7 +3662,7 @@ app.post('/api/papers', optionalAuthenticate, async (req, res) => {
       examType: examType.trim(),
       year: year.trim(),
       semester: parseInt(semester, 10) || 1,
-      url: fileUrl.trim(),
+      url: Array.isArray(fileUrl) ? fileUrl.map(u => u.trim()) : fileUrl.trim(),
       examDate: examDate ? examDate.trim() : null,
       uploadedBy: req.user ? req.user.email : 'Community',
       uploaderIp: uploaderIp,
