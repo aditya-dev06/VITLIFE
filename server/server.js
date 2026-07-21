@@ -306,18 +306,11 @@ const createSession = async (email, token, req) => {
 
     if (db) {
       try {
-        // Enforce FIFO Session Limit
-        const sessionCount = await db.collection('sessions').countDocuments({ email: sessionDoc.email });
-        if (sessionCount >= MAX_SESSIONS_PER_USER) {
-          const oldestSession = await db.collection('sessions')
-            .find({ email: sessionDoc.email })
-            .sort({ createdAt: 1 })
-            .limit(1)
-            .toArray();
-          if (oldestSession.length > 0) {
-            await db.collection('sessions').deleteOne({ _id: oldestSession[0]._id });
-            notifySessionRevoked(oldestSession[0].tokenHash);
-          }
+        // Enforce single active session by revoking all other tokens for this user
+        const existingSessions = await db.collection('sessions').find({ email: sessionDoc.email }).toArray();
+        for (const oldSession of existingSessions) {
+          await db.collection('sessions').deleteOne({ _id: oldSession._id });
+          notifySessionRevoked(oldSession.tokenHash);
         }
         await db.collection('sessions').insertOne(sessionDoc);
         return;
@@ -327,12 +320,11 @@ const createSession = async (email, token, req) => {
     }
 
     // Fallback to in-memory map
-    const userSessions = Array.from(inMemorySessions.values()).filter(s => s.email === sessionDoc.email);
-    if (userSessions.length >= MAX_SESSIONS_PER_USER) {
-      userSessions.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-      const oldest = userSessions[0];
-      inMemorySessions.delete(oldest.tokenHash);
-      notifySessionRevoked(oldest.tokenHash);
+    for (const [key, oldSession] of inMemorySessions.entries()) {
+      if (oldSession.email === sessionDoc.email) {
+        inMemorySessions.delete(key);
+        notifySessionRevoked(oldSession.tokenHash);
+      }
     }
     inMemorySessions.set(tokenHash, sessionDoc);
   } catch (err) {

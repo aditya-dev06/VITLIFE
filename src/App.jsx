@@ -22,6 +22,20 @@ const FeedbackModal = lazy(() => import('./components/FeedbackModal'));
 if (!window.fetch.__isWrapped) {
   const originalFetch = window.fetch;
   window.fetch = async function (...args) {
+    let requestToken = null;
+    if (args[1] && args[1].headers) {
+      const headers = args[1].headers;
+      let authHeader = null;
+      if (typeof headers.get === 'function') {
+        authHeader = headers.get('Authorization') || headers.get('authorization');
+      } else {
+        authHeader = headers['Authorization'] || headers['authorization'];
+      }
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        requestToken = authHeader.split(' ')[1];
+      }
+    }
+
     const response = await originalFetch(...args);
     if (response.status === 401 || response.status === 403) {
       const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
@@ -34,7 +48,10 @@ if (!window.fetch.__isWrapped) {
         url.includes('/api/health/smtp')
       );
       if (!isPublicRoute) {
-        window.dispatchEvent(new CustomEvent('session-expired'));
+        const currentToken = localStorage.getItem('ds_ai_token');
+        if (requestToken && requestToken === currentToken) {
+          window.dispatchEvent(new CustomEvent('session-expired'));
+        }
       }
     }
     return response;
