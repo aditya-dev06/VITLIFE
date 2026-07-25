@@ -3952,6 +3952,18 @@ app.get('/api/papers', optionalAuthenticate, async (req, res) => {
   }
 });
 
+// 1a. GET /api/ocr/vision - Health/Status info for browser navigation
+app.get('/api/ocr/vision', (req, res) => {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.Gemini_API_Key || process.env.GOOGLE_AI_KEY || process.env.gemini_api_key;
+  res.json({
+    status: 'online',
+    method: 'POST',
+    endpoint: '/api/ocr/vision',
+    geminiConfigured: !!apiKey,
+    message: 'AI Vision OCR Endpoint is active and ready. Send an HTTP POST request with imageBase64 or pdfBuffer to scan exam papers.'
+  });
+});
+
 // 1b. POST /api/ocr/vision - Ultra-fast Server AI Vision OCR endpoint using Gemini 1.5 Flash
 app.post('/api/ocr/vision', optionalAuthenticate, async (req, res) => {
   try {
