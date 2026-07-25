@@ -4031,6 +4031,34 @@ Return ONLY a raw valid JSON object (no markdown, no backticks) matching this ex
     }
 
     if (!apiRes) {
+      // Auto-discover available models for this API key via ModelService
+      try {
+        const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        if (listRes.ok) {
+          const listData = await listRes.json();
+          const availableModels = (listData.models || [])
+            .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+            .map(m => m.name);
+          
+          for (const fullModelName of availableModels) {
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/${fullModelName}:generateContent?key=${apiKey}`;
+            const res = await fetch(apiUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+              apiRes = res;
+              break;
+            }
+          }
+        }
+      } catch (discErr) {
+        console.warn('Model discovery error:', discErr.message);
+      }
+    }
+
+    if (!apiRes) {
       throw new Error(`Vision AI service error: ${lastErrText}`);
     }
 
