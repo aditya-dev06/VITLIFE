@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, X } from 'lucide-react';
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/InputGroup';
 
@@ -51,6 +52,42 @@ const loadJsPDF = () => {
     script.onerror = (err) => reject(new Error('Failed to load PDF engine.'));
     document.head.appendChild(script);
   });
+};
+
+const preprocessCanvasForOCR = (canvas) => {
+  try {
+    const ctx = canvas.getContext('2d');
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    
+    // Convert to high-contrast grayscale & binarization (black text on white paper)
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      const val = gray < 160 ? 0 : 255;
+      data[i] = val;
+      data[i + 1] = val;
+      data[i + 2] = val;
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
+  } catch (e) {
+    console.warn('OCR preprocessing warning:', e);
+  }
+  return canvas;
+};
+
+const cleanOCRText = (text) => {
+  if (!text) return '';
+  return text
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => {
+      if (!line) return false;
+      // Filter out noisy gibberish lines with few real characters
+      const alphaNum = (line.match(/[a-zA-Z0-9]/g) || []).length;
+      return alphaNum >= 3 || line.length > 8;
+    })
+    .join('\n');
 };
 
 const getImageDimensions = (base64) => {
@@ -130,7 +167,13 @@ const loadPdfJS = () => {
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js';
     script.onload = () => {
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+      try {
+        if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+        }
+      } catch (e) {
+        console.warn('PDF.js worker setup warning:', e);
+      }
       resolve(window.pdfjsLib);
     };
     script.onerror = (err) => reject(new Error('Failed to load PDF reader engine.'));
@@ -154,24 +197,38 @@ const loadPdfLib = () => {
 
 const extractTextFromPDF = async (arrayBuffer, tesseractWorker) => {
   const pdfjsLib = await loadPdfJS();
-  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-  const pdf = await loadingTask.promise;
+  const uint8Data = new Uint8Array(arrayBuffer);
   
+  let loadingTask;
+  try {
+    loadingTask = pdfjsLib.getDocument({ data: uint8Data });
+  } catch (err) {
+    loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  }
+  
+  const pdf = await loadingTask.promise;
   let combinedText = '';
   
-  for (let i = 1; i <= pdf.numPages; i++) {
+  const maxPages = Math.min(pdf.numPages, 5);
+  for (let i = 1; i <= maxPages; i++) {
     const page = await pdf.getPage(i);
-    const textContent = await page.getTextContent();
-    const pageText = textContent.items.map(item => item.str).join(' ');
+    let pageText = '';
+    try {
+      const textContent = await page.getTextContent();
+      pageText = textContent.items.map(item => item.str).join(' ');
+    } catch (tErr) {
+      console.warn(`Text extraction failed for page ${i}:`, tErr);
+    }
     
-    // Fall back to OCR if digital text is sparse (< 300 chars) or does not contain a course code pattern
-    const hasCourseCode = /\b[a-zA-Z]{3,4}\d{3,4}\b/.test(pageText);
-    const isSparse = pageText.trim().length < 300;
+    combinedText += pageText + '\n';
+    
+    // Perform OCR if text is sparse (< 200 chars) or missing course code
+    const isSparse = pageText.trim().length < 200;
+    const hasCourseCode = /\b[A-Za-z]{3,4}\d{3,4}\b/.test(pageText);
     
     if ((isSparse || !hasCourseCode) && tesseractWorker) {
       try {
-        const scale = 1.5;
-        const viewport = page.getViewport({ scale });
+        const viewport = page.getViewport({ scale: 2.0 }); // 2.0x scale for sharp OCR
         const canvas = document.createElement('canvas');
         canvas.width = viewport.width;
         canvas.height = viewport.height;
@@ -182,24 +239,20 @@ const extractTextFromPDF = async (arrayBuffer, tesseractWorker) => {
           viewport: viewport
         }).promise;
         
-        const canvasBase64 = canvas.toDataURL('image/jpeg', 0.85);
-        const ret = await tesseractWorker.recognize(canvasBase64);
-        if (ret.data && ret.data.text) {
-          // Combine both for maximum metadata matching accuracy
-          combinedText += pageText + '\n' + ret.data.text + '\n';
-        } else {
-          combinedText += pageText + '\n';
+        // High-contrast binarization preprocessing before OCR
+        preprocessCanvasForOCR(canvas);
+        
+        const ocrResult = await tesseractWorker.recognize(canvas);
+        if (ocrResult && ocrResult.data && ocrResult.data.text) {
+          combinedText += ocrResult.data.text + '\n';
         }
       } catch (ocrErr) {
-        console.warn(`OCR fallback failed for PDF page ${i}:`, ocrErr);
-        combinedText += pageText + '\n';
+        console.warn(`OCR page render failed for PDF page ${i}:`, ocrErr);
       }
-    } else {
-      combinedText += pageText + '\n';
     }
   }
   
-  return combinedText;
+  return cleanOCRText(combinedText);
 };
 
 const mergePDFs = async (pdfArrayBuffers) => {
@@ -225,8 +278,9 @@ const mergePDFs = async (pdfArrayBuffers) => {
 
 const parsePaperText = (text, existingPapers) => {
   const result = {};
+  if (!text) return result;
   
-  // 1. Extract Course Code (e.g. MAT3002, CSE101)
+  // 1. Extract Course Code (e.g. MAT3002, CSE101, CSD2001)
   const codeMatch = text.match(/\b([A-Z]{3,4}\d{3,4})\b/i);
   if (codeMatch) {
     const code = codeMatch[1].toUpperCase();
@@ -251,7 +305,29 @@ const parsePaperText = (text, existingPapers) => {
     result.examType = 'CAT-2';
   }
 
-  // 3. Extract Academic Year (e.g., 2024-25)
+  // 3. Extract Exam Month
+  const monthRegex = /\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b/i;
+  const monthMatch = text.match(monthRegex);
+  if (monthMatch) {
+    const raw = monthMatch[1].toLowerCase();
+    const monthMap = {
+      jan: 'Jan', january: 'Jan',
+      feb: 'Feb', february: 'Feb',
+      mar: 'Mar', march: 'Mar',
+      apr: 'Apr', april: 'Apr',
+      may: 'May',
+      jun: 'Jun', june: 'Jun',
+      jul: 'Jul', july: 'Jul',
+      aug: 'Aug', august: 'Aug',
+      sep: 'Sept', sept: 'Sept', september: 'Sept',
+      oct: 'Oct', october: 'Oct',
+      nov: 'Nov', november: 'Nov',
+      dec: 'Dec', december: 'Dec'
+    };
+    result.month = monthMap[raw] || (raw.charAt(0).toUpperCase() + raw.slice(1, 3));
+  }
+
+  // 4. Extract Academic Year (e.g., 2024-25, 2025-26)
   const yearMatch = text.match(/\b(202\d)[-/](2\d)\b/);
   if (yearMatch) {
     result.year = `${yearMatch[1]}-${yearMatch[2]}`;
@@ -262,7 +338,7 @@ const parsePaperText = (text, existingPapers) => {
     }
   }
 
-  // 4. Extract Semester
+  // 5. Extract Semester
   const semMatch = text.match(/\bsem(?:ester)?\s*([0-9IVX]+)\b/i);
   if (semMatch) {
     const semVal = semMatch[1].toUpperCase();
@@ -320,7 +396,7 @@ const compressImage = (file) => {
 };
 
 
-export default function CommunityPage({ user }) {
+function CommunityPage({ user }) {
   const [activeSubTab, setActiveSubTab] = useState('pyq'); // 'pyq' | 'chats' | 'marketplace'
   const [papers, setPapers] = useState([]);
   const [pendingPapers, setPendingPapers] = useState([]);
@@ -329,6 +405,60 @@ export default function CommunityPage({ user }) {
   const debounceRef = useRef(null);
   const [filterExamType, setFilterExamType] = useState('');
   const [filterYear, setFilterYear] = useState('');
+
+  // Exam Type Base UI Dropdown State
+  const [examTypeOpen, setExamTypeOpen] = useState(false);
+  const examTypeRef = useRef(null);
+  const examTypeBtnRef = useRef(null);
+  const [examTypeCoords, setExamTypeCoords] = useState({ top: 0, left: 0 });
+
+  const toggleExamTypeDropdown = () => {
+    if (!examTypeOpen && examTypeBtnRef.current) {
+      const rect = examTypeBtnRef.current.getBoundingClientRect();
+      setExamTypeCoords({
+        top: rect.bottom + 6,
+        left: Math.max(10, rect.left)
+      });
+    }
+    setExamTypeOpen(prev => !prev);
+  };
+
+  // Year Base UI Dropdown State
+  const [yearOpen, setYearOpen] = useState(false);
+  const yearRef = useRef(null);
+  const yearBtnRef = useRef(null);
+  const [yearCoords, setYearCoords] = useState({ top: 0, left: 0 });
+
+  const toggleYearDropdown = () => {
+    if (!yearOpen && yearBtnRef.current) {
+      const rect = yearBtnRef.current.getBoundingClientRect();
+      setYearCoords({
+        top: rect.bottom + 6,
+        left: Math.max(10, rect.left)
+      });
+    }
+    setYearOpen(prev => !prev);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        examTypeRef.current && !examTypeRef.current.contains(event.target) &&
+        examTypeBtnRef.current && !examTypeBtnRef.current.contains(event.target)
+      ) {
+        setExamTypeOpen(false);
+      }
+      if (
+        yearRef.current && !yearRef.current.contains(event.target) &&
+        yearBtnRef.current && !yearBtnRef.current.contains(event.target)
+      ) {
+        setYearOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -379,6 +509,33 @@ export default function CommunityPage({ user }) {
     setSuccess('');
     try {
       const compressedBase64 = await compressImage(file);
+      
+      // 1. Try ultra-fast server AI Vision OCR first (<300ms)
+      try {
+        const vRes = await fetch('/api/ocr/vision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: compressedBase64 })
+        });
+        if (vRes.ok) {
+          const vData = await vRes.json();
+          if (vData.success && vData.metadata) {
+            const m = vData.metadata;
+            if (m.courseCode) setCourseCode(m.courseCode);
+            if (m.courseTitle) setCourseTitle(m.courseTitle);
+            if (m.examType) setUploadExamType(m.examType);
+            if (m.year) setUploadYear(m.year);
+            if (m.semester) setUploadSemester(String(m.semester));
+            setSuccess('✨ Automatically detected paper details using AI Vision OCR!');
+            setDetectingText(false);
+            return;
+          }
+        }
+      } catch (vErr) {
+        console.warn('Vision OCR fallback to client engine:', vErr);
+      }
+
+      // 2. Local Engine Fallback
       const Tesseract = await loadTesseract();
       const worker = await Tesseract.createWorker('eng');
       const ret = await worker.recognize(compressedBase64);
@@ -398,7 +555,7 @@ export default function CommunityPage({ user }) {
         setSuccess('✨ Automatically detected paper details from scan!');
       }
     } catch (err) {
-      console.warn('Auto-detect failed:', err);
+      console.error('Auto detect error:', err);
     } finally {
       setDetectingText(false);
     }
@@ -584,6 +741,7 @@ export default function CommunityPage({ user }) {
           courseTitle: courseTitleVal,
           examType: examTypeVal,
           year: yearVal,
+          month: detected.month || null,
           semester: semesterVal,
           fullText: fullTextCombined,
           compileFileData: async () => {
@@ -632,6 +790,7 @@ export default function CommunityPage({ user }) {
           courseTitle: courseTitleVal,
           examType: examTypeVal,
           year: yearVal,
+          month: detected.month || null,
           semester: semesterVal,
           fullText: fullTextCombined,
           compileFileData: async () => {
@@ -655,6 +814,7 @@ export default function CommunityPage({ user }) {
           courseTitle: task.courseTitle,
           examType: task.examType,
           year: task.year,
+          month: task.month,
           semester: task.semester,
           fileData,
           fileName: task.fileName,
@@ -849,19 +1009,21 @@ export default function CommunityPage({ user }) {
 
       {activeSubTab === 'pyq' && (
         <div className="pyq-workspace animate-fade-in">
-          {/* Top Info Banner */}
-          <div className="pyq-header-banner">
-            <div className="pyq-banner-content">
-              <h2>Previous Year Questions (PYQ) Hub</h2>
-              <p>Browse, view, and share semester exam papers contributed by the student community.</p>
+          {/* Top Info Banner (Shown only on main PYQ listing page, hidden inside course view) */}
+          {!selectedCourseGroup && (
+            <div className="pyq-header-banner">
+              <div className="pyq-banner-content">
+                <h2>Previous Year Questions (PYQ) Hub</h2>
+                <p>Browse, view, and share semester exam papers contributed by the student community.</p>
+              </div>
+              <button
+                className="pyq-upload-trigger-btn"
+                onClick={() => setShowUploadModal(true)}
+              >
+                <span>+</span> Share a Paper
+              </button>
             </div>
-            <button
-              className="pyq-upload-trigger-btn"
-              onClick={() => setShowUploadModal(true)}
-            >
-              <span>+</span> Share a Paper
-            </button>
-          </div>
+          )}
 
           {/* Banner Messages */}
           {error && <div className="aurora-error-banner" style={{ margin: '1rem 0' }}><span>⚠️</span> {error}</div>}
@@ -992,9 +1154,11 @@ export default function CommunityPage({ user }) {
                             <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', fontWeight: '600' }}>
                               Year {paper.year}
                             </span>
-                            <span style={{ fontSize: '0.72rem', color: 'hsl(var(--primary))', fontWeight: '700', background: 'hsla(var(--primary) / 0.08)', border: '1px solid hsla(var(--primary) / 0.2)', padding: '0.15rem 0.55rem', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                              📅 {paper.examDate ? new Date(paper.examDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Date: N/A'}
-                            </span>
+                            {paper.month && (
+                              <span style={{ fontSize: '0.72rem', color: 'hsl(var(--secondary))', fontWeight: '700', background: 'hsla(var(--secondary) / 0.08)', border: '1px solid hsla(var(--secondary) / 0.25)', padding: '0.15rem 0.55rem', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                🗓️ {paper.month}
+                              </span>
+                            )}
                           </div>
                           <span style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                             👤 Contributed by {paper.uploadedBy || 'Community'}
@@ -1119,28 +1283,228 @@ export default function CommunityPage({ user }) {
                   </InputGroupAddon>
                 </InputGroup>
                 
-                <div className="pyq-filter-dropdowns">
-                  <select
-                    value={filterExamType}
-                    onChange={(e) => setFilterExamType(e.target.value)}
-                    className="pyq-filter-select"
-                  >
-                    <option value="">All Exam Types</option>
-                    {EXAM_TYPES.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
+                <div className="pyq-filter-dropdowns" style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
+                  {/* Exam Type Base UI Dropdown */}
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <button
+                      ref={examTypeBtnRef}
+                      onClick={toggleExamTypeDropdown}
+                      style={{
+                        width: '100%',
+                        padding: '0.65rem 0.9rem',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        borderRadius: '12px',
+                        color: '#ffffff',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '0.5rem',
+                        transition: 'all 0.2s ease',
+                        backdropFilter: 'blur(8px)'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                      }}
+                    >
+                      <span>{filterExamType ? filterExamType : 'All Exam Types'}</span>
+                      <span style={{ fontSize: '0.65rem', opacity: 0.7, transform: examTypeOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>▼</span>
+                    </button>
 
-                  <select
-                    value={filterYear}
-                    onChange={(e) => setFilterYear(e.target.value)}
-                    className="pyq-filter-select"
-                  >
-                    <option value="">All Years</option>
-                    {ACADEMIC_YEARS.map(year => (
-                      <option key={year} value={year}>{year}</option>
-                    ))}
-                  </select>
+                    {examTypeOpen && createPortal(
+                      <div
+                        ref={examTypeRef}
+                        className="base-nav-menu-popover"
+                        style={{
+                          position: 'fixed',
+                          top: `${examTypeCoords.top}px`,
+                          left: `${examTypeCoords.left}px`,
+                          width: '160px',
+                          maxHeight: '260px',
+                          overflowY: 'auto',
+                          background: '#121215',
+                          border: '1px solid rgba(255, 255, 255, 0.18)',
+                          borderRadius: '14px',
+                          padding: '0.45rem',
+                          boxShadow: '0 16px 40px rgba(0, 0, 0, 0.95)',
+                          backdropFilter: 'blur(20px)',
+                          zIndex: 9999999,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.2rem'
+                        }}
+                      >
+                        <button
+                          onClick={() => { setFilterExamType(''); setExamTypeOpen(false); }}
+                          style={{
+                            width: '100%',
+                            textAlign: 'left',
+                            padding: '0.38rem 0.65rem',
+                            fontSize: '0.78rem',
+                            fontWeight: filterExamType === '' ? 700 : 500,
+                            color: filterExamType === '' ? '#38bdf8' : '#e2e8f0',
+                            background: filterExamType === '' ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                            border: 'none',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                          }}
+                        >
+                          <span>All Exam Types</span>
+                          {filterExamType === '' && <span style={{ color: '#38bdf8' }}>✓</span>}
+                        </button>
+                        {EXAM_TYPES.map(type => {
+                          const isSelected = filterExamType === type;
+                          return (
+                            <button
+                              key={type}
+                              onClick={() => { setFilterExamType(type); setExamTypeOpen(false); }}
+                              style={{
+                                width: '100%',
+                                textAlign: 'left',
+                                padding: '0.38rem 0.65rem',
+                                fontSize: '0.78rem',
+                                fontWeight: isSelected ? 700 : 500,
+                                color: isSelected ? '#38bdf8' : '#e2e8f0',
+                                background: isSelected ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                                border: 'none',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between'
+                              }}
+                            >
+                              <span>{type}</span>
+                              {isSelected && <span style={{ color: '#38bdf8' }}>✓</span>}
+                            </button>
+                          );
+                        })}
+                      </div>,
+                      document.body
+                    )}
+                  </div>
+
+                  {/* Academic Year Base UI Dropdown */}
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <button
+                      ref={yearBtnRef}
+                      onClick={toggleYearDropdown}
+                      style={{
+                        width: '100%',
+                        padding: '0.65rem 0.9rem',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        borderRadius: '12px',
+                        color: '#ffffff',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '0.5rem',
+                        transition: 'all 0.2s ease',
+                        backdropFilter: 'blur(8px)'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                      }}
+                    >
+                      <span>{filterYear ? filterYear : 'All Years'}</span>
+                      <span style={{ fontSize: '0.65rem', opacity: 0.7, transform: yearOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>▼</span>
+                    </button>
+
+                    {yearOpen && createPortal(
+                      <div
+                        ref={yearRef}
+                        className="base-nav-menu-popover"
+                        style={{
+                          position: 'fixed',
+                          top: `${yearCoords.top}px`,
+                          left: `${yearCoords.left}px`,
+                          width: '160px',
+                          maxHeight: '260px',
+                          overflowY: 'auto',
+                          background: '#121215',
+                          border: '1px solid rgba(255, 255, 255, 0.18)',
+                          borderRadius: '14px',
+                          padding: '0.45rem',
+                          boxShadow: '0 16px 40px rgba(0, 0, 0, 0.95)',
+                          backdropFilter: 'blur(20px)',
+                          zIndex: 9999999,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.2rem'
+                        }}
+                      >
+                        <button
+                          onClick={() => { setFilterYear(''); setYearOpen(false); }}
+                          style={{
+                            width: '100%',
+                            textAlign: 'left',
+                            padding: '0.38rem 0.65rem',
+                            fontSize: '0.78rem',
+                            fontWeight: filterYear === '' ? 700 : 500,
+                            color: filterYear === '' ? '#38bdf8' : '#e2e8f0',
+                            background: filterYear === '' ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                            border: 'none',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                          }}
+                        >
+                          <span>All Years</span>
+                          {filterYear === '' && <span style={{ color: '#38bdf8' }}>✓</span>}
+                        </button>
+                        {ACADEMIC_YEARS.map(year => {
+                          const isSelected = filterYear === year;
+                          return (
+                            <button
+                              key={year}
+                              onClick={() => { setFilterYear(year); setYearOpen(false); }}
+                              style={{
+                                width: '100%',
+                                textAlign: 'left',
+                                padding: '0.38rem 0.65rem',
+                                fontSize: '0.78rem',
+                                fontWeight: isSelected ? 700 : 500,
+                                color: isSelected ? '#38bdf8' : '#e2e8f0',
+                                background: isSelected ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                                border: 'none',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between'
+                              }}
+                            >
+                              <span>{year}</span>
+                              {isSelected && <span style={{ color: '#38bdf8' }}>✓</span>}
+                            </button>
+                          );
+                        })}
+                      </div>,
+                      document.body
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1166,9 +1530,9 @@ export default function CommunityPage({ user }) {
                               📍 IP: {paper.uploaderIp}
                             </span>
                           )}
-                          {paper.examDate && (
-                            <span style={{ display: 'block', color: 'hsl(var(--primary))', fontSize: '0.75rem', marginTop: '0.15rem', fontWeight: 600 }}>
-                              📅 Exam Date: {new Date(paper.examDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                          {paper.month && (
+                            <span style={{ display: 'block', color: 'hsl(var(--secondary))', fontSize: '0.75rem', marginTop: '0.15rem', fontWeight: 600 }}>
+                              🗓️ Month: {paper.month}
                             </span>
                           )}
                         </p>
@@ -1404,3 +1768,5 @@ export default function CommunityPage({ user }) {
     </div>
   );
 }
+
+export default memo(CommunityPage);

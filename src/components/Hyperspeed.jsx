@@ -361,7 +361,7 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
           alpha: true
         });
         this.renderer.setSize(initW, initH, false);
-        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
         this.composer = new EffectComposer(this.renderer);
         container.append(this.renderer.domElement);
 
@@ -1277,7 +1277,7 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
     }
 
     const container = hyperspeed.current;
-    if (!container) return;
+    if (!container || window.innerWidth < 768) return;
 
     const options = {
       ...DEFAULT_EFFECT_OPTIONS,

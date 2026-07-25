@@ -412,10 +412,24 @@ body.sidebar-collapsed .main-content {
   transition: margin-left var(--sidebar-transition);
 }
 
-@media (max-width: 767px) {
+/* Mobile sidebar & hamburger button completely hidden on mobile devices */
+@media (max-width: 768px) {
+  .sidebar-mobile-trigger,
+  .app-sidebar,
+  .sidebar-backdrop,
+  .sidebar-overlay,
+  .sidebar-mobile-close {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  body,
   body.sidebar-open .main-content,
   body.sidebar-collapsed .main-content {
-    margin-left: 0;
+    margin-left: 0 !important;
+    padding-left: 0 !important;
   }
 }
 

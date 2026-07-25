@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import {
   LayoutDashboard,
   Target,
@@ -37,7 +37,7 @@ const NAV_ITEMS = [
   { id: 'campus',        label: 'College Life',      icon: PartyPopper,     requiresAuth: true  },
 ];
 
-export default function AppSidebar({
+function AppSidebar({
   user,
   activeTab,
   onTabClick,
@@ -120,28 +120,16 @@ export default function AppSidebar({
     return 'Global Member';
   };
 
-  const isOpen = isMobile ? mobileOpen : !collapsed;
+  if (isMobile) {
+    return null;
+  }
+
+  const isOpen = !collapsed;
 
   return (
     <>
-      {/* Mobile hamburger trigger */}
-      {isMobile && (
-        <button
-          className="sidebar-mobile-trigger"
-          onClick={() => setMobileOpen(o => !o)}
-          aria-label="Toggle navigation"
-        >
-          <span /><span /><span />
-        </button>
-      )}
-
-      {/* Mobile backdrop */}
-      {isMobile && mobileOpen && (
-        <div className="sidebar-backdrop" onClick={() => setMobileOpen(false)} />
-      )}
-
-      {/* ── The Sidebar ── */}
-      <aside className={`app-sidebar ${isOpen ? 'open' : 'collapsed'} ${isMobile ? 'mobile' : ''}`}>
+      {/* ── The Sidebar (Desktop Only) ── */}
+      <aside className={`app-sidebar ${isOpen ? 'open' : 'collapsed'}`}>
 
         {/* Header */}
         <div className="sidebar-header">
@@ -351,3 +339,5 @@ export default function AppSidebar({
     </>
   );
 }
+
+export default memo(AppSidebar);

@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
+import { createPortal } from 'react-dom';
 import BounceCards from './BounceCards';
 import Hyperspeed from './Hyperspeed';
 
@@ -926,12 +927,67 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
   });
   const [messMenuData, setMessMenuData] = useState(null); // Live menu data from API
   const [messMenuLoading, setMessMenuLoading] = useState(false);
+  const [messDropdownOpen, setMessDropdownOpen] = useState(false);
+  const messDropdownRef = useRef(null);
+  const messButtonRef = useRef(null);
+  const [dropdownCoords, setDropdownCoords] = useState({ top: 0, left: 0 });
 
-  const handleMessChange = (e) => {
-    const value = e.target.value;
-    setSelectedMess(value);
-    localStorage.setItem('ds_selected_mess', value);
+  const toggleMessDropdown = () => {
+    if (!messDropdownOpen && messButtonRef.current) {
+      const rect = messButtonRef.current.getBoundingClientRect();
+      setDropdownCoords({
+        top: rect.bottom + 6,
+        left: Math.max(10, rect.right - 220)
+      });
+    }
+    setMessDropdownOpen(prev => !prev);
   };
+
+  const selectMess = (messId) => {
+    setSelectedMess(messId);
+    localStorage.setItem('ds_selected_mess', messId);
+    setMessDropdownOpen(false);
+  };
+
+  const [semDropdownOpen, setSemDropdownOpen] = useState(false);
+  const semDropdownRef = useRef(null);
+  const semButtonRef = useRef(null);
+  const [semDropdownCoords, setSemDropdownCoords] = useState({ top: 0, left: 0 });
+
+  const toggleSemDropdown = () => {
+    if (!semDropdownOpen && semButtonRef.current) {
+      const rect = semButtonRef.current.getBoundingClientRect();
+      setSemDropdownCoords({
+        top: rect.bottom + 6,
+        left: Math.max(10, rect.left)
+      });
+    }
+    setSemDropdownOpen(prev => !prev);
+  };
+
+  const selectSemester = (semVal) => {
+    onUpdateSemester(semVal);
+    setSemDropdownOpen(false);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        messDropdownRef.current && !messDropdownRef.current.contains(event.target) &&
+        messButtonRef.current && !messButtonRef.current.contains(event.target)
+      ) {
+        setMessDropdownOpen(false);
+      }
+      if (
+        semDropdownRef.current && !semDropdownRef.current.contains(event.target) &&
+        semButtonRef.current && !semButtonRef.current.contains(event.target)
+      ) {
+        setSemDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Fetch live mess menu data from our backend proxy (which calls messmenu.me)
   useEffect(() => {
@@ -1138,7 +1194,9 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
       icon: mealIcons[mealType] || '🍽️',
       items,
       timeStr: MEAL_TIME_STRINGS[mealType] || '00:00 - 00:00',
-      messName
+      messName,
+      baseMealIndex,
+      targetMealIndex
     };
   };
 
@@ -1292,107 +1350,318 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
       const mealInfo = getUpcomingMealInfo();
       const mainDishes = filterMainDishes(mealInfo.items);
 
+      const currentMessObj = MESS_OPTIONS.find(m => m.id === selectedMess) || MESS_OPTIONS[0];
+
+      const MEAL_TABS = [
+        { id: 'breakfast', label: 'Breakfast', icon: '🥞' },
+        { id: 'lunch', label: 'Lunch', icon: '🍛' },
+        { id: 'snacks', label: 'Snacks', icon: '☕' },
+        { id: 'dinner', label: 'Dinner', icon: '🍽️' }
+      ];
+
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: isMobileDevice ? '0.5rem' : '0.85rem' }}>
-          {/* Header row: status + mess selector */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: isMobileDevice ? '0.4rem' : '0.6rem' }}>
-              <span style={{ fontSize: isMobileDevice ? '1.1rem' : '1.35rem' }}>{mealInfo.icon}</span>
-              <span style={{ fontSize: isMobileDevice ? '0.7rem' : '0.85rem', textTransform: 'uppercase', color: 'hsl(var(--text-muted))', fontWeight: 700, letterSpacing: '0.04em' }}>
-                {mealInfo.label}{mealInfo.isTomorrow ? ' · Tomorrow' : ''}
-              </span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: isMobileDevice ? '0.65rem' : '0.85rem' }}>
+          {/* Header Row: Live Status + Hostel Selector Pill (Top-Right Aligned) */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'nowrap', gap: '0.4rem', width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', minWidth: 0, flexShrink: 1 }}>
               <span style={{
-                fontSize: isMobileDevice ? '0.6rem' : '0.72rem', fontWeight: 800,
-                color: mealInfo.isServingNow ? '#10b981' : 'hsl(var(--secondary))',
-                background: mealInfo.isServingNow ? 'rgba(16, 185, 129, 0.12)' : 'hsla(var(--secondary) / 0.1)',
-                padding: isMobileDevice ? '0.12rem 0.45rem' : '0.22rem 0.65rem', borderRadius: '10px'
+                fontSize: isMobileDevice ? '0.62rem' : '0.72rem',
+                fontWeight: 800,
+                color: mealInfo.isServingNow ? '#10b981' : '#38bdf8',
+                background: mealInfo.isServingNow ? 'rgba(16, 185, 129, 0.12)' : 'rgba(56, 189, 248, 0.12)',
+                border: mealInfo.isServingNow ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(56, 189, 248, 0.3)',
+                padding: '0.18rem 0.6rem',
+                borderRadius: '10px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem'
               }}>
-                {mealInfo.isServingNow ? 'LIVE' : 'NEXT'}
+                <span style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: mealInfo.isServingNow ? '#10b981' : '#38bdf8',
+                  boxShadow: mealInfo.isServingNow ? '0 0 8px #10b981' : '0 0 8px #38bdf8'
+                }} />
+                {mealInfo.isServingNow ? 'LIVE SERVING' : 'UPCOMING'}
+              </span>
+
+              <span style={{ fontSize: isMobileDevice ? '0.68rem' : '0.76rem', color: '#a1a1aa', fontWeight: 600 }}>
+                🕒 {mealInfo.timeStr} {mealInfo.isTomorrow ? '· Tomorrow' : ''}
               </span>
             </div>
-            
-            <div style={{ display: 'flex', alignItems: 'center', gap: isMobileDevice ? '0.3rem' : '0.45rem' }}>
+
+            {/* SLEEK FLOATING MESS SELECTOR DROPDOWN MENU */}
+            <div style={{ position: 'relative' }}>
               <button
-                onClick={() => setMealCycleOffset(prev => (prev + 1) % 4)}
+                ref={messButtonRef}
+                onClick={toggleMessDropdown}
                 style={{
-                  background: 'linear-gradient(135deg, hsla(var(--primary) / 0.15), hsla(var(--secondary) / 0.15))',
-                  border: '1px solid hsla(var(--primary) / 0.25)',
-                  color: 'hsl(var(--primary))',
-                  fontSize: isMobileDevice ? '0.6rem' : '0.7rem',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#ffffff',
+                  fontSize: isMobileDevice ? '0.68rem' : '0.78rem',
                   fontWeight: 700,
-                  padding: isMobileDevice ? '0.18rem 0.45rem' : '0.25rem 0.65rem',
-                  borderRadius: '6px',
+                  padding: isMobileDevice ? '0.22rem 0.6rem' : '0.3rem 0.75rem',
+                  borderRadius: '10px',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.2rem',
-                  transition: 'all 0.2s'
+                  gap: '0.4rem',
+                  transition: 'all 0.2s ease',
+                  backdropFilter: 'blur(8px)'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, hsla(var(--primary) / 0.25), hsla(var(--secondary) / 0.25))';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, hsla(var(--primary) / 0.15), hsla(var(--secondary) / 0.15))';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
                 }}
               >
-                What's Next? ➡️
+                <span>📍</span>
+                <span>{currentMessObj.name}</span>
+                <span style={{ fontSize: '0.65rem', opacity: 0.7, transform: messDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>▼</span>
               </button>
-              <select
-                value={selectedMess}
-                onChange={handleMessChange}
-                style={{
-                  background: 'hsla(var(--bg-card) / 0.5)',
-                  border: '1px solid hsla(var(--border-glass))',
-                  color: 'hsl(var(--text-primary))',
-                  fontSize: isMobileDevice ? '0.6rem' : '0.75rem', fontWeight: 700,
-                  padding: isMobileDevice ? '0.15rem 0.3rem' : '0.25rem 0.5rem', borderRadius: '6px',
-                  cursor: 'pointer', outline: 'none'
-                }}
-              >
-                <optgroup label="Boys">
-                  {MESS_OPTIONS.filter(m => m.group === 'boys').map(m => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Girls">
-                  {MESS_OPTIONS.filter(m => m.group === 'girls').map(m => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </optgroup>
-              </select>
+
+              {/* Floating Dark Glass Dropdown Menu (Portaled directly to document.body for top z-index isolation) */}
+              {messDropdownOpen && createPortal(
+                <div
+                  ref={messDropdownRef}
+                  className="base-nav-menu-popover"
+                  style={{
+                    position: 'fixed',
+                    top: `${dropdownCoords.top}px`,
+                    left: `${dropdownCoords.left}px`,
+                    width: '210px',
+                    maxHeight: '340px',
+                    overflowY: 'auto',
+                    background: '#121215',
+                    border: '1px solid rgba(255, 255, 255, 0.18)',
+                    borderRadius: '14px',
+                    padding: '0.45rem',
+                    boxShadow: '0 16px 40px rgba(0, 0, 0, 0.95)',
+                    backdropFilter: 'blur(20px)',
+                    zIndex: 9999999,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.2rem',
+                    animation: 'fadeIn 0.15s ease-out'
+                  }}
+                >
+                  {/* Boys Hostels Section */}
+                  <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#38bdf8', letterSpacing: '0.08em', padding: '0.3rem 0.5rem 0.15rem 0.5rem', textTransform: 'uppercase' }}>
+                    👦 Boys Hostels
+                  </div>
+                  {MESS_OPTIONS.filter(m => m.group === 'boys').map(m => {
+                    const isSelected = m.id === selectedMess;
+                    return (
+                      <button
+                        key={m.id}
+                        onClick={() => selectMess(m.id)}
+                        style={{
+                          width: '100%',
+                          textAlign: 'left',
+                          padding: '0.38rem 0.65rem',
+                          fontSize: '0.78rem',
+                          fontWeight: isSelected ? 700 : 500,
+                          color: isSelected ? '#38bdf8' : '#e2e8f0',
+                          background: isSelected ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+                            e.currentTarget.style.color = '#ffffff';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.background = 'transparent';
+                            e.currentTarget.style.color = '#e2e8f0';
+                          }
+                        }}
+                      >
+                        <span>{m.name}</span>
+                        {isSelected && <span style={{ color: '#38bdf8', fontSize: '0.78rem' }}>✓</span>}
+                      </button>
+                    );
+                  })}
+
+                  <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.08)', margin: '0.25rem 0' }} />
+
+                  {/* Girls Hostels Section */}
+                  <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#ec4899', letterSpacing: '0.08em', padding: '0.3rem 0.5rem 0.15rem 0.5rem', textTransform: 'uppercase' }}>
+                    👧 Girls Hostels
+                  </div>
+                  {MESS_OPTIONS.filter(m => m.group === 'girls').map(m => {
+                    const isSelected = m.id === selectedMess;
+                    return (
+                      <button
+                        key={m.id}
+                        onClick={() => selectMess(m.id)}
+                        style={{
+                          width: '100%',
+                          textAlign: 'left',
+                          padding: '0.38rem 0.65rem',
+                          fontSize: '0.78rem',
+                          fontWeight: isSelected ? 700 : 500,
+                          color: isSelected ? '#ec4899' : '#e2e8f0',
+                          background: isSelected ? 'rgba(236, 72, 153, 0.12)' : 'transparent',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.background = 'rgba(236, 72, 153, 0.08)';
+                            e.currentTarget.style.color = '#ffffff';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.background = 'transparent';
+                            e.currentTarget.style.color = '#e2e8f0';
+                          }
+                        }}
+                      >
+                        <span>{m.name}</span>
+                        {isSelected && <span style={{ color: '#ec4899', fontSize: '0.78rem' }}>✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>,
+                document.body
+              )}
             </div>
           </div>
 
-          {/* Dish pills */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: isMobileDevice ? '0.35rem' : '0.5rem', marginTop: isMobileDevice ? '0' : '0.25rem' }}>
-            {messMenuLoading && !messMenuData ? (
-              <span style={{ fontSize: isMobileDevice ? '0.75rem' : '0.88rem', color: 'hsl(var(--text-muted))', fontStyle: 'italic' }}>Loading menu...</span>
-            ) : mainDishes.length > 0 ? (
-              mainDishes.map((dish, i) => (
-                <span key={i} style={{
-                  fontSize: isMobileDevice ? '0.72rem' : '0.88rem', fontWeight: 600,
-                  padding: isMobileDevice ? '0.2rem 0.55rem' : '0.35rem 0.85rem', borderRadius: isMobileDevice ? '14px' : '18px',
-                  background: i === 0
-                    ? 'linear-gradient(135deg, hsla(var(--primary) / 0.2), hsla(var(--secondary) / 0.15))'
-                    : 'rgba(255,255,255,0.06)',
-                  border: i === 0
-                    ? '1px solid hsla(var(--primary) / 0.3)'
-                    : '1px solid rgba(255,255,255,0.08)',
-                  color: i === 0 ? 'hsl(var(--primary))' : 'hsl(var(--text-primary))',
-                  whiteSpace: 'nowrap'
-                }}>
-                  {dish.length > 30 ? dish.substring(0, 28) + '…' : dish}
-                </span>
-              ))
-            ) : (
-              <span style={{ fontSize: isMobileDevice ? '0.75rem' : '0.88rem', color: 'hsl(var(--text-muted))' }}>Menu not available</span>
-            )}
+          {/* Sleek Segmented 4-Meal Tab Bar */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: isMobileDevice ? '0.2rem' : '0.35rem',
+            background: 'rgba(255, 255, 255, 0.03)',
+            padding: '0.25rem',
+            borderRadius: '12px',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            backdropFilter: 'blur(12px)'
+          }}>
+            {MEAL_TABS.map((tab, idx) => {
+              const isActive = idx === mealInfo.targetMealIndex;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    const offset = (idx - mealInfo.baseMealIndex + 4) % 4;
+                    setMealCycleOffset(offset);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: isMobileDevice ? '0.28rem 0.2rem' : '0.35rem 0.4rem',
+                    fontSize: isMobileDevice ? '0.66rem' : '0.76rem',
+                    fontWeight: isActive ? 800 : 600,
+                    borderRadius: '8px',
+                    border: isActive ? '1px solid rgba(255, 255, 255, 0.25)' : '1px solid transparent',
+                    background: isActive
+                      ? 'rgba(255, 255, 255, 0.12)'
+                      : 'transparent',
+                    color: isActive ? '#ffffff' : '#94a3b8',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.25rem',
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxShadow: isActive ? '0 4px 12px rgba(0, 0, 0, 0.3)' : 'none',
+                    whiteSpace: 'nowrap'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) e.currentTarget.style.color = '#ffffff';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) e.currentTarget.style.color = '#94a3b8';
+                  }}
+                >
+                  <span>{tab.icon}</span>
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Footer */}
-          <div style={{ fontSize: isMobileDevice ? '0.6rem' : '0.75rem', color: 'hsl(var(--text-muted))', display: 'flex', justifyContent: 'space-between', marginTop: isMobileDevice ? '0' : '0.4rem' }}>
-            <span>🕒 {mealInfo.timeStr}</span>
-            <span style={{ fontWeight: 600 }}>📍 {messMenuData?.name || MESS_OPTIONS.find(m => m.id === selectedMess)?.name || 'Mess'}</span>
+          {/* Dish Showcase Cards */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            {messMenuLoading && !messMenuData ? (
+              <span style={{ fontSize: isMobileDevice ? '0.75rem' : '0.85rem', color: '#94a3b8', fontStyle: 'italic' }}>Fetching live menu...</span>
+            ) : mainDishes.length > 0 ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: isMobileDevice ? '0.3rem' : '0.45rem' }}>
+                {mainDishes.map((dish, i) => {
+                  let dishIcon = '🍱';
+                  const lower = dish.toLowerCase();
+                  if (lower.includes('dosa') || lower.includes('idli')) dishIcon = '🥞';
+                  else if (lower.includes('paneer') || lower.includes('curry')) dishIcon = '🥘';
+                  else if (lower.includes('rice') || lower.includes('pulao') || lower.includes('biryani')) dishIcon = '🍚';
+                  else if (lower.includes('dal') || lower.includes('sambhar') || lower.includes('rasam')) dishIcon = '🥣';
+                  else if (lower.includes('roti') || lower.includes('paratha') || lower.includes('poori')) dishIcon = '🫓';
+                  else if (lower.includes('tea') || lower.includes('coffee') || lower.includes('milk')) dishIcon = '☕';
+                  else if (lower.includes('sweet') || lower.includes('kheer') || lower.includes('halwa') || lower.includes('jalebi')) dishIcon = '🍯';
+
+                  const isMainHighlight = i === 0;
+
+                  return (
+                    <div key={i} style={{
+                      fontSize: isMobileDevice ? '0.72rem' : '0.82rem',
+                      fontWeight: isMainHighlight ? 700 : 500,
+                      padding: isMainHighlight
+                        ? (isMobileDevice ? '0.38rem 0.7rem' : '0.45rem 0.88rem')
+                        : (isMobileDevice ? '0.3rem 0.6rem' : '0.38rem 0.75rem'),
+                      borderRadius: '10px',
+                      background: isMainHighlight
+                        ? 'rgba(255, 255, 255, 0.08)'
+                        : 'rgba(255, 255, 255, 0.03)',
+                      border: isMainHighlight
+                        ? '1px solid rgba(255, 255, 255, 0.22)'
+                        : '1px solid rgba(255, 255, 255, 0.06)',
+                      color: isMainHighlight ? '#ffffff' : '#cbd5e1',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      backdropFilter: 'blur(8px)',
+                      transition: 'all 0.2s ease-out'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.borderColor = isMainHighlight ? 'rgba(255, 255, 255, 0.22)' : 'rgba(255, 255, 255, 0.06)';
+                    }}
+                    >
+                      {isMainHighlight && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#38bdf8', boxShadow: '0 0 6px #38bdf8' }} />}
+                      <span>{dishIcon}</span>
+                      <span>{dish.length > 34 ? dish.substring(0, 32) + '…' : dish}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <span style={{ fontSize: isMobileDevice ? '0.75rem' : '0.85rem', color: '#94a3b8' }}>Menu details not available</span>
+            )}
           </div>
         </div>
       );
@@ -1524,7 +1793,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
     // Desktop: side-by-side | Mobile: tabs
     if (!isMobileDevice) {
       return (
-        <div className={`bento-item span-2 live-tracker-item live-tracker-panel ${statusClass}`}>
+        <div className={`bento-item span-2 live-tracker-item live-tracker-panel ${statusClass}`} style={{ overflow: 'visible' }}>
           <div style={{ display: 'flex', gap: '1.5rem', width: '100%' }}>
             {/* Left: Class Alert */}
             <div style={{ flex: 1 }}>
@@ -1543,7 +1812,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
 
     // Mobile: stack both vertically
     return (
-      <div className={`bento-item span-2 live-tracker-item live-tracker-panel ${statusClass}`} style={{ padding: '1rem' }}>
+      <div className={`bento-item span-2 live-tracker-item live-tracker-panel ${statusClass}`} style={{ padding: '1rem', overflow: 'visible' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
           {/* Top: Mess Menu */}
           <div>
@@ -1569,116 +1838,231 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
     const coursesCount = user && user.courses ? user.courses.length : 0;
     
     return (
-      <div className="profile-stats-widget" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+      <div className="profile-stats-widget" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', gap: '0.75rem' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+          {/* User Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.85rem' }}>
             <div style={{ 
-              width: '46px', 
-              height: '46px', 
+              width: '42px', 
+              height: '42px', 
               borderRadius: '50%', 
-              background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))',
+              background: 'linear-gradient(135deg, #ffffff, #a1a1aa)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '1.35rem',
+              fontSize: '1.25rem',
               fontWeight: 'bold',
-              color: '#fff',
-              boxShadow: '0 4px 10px hsla(var(--primary) / 0.3)'
+              color: '#09090b',
+              boxShadow: '0 4px 12px rgba(255,255,255,0.25)',
+              flexShrink: 0
             }}>
               {user && user.name ? user.name.charAt(0).toUpperCase() : 'U'}
             </div>
-            <div>
-              <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', fontWeight: 500 }}>{greeting},</div>
-              <h4 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'hsl(var(--text-primary))', fontFamily: 'var(--font-heading)' }}>
-                {user ? user.name.split(' ')[0] : 'Student'}
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', fontWeight: 500 }}>{greeting},</div>
+              <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'hsl(var(--text-primary))', fontFamily: 'var(--font-heading)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {user ? user.name.split(' ')[0] : 'Guest'}
               </h4>
               {user && user.isVitBhopal && (
-                <div style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))', fontFamily: 'var(--font-mono)', marginTop: '0.15rem', fontWeight: 600 }}>
+                <div style={{ fontSize: '0.68rem', color: 'hsl(var(--text-muted))', fontFamily: 'var(--font-mono)', marginTop: '0.1rem', fontWeight: 600 }}>
                   {getRegNumber()}
                 </div>
               )}
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-            <div style={{ flex: 1, padding: '0.85rem', background: 'rgba(255,255,255,0.03)', borderRadius: '1rem', border: '1px solid hsla(var(--border-glass))', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <div style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Courses</div>
-              <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'hsl(var(--secondary))' }}>{coursesCount}</div>
+          {/* PROMINENT SHORTCUT WINDOW TO PYQ SECTION */}
+          <div 
+            onClick={() => onNavigate('community')}
+            style={{
+              padding: '0.75rem 0.85rem',
+              borderRadius: '14px',
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02))',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.6rem',
+              transition: 'all 0.25s ease',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+              position: 'relative',
+              overflow: 'hidden'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.35)';
+              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05))';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02))';
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <div style={{
+                width: '36px', height: '36px', borderRadius: '10px',
+                background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05))',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '1.2rem', flexShrink: 0
+              }}>
+                📚
+              </div>
+              <div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#ffffff', fontFamily: 'var(--font-heading)' }}>
+                  PYQ Question Papers
+                </div>
+                <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.6)', marginTop: '0.05rem' }}>
+                  Explore past CAT-1, CAT-2 & FAT papers ⚡
+                </div>
+              </div>
             </div>
-            <div style={{ flex: 1, padding: '0.85rem', background: 'rgba(255,255,255,0.03)', borderRadius: '1rem', border: '1px solid hsla(var(--border-glass))', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <div style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Semester</div>
-              <select
-                value={user ? user.semester : '1'}
-                onChange={(e) => onUpdateSemester(e.target.value)}
-                style={{
-                  fontSize: '1.25rem',
-                  fontWeight: 800,
-                  color: 'hsl(var(--accent))',
-                  background: 'none',
-                  border: 'none',
-                  padding: 0,
-                  margin: 0,
-                  outline: 'none',
-                  cursor: 'pointer',
-                  width: '100%'
-                }}
-              >
-                {user && user.isVitBhopal ? (
-                  (() => {
-                    const isIntegrated = (user.program && user.program.startsWith('Integrated M.Tech')) || 
-                                         (user.email && (user.email.toLowerCase().includes('bim') || user.email.toLowerCase().includes('mim')));
-                    const maxSem = isIntegrated ? 10 : 8;
-                    const options = [];
-                    for (let i = 1; i <= maxSem; i++) {
-                      options.push(
-                        <option 
-                          key={i} 
-                          value={i.toString()} 
-                          style={{ 
-                            backgroundColor: theme === 'light' ? '#ffffff' : '#18181b',
-                            color: theme === 'light' ? 'hsl(var(--text-primary))' : '#ffffff',
-                            fontSize: '0.9rem'
-                          }}
-                        >
-                          Sem {i}
-                        </option>
-                      );
-                    }
-                    return options;
-                  })()
-                ) : (
-                  <>
-                    <option 
-                      value="0" 
-                      style={{ 
-                        backgroundColor: theme === 'light' ? '#ffffff' : '#18181b',
-                        color: theme === 'light' ? 'hsl(var(--text-primary))' : '#ffffff',
-                        fontSize: '0.9rem'
-                      }}
-                    >
-                      N/A
-                    </option>
-                    {[1,2,3,4,5,6,7,8].map(i => (
-                      <option 
-                        key={i} 
-                        value={i.toString()} 
-                        style={{ 
-                          backgroundColor: theme === 'light' ? '#ffffff' : '#18181b',
-                          color: theme === 'light' ? 'hsl(var(--text-primary))' : '#ffffff',
-                          fontSize: '0.9rem'
-                        }}
-                      >
-                        Sem {i}
-                      </option>
-                    ))}
-                  </>
+            
+            <div style={{
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              padding: '0.3rem 0.6rem',
+              borderRadius: '8px',
+              background: '#ffffff',
+              color: '#000000',
+              whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.2rem',
+              boxShadow: '0 2px 8px rgba(255,255,255,0.2)'
+            }}>
+              Open ➔
+            </div>
+          </div>
+
+          {/* Stats Bar */}
+          <div style={{ display: 'flex', gap: '0.65rem', marginTop: '0.75rem' }}>
+            <div style={{ flex: 1, padding: '0.6rem 0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+              <div style={{ fontSize: '0.65rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Courses</div>
+              <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#ffffff' }}>{coursesCount}</div>
+            </div>
+            <div style={{ flex: 1, padding: '0.6rem 0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+              <div style={{ fontSize: '0.65rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Semester</div>
+              {/* Base UI / shadcn Style Navigation Menu Trigger */}
+              <div style={{ position: 'relative', marginTop: '0.15rem' }}>
+                <button
+                  ref={semButtonRef}
+                  onClick={toggleSemDropdown}
+                  style={{
+                    fontSize: '0.9rem',
+                    fontWeight: 800,
+                    color: '#ffffff',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: '8px',
+                    padding: '0.2rem 0.55rem',
+                    margin: 0,
+                    outline: 'none',
+                    cursor: 'pointer',
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.3rem',
+                    transition: 'all 0.2s ease',
+                    backdropFilter: 'blur(8px)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)';
+                  }}
+                >
+                  <span>{user && user.semester ? `Sem ${user.semester}` : 'Sem 1'}</span>
+                  <span style={{ fontSize: '0.6rem', opacity: 0.7, transform: semDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>▼</span>
+                </button>
+
+                {/* Base UI NavigationMenuContent Popover */}
+                {semDropdownOpen && createPortal(
+                  <div
+                    ref={semDropdownRef}
+                    className="base-nav-menu-popover"
+                    style={{
+                      position: 'fixed',
+                      top: `${semDropdownCoords.top}px`,
+                      left: `${semDropdownCoords.left}px`,
+                      width: '135px',
+                      maxHeight: '260px',
+                      overflowY: 'auto',
+                      background: '#121215',
+                      border: '1px solid rgba(255, 255, 255, 0.18)',
+                      borderRadius: '12px',
+                      padding: '0.35rem',
+                      boxShadow: '0 16px 40px rgba(0, 0, 0, 0.95)',
+                      backdropFilter: 'blur(20px)',
+                      zIndex: 9999999,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.2rem',
+                      animation: 'fadeIn 0.15s ease-out'
+                    }}
+                  >
+                    {(() => {
+                      const currentSem = (user && user.semester) ? user.semester.toString() : '1';
+                      const isIntegrated = (user?.program && user.program.startsWith('Integrated M.Tech')) || 
+                                           (user?.email && (user.email.toLowerCase().includes('bim') || user.email.toLowerCase().includes('mim')));
+                      const maxSem = isIntegrated ? 10 : 8;
+                      const sems = [];
+                      for (let i = 1; i <= maxSem; i++) {
+                        const semStr = i.toString();
+                        const isSelected = semStr === currentSem;
+                        sems.push(
+                          <button
+                            key={i}
+                            onClick={() => selectSemester(semStr)}
+                            style={{
+                              width: '100%',
+                              textAlign: 'left',
+                              padding: '0.35rem 0.6rem',
+                              fontSize: '0.78rem',
+                              fontWeight: isSelected ? 700 : 500,
+                              color: isSelected ? '#38bdf8' : '#e2e8f0',
+                              background: isSelected ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              transition: 'all 0.15s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isSelected) {
+                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+                                e.currentTarget.style.color = '#ffffff';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isSelected) {
+                                e.currentTarget.style.background = 'transparent';
+                                e.currentTarget.style.color = '#e2e8f0';
+                              }
+                            }}
+                          >
+                            <span>Sem {i}</span>
+                            {isSelected && <span style={{ color: '#38bdf8', fontSize: '0.75rem' }}>✓</span>}
+                          </button>
+                        );
+                      }
+                      return sems;
+                    })()}
+                  </div>,
+                  document.body
                 )}
-              </select>
+              </div>
             </div>
           </div>
         </div>
-
-        {/* Removed Roadmap button */}
       </div>
     );
   };
@@ -2102,6 +2486,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
           </div>
         </div>
       </div>
+      </div>
 
       {selectedEvent && (
         <EventDetailsModal
@@ -2114,9 +2499,9 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
           theme={theme}
         />
       )}
-      </div>
+
     </div>
   );
 };
 
-export default Dashboard;
+export default memo(Dashboard);

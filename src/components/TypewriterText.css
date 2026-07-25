@@ -17,8 +17,20 @@
   height: 1.1em;
   background-color: #ffffff;
   margin-left: 2px;
-  animation: typewriter-blink 0.8s step-end infinite;
   vertical-align: middle;
+  transition: opacity 0.4s ease, visibility 0.4s ease;
+}
+
+.typewriter-cursor.visible {
+  opacity: 1;
+  visibility: visible;
+  animation: typewriter-blink 0.8s step-end infinite;
+}
+
+.typewriter-cursor.hidden {
+  opacity: 0;
+  visibility: hidden;
+  animation: none;
 }
 
 @keyframes typewriter-blink {

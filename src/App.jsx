@@ -81,7 +81,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [scrolled, setScrolled] = useState(false);
   const [navHidden, setNavHidden] = useState(false);
-  const [scrollProgress, setScrollProgress] = useState(0);
+  const headerRef = useRef(null);
   const [showAboutUs, setShowAboutUs] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [showMobileProfileSheet, setShowMobileProfileSheet] = useState(false);
@@ -170,35 +170,43 @@ function App() {
     };
   }, []);
 
-  const handleInstallApp = async () => {
+  const handleInstallApp = useCallback(async () => {
     if (!installPrompt) return;
     installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
     if (outcome === 'accepted') setInstallPrompt(null);
-  };
+  }, [installPrompt]);
 
 
   useEffect(() => {
+    let ticking = false;
     const handleScroll = () => {
-      const currentY = window.scrollY;
-      setScrolled(currentY > 20);
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentY = window.scrollY;
+          const isScrolled = currentY > 20;
+          setScrolled(prev => prev !== isScrolled ? isScrolled : prev);
 
-      // Direction: hide when scrolling down past 60px, reveal when scrolling up
-      if (currentY <= 20) {
-        setNavHidden(false);
-      } else if (currentY > lastScrollY.current + 6 && currentY > 60) {
-        setNavHidden(true);
-      } else if (currentY < lastScrollY.current - 6) {
-        setNavHidden(false);
-      }
-      lastScrollY.current = currentY;
+          if (currentY <= 20) {
+            setNavHidden(prev => prev ? false : prev);
+          } else if (currentY > lastScrollY.current + 8 && currentY > 60) {
+            setNavHidden(prev => !prev ? true : prev);
+          } else if (currentY < lastScrollY.current - 8) {
+            setNavHidden(prev => prev ? false : prev);
+          }
+          lastScrollY.current = currentY;
 
-      // Progress bar
-      const el = document.querySelector('.main-content');
-      if (el) {
-        const scrollTop = el.scrollTop || currentY;
-        const maxScroll = (el.scrollHeight || document.body.scrollHeight) - window.innerHeight;
-        setScrollProgress(maxScroll > 0 ? Math.min(scrollTop / maxScroll, 1) : 0);
+          // Update scroll progress via DOM ref (no React re-render)
+          const el = document.querySelector('.main-content');
+          if (el && headerRef.current) {
+            const scrollTop = el.scrollTop || currentY;
+            const maxScroll = (el.scrollHeight || document.body.scrollHeight) - window.innerHeight;
+            const progress = maxScroll > 0 ? Math.min(scrollTop / maxScroll, 1) : 0;
+            headerRef.current.style.setProperty('--scroll-progress', progress);
+          }
+          ticking = false;
+        });
+        ticking = true;
       }
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -263,11 +271,11 @@ function App() {
 
 
 
-  const handleTabClick = (tab) => {
+  const handleTabClick = useCallback((tab) => {
     setActiveTab(tab);
     setMobileMenuOpen(false);
     setShowMobileProfileSheet(false);
-  };
+  }, []);
 
   const handleLogout = useCallback(() => {
     if (token) {
@@ -709,7 +717,7 @@ function App() {
         onTouchEnd={handleTouchEnd}
       >
         {/* Floating Top Navigation Bar */}
-        <header className={`top-bar ${scrolled ? 'scrolled' : ''} ${navHidden ? 'nav-hidden' : ''}`} style={{ '--scroll-progress': scrollProgress }}>
+        <header ref={headerRef} className={`top-bar ${scrolled ? 'scrolled' : ''} ${navHidden ? 'nav-hidden' : ''}`}>
           {/* Scroll progress bar */}
           <div className="top-bar-progress" />
           {/* Animated shimmer line */}
@@ -1134,7 +1142,14 @@ function App() {
                 ✏️ Edit Profile Name/Sem
               </button>
               <button 
-                onClick={() => { setShowEditProfile(true); setShowMobileProfileSheet(false); }}
+                onClick={() => {
+                  setShowMobileProfileSheet(false);
+                  if (user?.isGuest) {
+                    alert('🔒 You are currently in a Guest Session. Session management is enabled for registered student accounts.');
+                  } else {
+                    setShowEditProfile(true);
+                  }
+                }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -1400,9 +1415,23 @@ function EditProfileModal({ user, token, handleLogout, onClose, onSave }) {
               value={semester} 
               onChange={e => setSemester(e.target.value)} 
               required
+              style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                borderRadius: '8px',
+                color: '#ffffff',
+                padding: '0.65rem 0.85rem',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                outline: 'none',
+                cursor: 'pointer',
+                width: '100%'
+              }}
             >
               {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
-                <option key={sem} value={sem}>Semester {sem}</option>
+                <option key={sem} value={sem} style={{ background: '#121215', color: '#ffffff' }}>
+                  Semester {sem}
+                </option>
               ))}
             </select>
           </div>

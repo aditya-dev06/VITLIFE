@@ -43,6 +43,17 @@ server/data/activity_logs*.json
 .env
 .env.*
 
+# Android / Mobile Build Artifacts & Keystores
+*.apk
+*.aab
+*.keystore
+*.idsig
+.gradle/
+build/
+app/build/
+manifest-checksum.txt
+eslint-report.json
+
 
 
 

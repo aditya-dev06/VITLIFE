@@ -1,10 +1,29 @@
 /* Core Design System & Theme Settings */
 /* Fonts are loaded via <link rel="preload"> in index.html — no @import needed here */
 
+/* ── iOS & Android Native Touch & Mobile Performance Reset ── */
+*, *::before, *::after {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, a, input, select, textarea, [role="button"] {
+  touch-action: manipulation;
+}
+
+html, body {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: none;
+}
+
 :root {
+  /* Mobile Safe Area Insets for iOS & Android Gesture Navigation */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+
   /* Typography Fonts */
   --font-heading: 'Space Grotesk', sans-serif;
-  --font-accent: 'Sora', sans-serif;
   --font-body: 'Inter', sans-serif;
   --font-mono: 'Geist Mono', 'Courier New', Courier, monospace;
 
@@ -864,9 +883,14 @@ body.light {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
+  cursor: default;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
   background-color: hsl(var(--bg-deep));
   color: hsl(var(--text-primary));
   font-family: var(--font-body);
@@ -893,6 +917,22 @@ button, .btn-primary, .btn-secondary, .tracker-manage-btn, .btn-promote {
 
 input, textarea, select {
   font-family: inherit;
+  cursor: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  user-select: text;
+}
+
+select {
+  cursor: pointer;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  cursor: pointer;
 }
 
 /* Custom Scrollbar */
@@ -3592,29 +3632,28 @@ input, textarea, select {
 }
 
 .aurora-select option {
-  background: #1a1a2e;
-  color: #fff;
+  background: #121215;
+  color: #ffffff;
 }
 
 .aurora-select:focus {
-  border-color: rgba(99, 91, 255, 0.4);
-  background-color: rgba(99, 91, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.3);
+  background-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
 }
 
 /* ── Submit Button ── */
 .aurora-submit-btn {
   width: 100%;
   padding: 0.95rem;
-  background: linear-gradient(135deg, #635bff, #4f46e5, #7c3aed);
-  background-size: 200% 200%;
-  animation: auroraGradient 4s ease infinite;
-  border: none;
-  border-radius: 14px;
-  color: #fff;
+  background: #ffffff;
+  color: #000000;
   font-family: var(--font-accent, 'Inter', sans-serif);
   font-size: 0.92rem;
   font-weight: 700;
   letter-spacing: 0.03em;
+  border: none;
+  border-radius: 14px;
   cursor: pointer;
   position: relative;
   overflow: hidden;
@@ -3622,8 +3661,15 @@ input, textarea, select {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  transition: transform 0.2s, box-shadow 0.3s;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.15);
   margin-top: 0.5rem;
+}
+
+.aurora-submit-btn:hover {
+  background: #f4f4f5;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(255, 255, 255, 0.25);
 }
 
 @keyframes auroraGradient {
@@ -4168,8 +4214,16 @@ input, textarea, select {
   }
 
   /* Sidebar sliding navigation drawer disabled on mobile by bottom nav */
-  .sidebar {
+  .sidebar,
+  .app-sidebar,
+  .sidebar-mobile-trigger,
+  .sidebar-mobile-close,
+  .sidebar-overlay,
+  .sidebar-backdrop {
     display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
   }
 
   /* User profile card mobile adjustments */
@@ -4178,20 +4232,11 @@ input, textarea, select {
     border-radius: 12px !important;
   }
 
-  .sidebar-mobile-close {
-    display: none !important;
-  }
-
-  /* Backdrop Overlay */
-  .sidebar-overlay {
-    display: none !important;
-  }
-
   /* Main Content adjustment */
   .main-content {
     margin-left: 0 !important;
     padding-top: calc(96px + env(safe-area-inset-top, 0px)) !important; /* Clears fixed top-bar header with notch safety */
-    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 16px) + 40px) !important;
+    padding-bottom: calc(var(--bottom-nav-height, 64px) + env(safe-area-inset-bottom, 16px) + 90px) !important;
     padding-left: 14px !important;
     padding-right: 14px !important;
     width: 100%;
@@ -5138,9 +5183,9 @@ input, textarea, select {
 /* ================= COMMUNITY PAGE STYLES ================= */
 
 .community-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  padding: 1rem 0;
   display: flex;
   flex-direction: column;
   gap: 1.75rem;
@@ -5196,15 +5241,15 @@ input, textarea, select {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 1.5rem;
-  padding: 2.25rem 2.5rem;
-  border-radius: 20px;
-  background: linear-gradient(135deg, hsla(var(--primary) / 0.12), hsla(var(--secondary) / 0.03));
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, hsla(var(--primary) / 0.10), hsla(var(--secondary) / 0.02));
   border: 1px solid hsla(var(--border-glass));
   box-shadow: 
-    0 12px 40px -12px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(20px);
+    0 6px 20px -8px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(16px);
   position: relative;
   overflow: hidden;
 }
@@ -5214,18 +5259,18 @@ input, textarea, select {
   position: absolute;
   top: -50%;
   right: -50%;
-  width: 250px;
-  height: 250px;
-  background: radial-gradient(circle, hsla(var(--secondary) / 0.15) 0%, transparent 70%);
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle, hsla(var(--secondary) / 0.10) 0%, transparent 70%);
   pointer-events: none;
-  filter: blur(40px);
+  filter: blur(30px);
 }
 
 .pyq-banner-content h2 {
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.15rem 0;
   font-family: var(--font-heading);
-  font-size: 1.75rem;
-  font-weight: 800;
+  font-size: 1.1rem;
+  font-weight: 700;
   color: hsl(var(--text-primary));
   background: linear-gradient(135deg, #fff, hsl(var(--text-secondary)));
   -webkit-background-clip: text;
@@ -5234,18 +5279,18 @@ input, textarea, select {
 
 .pyq-banner-content p {
   margin: 0;
-  color: hsl(var(--text-secondary));
-  font-size: 0.95rem;
+  color: hsl(var(--text-muted));
+  font-size: 0.78rem;
 }
 
 .pyq-upload-trigger-btn {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.85rem 1.75rem;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
   font-weight: 700;
-  font-size: 0.9rem;
-  border-radius: 12px;
+  font-size: 0.8rem;
+  border-radius: 10px;
   border: 1px solid hsla(var(--primary) / 0.4);
   background: linear-gradient(135deg, hsla(var(--primary) / 0.2), hsla(var(--primary) / 0.05));
   color: #fff;
@@ -5428,6 +5473,10 @@ input, textarea, select {
     0 10px 30px -15px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
   overflow: hidden;
+  cursor: pointer;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
 }
 
 .pyq-paper-card::before {
@@ -5880,6 +5929,26 @@ input, textarea, select {
     transform: scale(1) translateY(0);
     opacity: 1;
   }
+}
+
+/* ── Base UI / shadcn Navigation Menu Spring Animated Dropdown ── */
+@keyframes baseNavMenuSlideDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.base-nav-menu-popover {
+  animation: baseNavMenuSlideDown 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  transform-origin: top right;
+  will-change: transform, opacity, filter;
 }
 
 .aurora-modal-overlay {

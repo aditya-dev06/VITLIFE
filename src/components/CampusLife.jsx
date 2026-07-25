@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { motion } from 'motion/react';
 import BounceCards from './BounceCards';
 import Masonry from './Masonry';
@@ -447,7 +447,7 @@ function EventCardItem({
   );
 }
 
-export default function CampusLife({ 
+function CampusLife({ 
   user, 
   token, 
   clubs = [], 
@@ -3783,3 +3783,5 @@ function ManagerPortal({
     </div>
   );
 }
+
+export default memo(CampusLife);

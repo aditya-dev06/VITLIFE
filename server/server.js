@@ -1084,6 +1084,77 @@ if (MONGODB_URI) {
       dbConnectionError = null;
       console.log("Successfully connected to MongoDB Database!");
       ensureIndexes(db).catch(err => console.error("Index creation error:", err.message));
+
+      // Migration: Correct any papers saved with invalid academic years (e.g. 2005-06, 2006-07) to '2025-26'
+      try {
+        const updateResult = await db.collection('papers').updateMany(
+          {
+            $or: [
+              { year: { $regex: /^200/ } },
+              { year: { $regex: /^201/ } },
+              { year: '2005-06' },
+              { year: '2006-07' },
+              { year: '2007-08' }
+            ]
+          },
+          { $set: { year: '2025-26' } }
+        );
+        if (updateResult.modifiedCount > 0) {
+          console.log(`[Migration] Successfully updated ${updateResult.modifiedCount} papers with invalid 2006/2007 year to '2025-26'.`);
+        }
+      } catch (err) {
+        console.error("Error updating paper years in MongoDB:", err.message);
+      }
+
+      // Migration: Clean OCR fullText noise and extract missing month metadata for stored papers
+      try {
+        const papersCursor = await db.collection('papers').find({ fullText: { $exists: true, $ne: '' } }).toArray();
+        const monthRegex = /\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b/i;
+        const monthMap = {
+          jan: 'Jan', january: 'Jan', feb: 'Feb', february: 'Feb', mar: 'Mar', march: 'Mar',
+          apr: 'Apr', april: 'Apr', may: 'May', jun: 'Jun', june: 'Jun', jul: 'Jul', july: 'Jul',
+          aug: 'Aug', august: 'Aug', sep: 'Sept', sept: 'Sept', september: 'Sept', oct: 'Oct', october: 'Oct',
+          nov: 'Nov', november: 'Nov', dec: 'Dec', december: 'Dec'
+        };
+
+        let cleanedCount = 0;
+        for (const doc of papersCursor) {
+          let updated = false;
+          const updates = {};
+
+          if (doc.fullText) {
+            const cleaned = doc.fullText
+              .split('\n')
+              .map(l => l.trim())
+              .filter(l => l && !/^(pr a=|RE|SEX 0|SCE EEE yr|6 VIT)/i.test(l) && ((l.match(/[a-zA-Z0-9]/g) || []).length >= 3 || l.length > 8))
+              .join('\n');
+
+            if (cleaned !== doc.fullText) {
+              updates.fullText = cleaned;
+              updated = true;
+            }
+          }
+
+          if (!doc.month && doc.fullText) {
+            const m = doc.fullText.match(monthRegex);
+            if (m) {
+              const raw = m[1].toLowerCase();
+              updates.month = monthMap[raw] || (raw.charAt(0).toUpperCase() + raw.slice(1, 3));
+              updated = true;
+            }
+          }
+
+          if (updated) {
+            await db.collection('papers').updateOne({ _id: doc._id }, { $set: updates });
+            cleanedCount++;
+          }
+        }
+        if (cleanedCount > 0) {
+          console.log(`[Migration] Cleaned OCR noise & extracted month metadata for ${cleanedCount} paper documents.`);
+        }
+      } catch (err) {
+        console.error("Error running OCR text cleaning migration:", err.message);
+      }
       
       // Seed papers in MongoDB if empty
       try {
@@ -1720,10 +1791,6 @@ const deletePaper = async (id) => {
     } catch (e) {}
   }
 };
-      fs.writeFileSync(PAPERS_FILE, JSON.stringify(list, null, 2), 'utf-8');
-    } catch (e) {}
-  }
-};
 
 const saveFeedback = async (feedbackObj) => {
   const id = `fb_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
@@ -1845,12 +1912,12 @@ const syncPassVitianPapers = async () => {
       else if (firstDigit === 3) semester = 5;
       else if (firstDigit === 4) semester = 7;
 
-      // Infer year from paperName
-      let year = '2024-25'; // Fallback
+      // Infer year from paperName (must match a 4-digit year like 2023, 2024, 2025, 2026; avoids course codes like CSE2006)
+      let year = '2025-26'; // Fallback
       if (paper.paperName) {
-        const match = paper.paperName.match(/\d{4}/);
+        const match = paper.paperName.match(/\b(202[0-9])\b/);
         if (match) {
-          const fullYear = parseInt(match[0], 10);
+          const fullYear = parseInt(match[1], 10);
           const prevYear = fullYear - 1;
           const shortYearStr = String(fullYear).slice(-2);
           year = `${prevYear}-${shortYearStr}`;
@@ -3591,6 +3658,144 @@ const MAYURI_BOYS_NEW_MENU = {
   }
 };
 
+const MAYURI_GIRLS_MENU = {
+  0: {
+    breakfast: 'Paneer Stuffed Paratha, Butter, Dahi, Banana, Sprouts, Bread, Jam, Tea, Coffee, Milk',
+    lunch: 'Roti, Veg Dum Biryani, Shahi Paneer, Boondi Raita, Dal Tadka, South Rice, Rasam, Pickle',
+    snacks: 'Samosa, Mint Chutney, Tea, Coffee, Milk',
+    dinner: 'Plain Roti, Veg Korma, Dal Makhani, Steamed Rice, Tomato Soup, Fruit Custard'
+  },
+  1: {
+    breakfast: 'Idli, Medu Vada, Coconut Chutney, Sambhar, Fruit Salad, Bread, Butter, Tea, Milk',
+    lunch: 'Tawa Roti, Aloo Gobhi, Chana Dal, Curd Rice, North Rice, Rasam, Salad, Pickle',
+    snacks: 'Pasta, Tomato Ketchup, Tea, Coffee',
+    dinner: 'Butter Roti, Veg Jalfrezi, Rajma Gravy, Plain Rice, Pepper Rasam, Sevai Kheer'
+  },
+  2: {
+    breakfast: 'Poha, Jalebi, Mix Cut Fruit, Sprouts, Bread, Butter, Jam, Tea, Milk',
+    lunch: 'Puri, Chole Masala, Veg Pulao, Curd, Mixed Salad, Plain Rice, Sambar, Rasam',
+    snacks: 'Sandwich, Green Chutney, Tea, Coffee',
+    dinner: 'Roti, Matar Paneer, Dal Fry, Plain Rice, Lemon Rasam, Gulab Jamun'
+  },
+  3: {
+    breakfast: 'Masala Dosa, Tomato Chutney, Sambhar, Boiled Egg / Sprouts, Tea, Coffee',
+    lunch: 'Roti, Veg Kofta, Dal Kolhapuri, Jeera Rice, Curd, Veg Salad, Rasam, Pickle',
+    snacks: 'Pav Bhaji, Lemon Slice, Tea, Coffee',
+    dinner: 'Butter Roti, Kadai Paneer, Butter Chicken Gravy, Dal Tadka, Steamed Rice, Ingi Rasam, Ice Cream'
+  },
+  4: {
+    breakfast: 'Aloo Paratha, Curd, Pickle, Banana, Bread, Butter, Jam, Tea, Milk',
+    lunch: 'Plain Roti, Rajma Masala, Jeera Rice, Mix Veg, Curd, Plain Rice, Sambar, Rasam',
+    snacks: 'Noodles, Chili Sauce, Tea, Coffee',
+    dinner: 'Roti, Mix Veg Curry, Egg Curry / Paneer Gravy, Dal Fry, Steamed Rice, Pepper Rasam, Halwa'
+  },
+  5: {
+    breakfast: 'Uttapam, Coconut Chutney, Sambhar, Boiled Egg, Fruit Salad, Tea, Milk',
+    lunch: 'Tawa Roti, Kadhi Pakoda, Dal Fry, Ghee Rice, Mix Salad, Plain Rice, Sambar, Rasam',
+    snacks: 'Vada Pav, Green Chutney, Tea, Milk',
+    dinner: 'Butter Roti, Kadai Paneer / Chicken Curry, Dal Tadka, Steamed Rice, Tomato Soup, Sweet Kheer'
+  },
+  6: {
+    breakfast: 'Chole Bhature, Cut Fruit, Sprouts, Bread, Jam, Tea, Milk',
+    lunch: 'Roti, Aloo Matar, Dal Makhani, Veg Pulao, Curd, Plain Rice, Sambar, Rasam',
+    snacks: 'Bread Pakoda, Red Chutney, Tea, Coffee',
+    dinner: 'Roti, Malai Kofta, Dal Fry, Steamed Rice, Paruppu Rasam, Fruit Salad'
+  }
+};
+
+const AB_GIRLS_MENU = {
+  0: {
+    breakfast: 'Masala Dosa, Sambhar, Coconut Chutney, Boiled Egg, Sprouts, Bread, Butter, Jam, Tea, Milk',
+    lunch: 'Roti, Veg Biryani, Paneer Butter Masala, Raita, Dal Tadka, South Rice, Rasam, Pickle',
+    snacks: 'Red Sauce Pasta, Tea, Coffee',
+    dinner: 'Roti, Aloo Veg Masala, Dal Makhani, Steamed Rice, Veg Soup, Gulab Jamun'
+  },
+  1: {
+    breakfast: 'Set Dosa, Tomato Chutney, Sambhar, Banana, Bread, Butter, Jam, Tea, Milk',
+    lunch: 'Tawa Roti, Bhindi Fry, Chana Dal, Curd Rice, Plain Rice, Rasam, Salad, Pickle',
+    snacks: 'Veg Cutlet, Green Chutney, Tea, Coffee',
+    dinner: 'Butter Roti, Mix Veg Gravy, Rajma Curry, Steamed Rice, Tomato Rasam, Kheer'
+  },
+  2: {
+    breakfast: 'Poha, Sev, Mix Cut Fruit, Bread, Butter, Jam, Tea, Milk',
+    lunch: 'Poori, Chole Curry, Jeera Rice, Dahi, Plain Rice, Sambar, Rasam',
+    snacks: 'Aloo Bonda, Green Chutney, Tea, Coffee',
+    dinner: 'Roti, Paneer Do Pyaza, Dal Fry, Steamed Rice, Pepper Rasam, Jalebi'
+  },
+  3: {
+    breakfast: 'Onion Uttapam, Coconut Chutney, Sambhar, Sprouts, Boiled Egg, Tea, Milk',
+    lunch: 'Roti, Veg Kofta, Dal Kolhapuri, Veg Pulao, Curd, Plain Rice, Rasam',
+    snacks: 'Corn Sandwich, Tomato Ketchup, Tea, Coffee',
+    dinner: 'Butter Roti, Shahi Paneer, Egg Gravy, Dal Tadka, Steamed Rice, Ingi Rasam, Rasgulla'
+  },
+  4: {
+    breakfast: 'Gobhi Paratha, Curd, Butter, Banana, Bread, Jam, Tea, Milk',
+    lunch: 'Roti, Rajma Masala, Veg Pulao, Mixed Veg, Curd, Plain Rice, Rasam',
+    snacks: 'Hakha Noodles, Sauce, Tea, Coffee',
+    dinner: 'Roti, Matar Mushroom, Dal Fry, Steamed Rice, Pepper Rasam, Moong Dal Halwa'
+  },
+  5: {
+    breakfast: 'Idli, Vada, Sambhar, Chutney, Boiled Egg, Cut Fruit, Tea, Milk',
+    lunch: 'Roti, Kadi Pakoda, Dal Fry, Ghee Rice, Curd, Plain Rice, Rasam',
+    snacks: 'Samosa, Mint Chutney, Tea, Coffee',
+    dinner: 'Butter Roti, Paneer Tikka Gravy, Chicken Masala, Dal Tadka, Steamed Rice, Soup, Sweet'
+  },
+  6: {
+    breakfast: 'Chole Bhature, Sprouts, Mix Cut Fruit, Bread, Butter, Tea, Milk',
+    lunch: 'Roti, Aloo Hara Matar, Dal Makhani, Veg Pulao, Plain Rice, Rasam',
+    snacks: 'Bread Roll, Tomato Sauce, Tea, Coffee',
+    dinner: 'Roti, Veg Handi, Dal Fry, Steamed Rice, Rasam, Custard'
+  }
+};
+
+const JMB_BOYS_MENU = {
+  0: {
+    breakfast: 'Masala Dosa, Sambhar, Chutney, Boiled Egg, Sprouts, Bread, Butter, Tea, Milk',
+    lunch: 'Roti, Chicken Biryani / Veg Biryani, Shahi Paneer, Raita, Dal Tadka, Plain Rice, Rasam',
+    snacks: 'Pasta, Sauce, Tea, Coffee',
+    dinner: 'Roti, Aloo Matar Gravy, Dal Makhani, Steamed Rice, Tomato Soup, Sweet'
+  },
+  1: {
+    breakfast: 'Idli, Vada, Sambhar, Chutney, Fruit, Bread, Jam, Tea, Milk',
+    lunch: 'Roti, Aloo Gobhi, Chana Dal, Curd Rice, Plain Rice, Rasam, Salad',
+    snacks: 'Kachori, Chutney, Tea, Coffee',
+    dinner: 'Butter Roti, Mix Veg, Rajma Masala, Steamed Rice, Rasam, Kheer'
+  },
+  2: {
+    breakfast: 'Poha, Jalebi, Cut Fruit, Sprouts, Bread, Butter, Tea, Milk',
+    lunch: 'Puri, Chole Masala, Veg Pulao, Curd, Plain Rice, Sambar, Rasam',
+    snacks: 'Samosa, Chutney, Tea, Coffee',
+    dinner: 'Roti, Paneer Butter Masala, Dal Fry, Steamed Rice, Rasam, Sweet'
+  },
+  3: {
+    breakfast: 'Pav Bhaji, Upma, Chutney, Boiled Egg, Bread, Jam, Tea, Milk',
+    lunch: 'Roti, Veg Kofta, Dal Tadka, Matar Pulao, Curd, Plain Rice, Rasam',
+    snacks: 'Cutlet, Sauce, Tea, Coffee',
+    dinner: 'Butter Roti, Kadai Paneer, Chicken Gravy, Dal Tadka, Steamed Rice, Rasam, Gulab Jamun'
+  },
+  4: {
+    breakfast: 'Aloo Paratha, Curd, Pickle, Fruit, Bread, Butter, Tea, Milk',
+    lunch: 'Roti, Rajma, Jeera Rice, Mixed Veg, Plain Rice, Rasam',
+    snacks: 'Fried Rice / Noodles, Sauce, Tea, Coffee',
+    dinner: 'Roti, Egg Curry / Paneer Curry, Dal Fry, Steamed Rice, Rasam, Halwa'
+  },
+  5: {
+    breakfast: 'Uttapam, Chutney, Sambhar, Boiled Egg, Tea, Milk',
+    lunch: 'Roti, Kadhi Pakoda, Dal Fry, Plain Rice, Rasam',
+    snacks: 'Vada Pav, Chutney, Tea, Coffee',
+    dinner: 'Butter Roti, Butter Chicken / Paneer Masala, Dal Tadka, Steamed Rice, Rasam, Sweet'
+  },
+  6: {
+    breakfast: 'Chole Bhature, Cut Fruit, Bread, Butter, Tea, Milk',
+    lunch: 'Roti, Aloo Hara Matar, Dal Makhani, Ghee Rice, Plain Rice, Rasam',
+    snacks: 'Bread Pakoda, Sauce, Tea, Coffee',
+    dinner: 'Roti, Veg Pulao, Dal Fry, Steamed Rice, Rasam, Kheer'
+  }
+};
+
+const CRCL_BOYS_MENU = { ...JMB_BOYS_MENU };
+const SAFAL_BOYS_MENU = { ...JMB_BOYS_MENU };
+
 const MEAL_KEYS = ['breakfast', 'lunch', 'snacks', 'dinner'];
 
 /**
@@ -3628,8 +3833,6 @@ async function fetchMessMenuFromSource(messId) {
     if (line.startsWith('1:')) {
       const payload = JSON.parse(line.substring(2));
       if (payload.menu && payload.menu.success && payload.menu.data) {
-        // payload.menu.data is an array of 7 days (Sun=0 … Sat=6)
-        // Each day is an array of 4 strings: [breakfast, lunch, snacks, dinner]
         const rawDays = payload.menu.data;
         const menu = {};
         for (let dayIndex = 0; dayIndex < rawDays.length; dayIndex++) {
@@ -3638,7 +3841,6 @@ async function fetchMessMenuFromSource(messId) {
           menu[dayIndex] = {};
           for (let mealIdx = 0; mealIdx < MEAL_KEYS.length; mealIdx++) {
             const rawItems = dayArr[mealIdx] || 'Menu not available';
-            // Clean up: remove leading * markers used by messmenu.me for highlighting
             const cleaned = rawItems.replace(/\*/g, '').trim();
             menu[dayIndex][MEAL_KEYS[mealIdx]] = cleaned;
           }
@@ -3662,16 +3864,7 @@ app.get('/api/mess-menu/:messId', async (req, res) => {
     });
   }
 
-  // Serve the updated static June 2026 menu for Mayuri Mess
-  if (messId === 'mayuri-boys' || messId === 'mayuri-girls') {
-    return res.json({
-      success: true,
-      cached: false,
-      data: { name: MESS_NAMES[messId], menu: MAYURI_BOYS_NEW_MENU }
-    });
-  }
-
-  // Check cache
+  // Check cache first
   const cached = messMenuCache[messId];
   if (cached && (Date.now() - cached.fetchedAt) < MESS_CACHE_TTL) {
     return res.json({
@@ -3681,32 +3874,33 @@ app.get('/api/mess-menu/:messId', async (req, res) => {
     });
   }
 
+  const MESS_FALLBACKS = {
+    'mayuri-boys': MAYURI_BOYS_NEW_MENU,
+    'mayuri-girls': MAYURI_GIRLS_MENU,
+    'ab-girls': AB_GIRLS_MENU,
+    'jmb-boys': JMB_BOYS_MENU,
+    'crcl-boys': CRCL_BOYS_MENU,
+    'safal-boys': SAFAL_BOYS_MENU
+  };
+
   try {
     const menu = await fetchMessMenuFromSource(messId);
-    // Store in cache
     messMenuCache[messId] = { data: menu, fetchedAt: Date.now() };
 
-    res.json({
+    return res.json({
       success: true,
       cached: false,
       data: { name: MESS_NAMES[messId], menu }
     });
   } catch (error) {
-    console.error(`[Mess Menu] Failed to fetch menu for ${messId}:`, error.message);
+    console.warn(`[Mess Menu] Live fetch failed for ${messId} (${error.message}), serving structured fallback menu.`);
 
-    // If we have stale cache, serve it with a warning
-    if (cached) {
-      return res.json({
-        success: true,
-        cached: true,
-        stale: true,
-        data: { name: MESS_NAMES[messId], menu: cached.data }
-      });
-    }
-
-    res.status(502).json({
-      success: false,
-      error: 'Unable to fetch mess menu data. Please try again later.'
+    const fallbackMenu = MESS_FALLBACKS[messId] || MAYURI_BOYS_NEW_MENU;
+    return res.json({
+      success: true,
+      cached: false,
+      fallback: true,
+      data: { name: MESS_NAMES[messId], menu: fallbackMenu }
     });
   }
 });
@@ -3758,6 +3952,79 @@ app.get('/api/papers', optionalAuthenticate, async (req, res) => {
   }
 });
 
+// 1b. POST /api/ocr/vision - Ultra-fast Server AI Vision OCR endpoint using Gemini 1.5 Flash
+app.post('/api/ocr/vision', optionalAuthenticate, async (req, res) => {
+  try {
+    const { imageBase64, pdfBuffer } = req.body;
+    const fileContent = imageBase64 || pdfBuffer;
+
+    if (!fileContent) {
+      return res.status(400).json({ error: 'Please provide imageBase64 or pdfBuffer for Vision OCR scan.' });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY;
+    if (!apiKey) {
+      return res.status(503).json({ error: 'AI Vision OCR API key is not configured on the server.' });
+    }
+
+    const cleanBase64 = fileContent.replace(/^data:[^;]+;base64,/, '');
+    const mimeType = imageBase64 ? (fileContent.match(/^data:([^;]+);/)?.[1] || 'image/jpeg') : 'application/pdf';
+
+    const payload = {
+      contents: [
+        {
+          parts: [
+            {
+              inlineData: {
+                mimeType,
+                data: cleanBase64
+              }
+            },
+            {
+              text: `Analyze this university exam question paper image/document carefully.
+Return ONLY a raw valid JSON object (no markdown, no backticks) matching this exact format:
+{
+  "courseCode": "Subject code e.g. MAT2005 or CSE2001",
+  "courseTitle": "Full title of the subject/course",
+  "examType": "MTE" or "TEE" or "CAT-1" or "CAT-2",
+  "year": "Academic year e.g. 2025-26",
+  "month": "Short month e.g. Jul, Nov, May, Dec",
+  "semester": integer 1-8,
+  "fullText": "Full clean text of the exam paper in proper LaTeX/Markdown format"
+}`
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.1
+      }
+    };
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const apiRes = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!apiRes.ok) {
+      const errText = await apiRes.text();
+      throw new Error(`Vision AI service error: ${apiRes.status} ${errText}`);
+    }
+
+    const result = await apiRes.json();
+    const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+    const parsedData = JSON.parse(jsonText);
+
+    res.json({ success: true, metadata: parsedData });
+  } catch (err) {
+    console.error('[Vision OCR Error]:', err.message);
+    res.status(500).json({ error: err.message || 'Vision OCR scan failed.' });
+  }
+});
+
 // 2. GET /api/papers/moderation - Get pending papers (Admin Only)
 app.get('/api/papers/moderation', authenticate, requireAdmin, async (req, res) => {
   try {
@@ -3773,7 +4040,7 @@ app.get('/api/papers/moderation', authenticate, requireAdmin, async (req, res) =
 // 3. POST /api/papers - Upload a new paper (Authenticated & Guests)
 app.post('/api/papers', optionalAuthenticate, async (req, res) => {
   try {
-    const { courseCode, courseTitle, department, examType, year, semester, url, fileData, fileName, examDate, fullText } = req.body;
+    const { courseCode, courseTitle, department, examType, year, semester, url, fileData, fileName, examDate, month, fullText } = req.body;
 
     if (!courseCode || !courseTitle || !examType || !year || !semester) {
       return res.status(400).json({ error: 'All fields (courseCode, courseTitle, examType, year, semester) are required.' });
@@ -3940,6 +4207,7 @@ app.post('/api/papers', optionalAuthenticate, async (req, res) => {
       department: inferredDept.trim().toUpperCase(),
       examType: examType.trim(),
       year: year.trim(),
+      month: month ? month.trim() : null,
       semester: parseInt(semester, 10) || 1,
       url: Array.isArray(fileUrl) ? fileUrl.map(u => u.trim()) : fileUrl.trim(),
       examDate: examDate ? examDate.trim() : null,

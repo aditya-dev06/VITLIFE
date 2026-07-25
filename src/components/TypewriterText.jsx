@@ -6,15 +6,22 @@ export default function TypewriterText({
   typingSpeed = 120, 
   erasingSpeed = 60, 
   newWordDelay = 2000, 
-  className = '' 
+  className = '',
+  hideCursorAfterFinish = true,
+  cursorHideDelay = 1800
 }) {
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [currentText, setCurrentText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showCursor, setShowCursor] = useState(true);
 
   useEffect(() => {
     let timer;
+    let cursorTimer;
     const activeWord = words[currentWordIndex] || '';
+
+    // Keep cursor visible while typing or erasing
+    setShowCursor(true);
 
     if (isDeleting) {
       if (currentText === '') {
@@ -29,6 +36,13 @@ export default function TypewriterText({
       }
     } else {
       if (currentText === activeWord) {
+        // Word typing finished! Hide cursor after delay so it is not distracting
+        if (hideCursorAfterFinish) {
+          cursorTimer = setTimeout(() => {
+            setShowCursor(false);
+          }, cursorHideDelay);
+        }
+
         if (words.length > 1) {
           timer = setTimeout(() => {
             setIsDeleting(true);
@@ -41,13 +55,16 @@ export default function TypewriterText({
       }
     }
 
-    return () => clearTimeout(timer);
-  }, [currentText, isDeleting, currentWordIndex, words, typingSpeed, erasingSpeed, newWordDelay]);
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(cursorTimer);
+    };
+  }, [currentText, isDeleting, currentWordIndex, words, typingSpeed, erasingSpeed, newWordDelay, hideCursorAfterFinish, cursorHideDelay]);
 
   return (
     <span className={`typewriter-container ${className}`}>
       <span className="typewriter-text">{currentText}</span>
-      <span className="typewriter-cursor"></span>
+      <span className={`typewriter-cursor ${showCursor ? 'visible' : 'hidden'}`}></span>
     </span>
   );
 }

@@ -1,10 +1,10 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, memo } from 'react';
 import './Dock.css';
 
-export default function Dock({
+function Dock({
   items,
   outerClassName = ''
 }) {
@@ -16,10 +16,12 @@ export default function Dock({
 
   const activeIndex = items.findIndex(item => item.className?.includes('active'));
 
-  if (activeIndex !== -1 && activeIndex !== currentActiveIndex) {
-    setPrevActiveIndex(currentActiveIndex);
-    setCurrentActiveIndex(activeIndex);
-  }
+  useEffect(() => {
+    if (activeIndex !== -1 && activeIndex !== currentActiveIndex) {
+      setPrevActiveIndex(currentActiveIndex);
+      setCurrentActiveIndex(activeIndex);
+    }
+  }, [activeIndex, currentActiveIndex]);
 
   // Calculate coordinates of the active element
   useEffect(() => {
@@ -122,3 +124,5 @@ export default function Dock({
     </div>
   );
 }
+
+export default memo(Dock);
