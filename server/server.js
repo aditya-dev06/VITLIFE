@@ -3952,6 +3952,18 @@ app.get('/api/papers', optionalAuthenticate, async (req, res) => {
   }
 });
 
+app.get('/api/ocr/debug', async (req, res) => {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.Gemini_API_Key || process.env.GOOGLE_AI_KEY || process.env.gemini_api_key;
+  if (!apiKey) return res.json({ configured: false, keyFound: false });
+  try {
+    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    const data = await listRes.json();
+    res.json({ configured: true, status: listRes.status, keyLength: apiKey.length, googleResponse: data });
+  } catch (err) {
+    res.json({ configured: true, error: err.message });
+  }
+});
+
 // 1b. POST /api/ocr/vision - Ultra-fast Server AI Vision OCR endpoint using Gemini 1.5 Flash
 app.post('/api/ocr/vision', optionalAuthenticate, async (req, res) => {
   try {
