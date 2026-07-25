@@ -4002,26 +4002,38 @@ Return ONLY a raw valid JSON object (no markdown, no backticks) matching this ex
       }
     };
 
-    let apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-    let apiRes = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    const candidateModels = [
+      'gemini-1.5-flash-002',
+      'gemini-1.5-flash-001',
+      'gemini-2.0-flash-exp',
+      'gemini-pro-vision',
+      'gemini-1.5-flash'
+    ];
 
-    if (!apiRes.ok) {
-      // Fallback to gemini-1.5-flash-latest
-      apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
-      apiRes = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+    let apiRes = null;
+    let lastErrText = '';
+
+    for (const modelName of candidateModels) {
+      try {
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          apiRes = res;
+          break;
+        } else {
+          lastErrText = await res.text();
+        }
+      } catch (e) {
+        lastErrText = e.message;
+      }
     }
 
-    if (!apiRes.ok) {
-      const errText = await apiRes.text();
-      throw new Error(`Vision AI service error: ${apiRes.status} ${errText}`);
+    if (!apiRes) {
+      throw new Error(`Vision AI service error: ${lastErrText}`);
     }
 
     const result = await apiRes.json();
