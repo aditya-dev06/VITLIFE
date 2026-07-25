@@ -4002,20 +4002,18 @@ Return ONLY a raw valid JSON object (no markdown, no backticks) matching this ex
       }
     };
 
-    const candidateModels = [
-      'gemini-1.5-flash-002',
-      'gemini-1.5-flash-001',
-      'gemini-2.0-flash-exp',
-      'gemini-pro-vision',
-      'gemini-1.5-flash'
+    const candidateEndpoints = [
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`
     ];
 
     let apiRes = null;
     let lastErrText = '';
 
-    for (const modelName of candidateModels) {
+    for (const apiUrl of candidateEndpoints) {
       try {
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
         const res = await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
