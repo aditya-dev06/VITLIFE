@@ -3962,7 +3962,7 @@ app.post('/api/ocr/vision', optionalAuthenticate, async (req, res) => {
       return res.status(400).json({ error: 'Please provide imageBase64 or pdfBuffer for Vision OCR scan.' });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.Gemini_API_Key || process.env.GOOGLE_AI_KEY || process.env.gemini_api_key;
     if (!apiKey) {
       return res.status(503).json({ error: 'AI Vision OCR API key is not configured on the server.' });
     }
