@@ -965,12 +965,13 @@ const sendMailHelper = async (to, subject, text, html) => {
   }
 
   try {
+    const fromAddress = process.env.FROM_EMAIL || smtpUser;
     await transporter.sendMail({
-      from: `"VIT Life Support" <${smtpUser}>`,
+      from: `"VIT Life" <${fromAddress}>`,
       to,
       subject,
-      text
-      // html parameter is omitted to ensure deliverability to strict organization/university email filters
+      text,
+      html: html || getHtmlEmailTemplate(to.split('@')[0], subject, subject, text)
     });
     console.log(`Email sent successfully to ${to}`);
     return true;
