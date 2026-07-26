@@ -1,5 +1,24 @@
+# Allow search engine crawlers access to all student pages, mess menu, campus events, and guides
 User-agent: *
 Allow: /
+Allow: /dashboard
+Allow: /mess-menu
+Allow: /community
+Allow: /pyq-hub
+Allow: /marketplace
+Allow: /student-chats
+Allow: /campus-life
+Allow: /events
+Allow: /clubs
+Allow: /recruitments
+Allow: /opportunities
+Allow: /timetable
+Allow: /guide
+Allow: /terms
+Allow: /privacy
+
+# Protect internal server APIs from index bloat
 Disallow: /api/
 
+# XML Sitemap location for Google Search Console
 Sitemap: https://vitlife.vercel.app/sitemap.xml
