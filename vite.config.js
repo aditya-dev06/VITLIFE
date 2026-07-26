@@ -5,7 +5,9 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
+    target: 'esnext',
     chunkSizeWarningLimit: 700,
+    reportCompressedSize: false, // Disables Gzip calculation for sub-500ms builds
     rollupOptions: {
       output: {
         manualChunks(id) {
