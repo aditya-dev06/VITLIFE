@@ -584,7 +584,10 @@ const EMAIL_REGEX = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
 const isSafeEmail = (email) => {
   if (!email || typeof email !== 'string') return false;
   if (email.length > 320) return false; // RFC 5321 max length
-  const cleanEmail = email.toLowerCase().trim();
+  let cleanEmail = email.toLowerCase().trim();
+  if (cleanEmail.endsWith('@vitbhopal')) {
+    cleanEmail += '.ac.in';
+  }
   if (cleanEmail === '__proto__' || cleanEmail === 'constructor' || cleanEmail === 'prototype') {
     return false;
   }
@@ -1296,9 +1299,9 @@ const ensureJwtSecret = async () => {
   if (jwtSecretPromise) return jwtSecretPromise;
 
   jwtSecretPromise = (async () => {
-    // 1. Check environment variable first
-    let secret = process.env.JWT_SECRET;
-    if (secret && secret.trim().length >= 32) {
+    // 1. Check environment variable first (with case-insensitive & alias fallback)
+    let secret = process.env.JWT_SECRET || process.env.jwt_secret || process.env.JWT_Secret || process.env.Jwt_Secret || process.env.JSW_SECRET || process.env.jsw_secret || process.env.Jsw_Secret;
+    if (secret && secret.trim().length >= 16) {
       JWT_SECRET = secret.trim();
       return JWT_SECRET;
     }
@@ -3099,7 +3102,11 @@ app.post('/api/auth/login', authLimiter, authRateLimiter(10, 15 * 60 * 1000), as
       return res.status(400).json({ error: 'Invalid email address.' });
     }
 
-    const lowerEmail = email.trim().toLowerCase();
+    let lowerEmail = email.trim().toLowerCase();
+    if (lowerEmail.endsWith('@vitbhopal')) {
+      lowerEmail += '.ac.in';
+    }
+
     const user = await findUserByEmail(lowerEmail);
 
     if (!user) {

@@ -527,12 +527,17 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
     }
 
     setLoading(true);
+    let targetEmail = email.trim().toLowerCase();
+    if (targetEmail.endsWith('@vitbhopal')) {
+      targetEmail += '.ac.in';
+    }
+
     const url = isSignUp ? '/api/auth/register' : '/api/auth/login';
     const payload = !isSignUp 
-      ? { email, password }
+      ? { email: targetEmail, password }
       : { 
           name, 
-          email, 
+          email: targetEmail, 
           password, 
           isVitBhopal, 
           courses: isVitBhopal ? selectedCourses : [],
