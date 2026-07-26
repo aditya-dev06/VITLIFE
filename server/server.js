@@ -131,6 +131,23 @@ if (!fs.existsSync(uploadsDir)) {
 }
 app.use('/uploads', express.static(uploadsDir));
 
+// Smart Caching Middleware for read-only public resources
+app.use((req, res, next) => {
+  if (req.method === 'GET') {
+    const p = req.path;
+    if (
+      p.startsWith('/api/clubs') ||
+      p.startsWith('/api/opportunities') ||
+      p.startsWith('/api/mess-menu') ||
+      p.startsWith('/api/events') ||
+      p.startsWith('/api/settings/')
+    ) {
+      res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
+    }
+  }
+  next();
+});
+
 // Security response headers middleware (replaces helmet)
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');

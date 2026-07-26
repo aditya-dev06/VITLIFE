@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, memo } from 'react';
 import { createPortal } from 'react-dom';
 import BounceCards from './BounceCards';
 import Hyperspeed from './Hyperspeed';
+import { cachedFetch } from '../utils/apiClient';
 
 const DARK_HYPERSPEED_OPTIONS = {
   distortion: 'turbulentDistortion',
@@ -995,7 +996,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
     const fetchMenu = async () => {
       setMessMenuLoading(true);
       try {
-        const res = await fetch(`/api/mess-menu/${selectedMess}`);
+        const res = await cachedFetch(`/api/mess-menu/${selectedMess}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         if (!cancelled && json.success && json.data) {

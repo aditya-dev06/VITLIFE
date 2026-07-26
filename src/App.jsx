@@ -19,6 +19,7 @@ import CommunityPage from './components/CommunityPage';
 import FeedbackModal from './components/FeedbackModal';
 import AppSidebar from './components/AppSidebar';
 import { useTheme } from './components/theme-provider';
+import { cachedFetch } from './utils/apiClient';
 
 // Global fetch interceptor to catch 401/403 responses and trigger logouts (HMR-safe)
 if (!window.fetch.__isWrapped) {
@@ -93,7 +94,7 @@ function App() {
   const lastScrollY = useRef(0);
 
   useEffect(() => {
-    fetch('/api/settings/guide-visible')
+    cachedFetch('/api/settings/guide-visible')
       .then(res => res.json())
       .then(data => {
         if (data && typeof data.visible === 'boolean') {
@@ -102,7 +103,7 @@ function App() {
       })
       .catch(err => console.error('Failed to load guide visibility:', err));
 
-    fetch('/api/settings/events-locked')
+    cachedFetch('/api/settings/events-locked')
       .then(res => res.json())
       .then(data => {
         if (data && typeof data.locked === 'boolean') {
@@ -411,7 +412,7 @@ function App() {
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      const res = await fetch('/api/opportunities', { headers });
+      const res = await cachedFetch('/api/opportunities', { headers });
       if (res.ok) {
         const data = await res.json();
         setOpportunities(data.opportunities || []);
@@ -426,7 +427,7 @@ function App() {
 
   const fetchClubs = useCallback(async () => {
     try {
-      const res = await fetch('/api/clubs');
+      const res = await cachedFetch('/api/clubs');
       if (res.ok) {
         const data = await res.json();
         setClubs(data.clubs || []);
@@ -440,7 +441,7 @@ function App() {
 
   const fetchEvents = useCallback(async () => {
     try {
-      const res = await fetch('/api/events');
+      const res = await cachedFetch('/api/events');
       if (res.ok) {
         const data = await res.json();
         setEvents(data.events || []);
