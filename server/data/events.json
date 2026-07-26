@@ -1,3 +1,55 @@
 {
-  "events": []
+  "events": [
+    {
+      "id": "evt-vitb-hack-2026",
+      "title": "VIT Bhopal HackSummit 2026",
+      "description": "Annual flagship 36-hour hackathon hosted by VIT Bhopal Coding Club. Solve real-world AI, Web3, and HealthTech challenges with exciting prize pools and recruiter networking.",
+      "clubId": "coding-club",
+      "clubName": "Coding Club VIT Bhopal",
+      "category": "Technical",
+      "date": "2026-08-15",
+      "time": "09:00 AM",
+      "venue": "Auditorium & AB-1 Labs",
+      "posterUrl": "https://res.cloudinary.com/demo/image/upload/v1631234567/sample.jpg",
+      "registrationLink": "https://vitbhopal.ac.in",
+      "tags": ["AI", "Hackathon", "Web3", "Coding"],
+      "price": "Free",
+      "createdBy": "Admin",
+      "createdAt": "2026-07-26T00:00:00.000Z"
+    },
+    {
+      "id": "evt-vitb-ai-workshop",
+      "title": "Generative AI & LLM Engineering Workshop",
+      "description": "Hands-on technical workshop building autonomous AI agents and fine-tuning open-source LLMs using PyTorch and HuggingFace.",
+      "clubId": "ai-society",
+      "clubName": "AI & Robotics Society",
+      "category": "Technical",
+      "date": "2026-08-20",
+      "time": "02:00 PM",
+      "venue": "Lab 204, Academic Block 2",
+      "posterUrl": "https://res.cloudinary.com/demo/image/upload/v1631234567/sample.jpg",
+      "registrationLink": "https://vitbhopal.ac.in",
+      "tags": ["AI", "Machine Learning", "Python"],
+      "price": "Free",
+      "createdBy": "Admin",
+      "createdAt": "2026-07-26T00:00:00.000Z"
+    },
+    {
+      "id": "evt-vitb-cultural-fest",
+      "title": "VIBRANCE 2026 - Annual Cultural Fest",
+      "description": "The grand annual cultural fest of VIT Bhopal featuring battle of the bands, fashion shows, dance competitions, and celebrity night performances.",
+      "clubId": "cultural-club",
+      "clubName": "Cultural Society",
+      "category": "Cultural",
+      "date": "2026-09-10",
+      "time": "05:00 PM",
+      "venue": "Central Sports Ground",
+      "posterUrl": "https://res.cloudinary.com/demo/image/upload/v1631234567/sample.jpg",
+      "registrationLink": "https://vitbhopal.ac.in",
+      "tags": ["Cultural", "Music", "Dance", "Fest"],
+      "price": "Free",
+      "createdBy": "Admin",
+      "createdAt": "2026-07-26T00:00:00.000Z"
+    }
+  ]
 }

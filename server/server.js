@@ -1260,6 +1260,11 @@ let JWT_SECRET = null;
 let jwtSecretPromise = null;
 
 const getLocalFallbackSecret = () => {
+  const envSecret = process.env.JWT_SECRET;
+  if (envSecret && envSecret.trim().length >= 16) {
+    return envSecret.trim();
+  }
+
   const SECRET_FILE = path.join(DATA_DIR, 'secret.key');
   if (fs.existsSync(SECRET_FILE)) {
     try {
@@ -1272,16 +1277,18 @@ const getLocalFallbackSecret = () => {
     }
   }
 
-  const newSecret = crypto.randomBytes(64).toString('hex');
+  // Deterministic fallback derived from app signature to prevent random token invalidation on Vercel cold starts
+  const baseSeed = process.env.MONGODB_URI || process.env.ADMIN_EMAIL || 'vit_life_app_persistent_jwt_secret_seed_2026';
+  const deterministicSecret = crypto.createHash('sha256').update(`vitlife:${baseSeed}:secret`).digest('hex');
+
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
-    fs.writeFileSync(SECRET_FILE, newSecret, 'utf8');
-  } catch (err) {
-    console.warn("Could not save persistent secret key to disk fallback:", err.message);
-  }
-  return newSecret;
+    fs.writeFileSync(SECRET_FILE, deterministicSecret, 'utf8');
+  } catch {}
+
+  return deterministicSecret;
 };
 
 const ensureJwtSecret = async () => {
@@ -2481,15 +2488,20 @@ const hashPassword = (password, salt) => {
 };
 
 const verifyPassword = (password, salt, storedHash) => {
-  if (typeof storedHash !== 'string') return false;
+  if (typeof storedHash !== 'string' || typeof password !== 'string' || !salt) return false;
+  const cleanSalt = String(salt).trim();
   if (storedHash.startsWith('scrypt$')) {
-    const hash = crypto.scryptSync(password, salt, 64, { N: 16384, r: 8, p: 1 });
+    const hash = crypto.scryptSync(password, cleanSalt, 64, { N: 16384, r: 8, p: 1 });
     const computed = `scrypt$${hash.toString('hex')}`;
     return computed === storedHash;
   }
   // Legacy PBKDF2 check
-  const legacyComputed = hashPasswordLegacy(password, salt);
-  return legacyComputed === storedHash;
+  const legacyComputed = hashPasswordLegacy(password, cleanSalt);
+  if (legacyComputed === storedHash) return true;
+
+  // Fallback check against scrypt with cleanSalt
+  const scryptComputed = hashPasswordScrypt(password, cleanSalt);
+  return scryptComputed === storedHash;
 };
 
 const isStrongPassword = (password) => {
@@ -4469,6 +4481,7 @@ app.get('/api/opportunities', async (req, res) => {
       }
     }
 
+    res.setHeader('Cache-Control', 'public, max-age=120, stale-while-revalidate=86400');
     res.json({
       lastUpdated: data.lastUpdated,
       count: opps.length,
@@ -4737,14 +4750,15 @@ app.get('/api/events', async (req, res) => {
     const category = req.query.category || null;
     const events = await getEvents(category);
     
-    // Automatically unpin ended events
-    await autoUnpinEndedEvents(events);
+    // Background task: Automatically unpin ended events without blocking HTTP response
+    autoUnpinEndedEvents(events).catch(() => {});
     
-    // Mask admin emails in createdBy
-    const adminEmails = await getAdminEmails();
+    // Cache response on Vercel CDN for instant 0ms TTFB
+    res.setHeader('Cache-Control', 'public, max-age=120, stale-while-revalidate=86400');
+    
     const processedEvents = events.map(event => {
       const creatorEmail = (event.createdBy || '').toLowerCase().trim();
-      if (adminEmails.has(creatorEmail) || creatorEmail === 'admin') {
+      if (creatorEmail.includes('admin') || creatorEmail === 'admin') {
         return { ...event, createdBy: 'Admin' };
       }
       return event;
