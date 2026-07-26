@@ -1862,7 +1862,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
             <div style={{ overflow: 'hidden' }}>
               <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', fontWeight: 500 }}>{greeting},</div>
               <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'hsl(var(--text-primary))', fontFamily: 'var(--font-heading)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {user ? user.name.split(' ')[0] : 'Guest'}
+                {user && !user.isGuest && user.name ? user.name.split(' ')[0] : 'VITian'}
               </h4>
               {user && user.isVitBhopal && (
                 <div style={{ fontSize: '0.68rem', color: 'hsl(var(--text-muted))', fontFamily: 'var(--font-mono)', marginTop: '0.1rem', fontWeight: 600 }}>
@@ -2218,7 +2218,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
       )}
       <div style={{ position: 'relative', zIndex: 1 }}>
         <div className="section-header">
-          <h1 className="section-title">Welcome Back, {user ? (user.isGuest ? 'Guest' : user.name) : 'User'}</h1>
+          <h1 className="section-title">Welcome Back, {user && !user.isGuest && user.name ? user.name : 'VITian'}</h1>
           <p 
             className="section-subtitle"
             style={{

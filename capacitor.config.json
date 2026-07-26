@@ -1,0 +1,6 @@
+{
+  "appId": "com.vitlife.app",
+  "appName": "VIT Life",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

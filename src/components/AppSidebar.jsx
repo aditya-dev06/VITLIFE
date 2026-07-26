@@ -20,6 +20,7 @@ import {
   Moon,
 } from 'lucide-react';
 import { useTheme } from './theme-provider';
+import TypewriterText from './TypewriterText';
 import './AppSidebar.css';
 
 const GithubIcon = ({ size = 18, className = '' }) => (
@@ -134,8 +135,23 @@ function AppSidebar({
         {/* Header */}
         <div className="sidebar-header">
           <div className="sidebar-brand">
-            <span className="sidebar-brand-mark">VL</span>
-            {isOpen && <span className="sidebar-brand-name">VIT Life</span>}
+            <div className="sidebar-brand-logo-wrap">
+              {isOpen && (
+                <div className="sidebar-brand-icon">
+                  <span className="sidebar-brand-dot"></span>
+                </div>
+              )}
+              <span className="sidebar-brand-vit">VIT</span>
+            </div>
+            {isOpen && (
+              <TypewriterText
+                words={['LIFE', 'BHOPAL', 'CAMPUS']}
+                typingSpeed={110}
+                erasingSpeed={55}
+                newWordDelay={2200}
+                className="sidebar-brand-typewriter"
+              />
+            )}
           </div>
           {!isMobile && (
             <button

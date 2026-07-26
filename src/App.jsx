@@ -17,6 +17,7 @@ const TermsAndConditions = lazy(() => import('./components/TermsAndConditions'))
 const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
 import CommunityPage from './components/CommunityPage';
 import FeedbackModal from './components/FeedbackModal';
+import ConsentBanner from './components/ConsentBanner';
 import AppSidebar from './components/AppSidebar';
 import { useTheme } from './components/theme-provider';
 import { cachedFetch } from './utils/apiClient';
@@ -463,9 +464,19 @@ function App() {
             localStorage.removeItem('ds_guest_user');
           }
         } else {
-          setSkills(INITIAL_SKILLS);
-          setXpPoints(0);
-          setUser(null);
+          // Default new visitors to Guest User mode on Home/Dashboard page
+          const defaultGuestUser = {
+            name: 'VITian',
+            email: 'guest@vitbhopal.ac.in',
+            isGuest: true,
+            role: 'student',
+            isVitBhopal: true,
+            semester: 1,
+            courses: ['DBMS', 'DSA'],
+            registrationNumber: '25GUEST0001'
+          };
+          localStorage.setItem('ds_guest_user', JSON.stringify(defaultGuestUser));
+          setUser(defaultGuestUser);
         }
         setLoading(false);
       });
@@ -721,7 +732,7 @@ function App() {
             <div className="top-bar-mobile-brand">
               <span className="logo-gradient-text" style={{ fontWeight: 800 }}>VIT</span>
               <TypewriterText
-                words={user?.isGuest ? ['GUEST'] : (user && user.isVitBhopal ? ['LIFE', 'BHOPAL'] : ['BHOPAL'])}
+                words={['LIFE', 'BHOPAL']}
                 className="brand-rotating-text"
               />
             </div>
@@ -1552,6 +1563,7 @@ function EditProfileModal({ user, token, handleLogout, onClose, onSave }) {
           </div>
         )}
       </div>
+      <ConsentBanner />
     </div>
   );
 }

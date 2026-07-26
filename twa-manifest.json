@@ -1,0 +1,42 @@
+{
+  "packageId": "com.vitlife.app",
+  "host": "vitlife.vercel.app",
+  "name": "VIT Life",
+  "launcherName": "VIT Life",
+  "display": "standalone",
+  "themeColor": "#0A0A0C",
+  "themeColorDark": "#000000",
+  "navigationColor": "#0A0A0C",
+  "navigationColorDark": "#0A0A0C",
+  "navigationDividerColor": "#0A0A0C",
+  "navigationDividerColorDark": "#0A0A0C",
+  "backgroundColor": "#0A0A0C",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://vitlife.vercel.app/favicon.svg",
+  "maskableIconUrl": "https://vitlife.vercel.app/favicon.svg",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "C:/Users/Aditya Prakash/Documents/antigravity/excited-newton/android.keystore",
+    "alias": "android"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 2,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 21,
+  "orientation": "default",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "displayOverride": [],
+  "appVersion": "1.0.0"
+}

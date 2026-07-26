@@ -1579,7 +1579,7 @@ const saveUsers = (users) => {
   }
 };
 
-// Database interface methods
+// Database interface methods — STRICT MONGODB ONLY (No file fallback)
 const findUserByEmail = async (email) => {
   if (typeof email !== 'string') return null;
   const lowerEmail = email.toLowerCase().trim();
@@ -1589,27 +1589,17 @@ const findUserByEmail = async (email) => {
   if (dbConnectingPromise) {
     await dbConnectingPromise;
   }
-  if (db) {
-    try {
-      const user = await db.collection('users').findOne({ email: lowerEmail });
-      if (user) {
-        if (user.email === '__proto__' || user.email === 'constructor' || user.email === 'prototype') {
-          return null;
-        }
-        return user;
-      }
-      // User not found in MongoDB — fall through to local file (read-only fallback, no write)
-    } catch (err) {
-      console.error("MongoDB findUserByEmail error, falling back to file:", err);
-    }
+  if (!db) {
+    console.error('[DB Error] MongoDB connection is not active.');
+    return null;
   }
-  // Local file fallback — READ ONLY, never used to write to MongoDB here
-  const users = loadUsers();
-  if (Object.prototype.hasOwnProperty.call(users, lowerEmail)) {
-    const user = users[lowerEmail];
-    if (user && user !== Object.prototype) {
+  try {
+    const user = await db.collection('users').findOne({ email: lowerEmail });
+    if (user && user.email !== '__proto__' && user.email !== 'constructor' && user.email !== 'prototype') {
       return user;
     }
+  } catch (err) {
+    console.error('[DB Error] MongoDB findUserByEmail error:', err);
   }
   return null;
 };
@@ -1617,26 +1607,18 @@ const findUserByEmail = async (email) => {
 const getAdminEmails = async () => {
   const adminSet = new Set();
   if (dbConnectingPromise) await dbConnectingPromise;
-  if (db) {
-    try {
-      const admins = await db.collection('users').find({ role: 'admin' }, { projection: { email: 1 } }).toArray();
-      for (const u of admins) {
-        if (u.email) adminSet.add(u.email.toLowerCase().trim());
-      }
-      return adminSet;
-    } catch (err) {
-      console.error("MongoDB getAdminEmails error, falling back to file:", err);
-    }
+  if (!db) {
+    console.error('[DB Error] MongoDB connection is not active for getAdminEmails.');
+    return adminSet;
   }
   try {
-    const users = loadUsers();
-    for (const email of Object.keys(users)) {
-      const user = users[email];
-      if (user && user.role === 'admin') {
-        adminSet.add(email.toLowerCase().trim());
-      }
+    const admins = await db.collection('users').find({ role: 'admin' }, { projection: { email: 1 } }).toArray();
+    for (const u of admins) {
+      if (u.email) adminSet.add(u.email.toLowerCase().trim());
     }
-  } catch (e) {}
+  } catch (err) {
+    console.error('[DB Error] MongoDB getAdminEmails error:', err);
+  }
   return adminSet;
 };
 
@@ -1649,23 +1631,17 @@ const saveUser = async (email, userData) => {
   if (dbConnectingPromise) {
     await dbConnectingPromise;
   }
-  if (db) {
-    try {
-      const updateData = { ...userData };
-      delete updateData._id;
-      await db.collection('users').updateOne(
-        { email: lowerEmail },
-        { $set: updateData },
-        { upsert: true }
-      );
-      return;
-    } catch (err) {
-      console.error("MongoDB saveUser error, falling back to file:", err);
-    }
+  if (!db) {
+    console.error('[DB Error] MongoDB connection is not active for saveUser.');
+    throw new Error('Database unavailable. User save aborted.');
   }
-  const users = loadUsers();
-  users[lowerEmail] = userData;
-  saveUsers(users);
+  const updateData = { ...userData };
+  delete updateData._id;
+  await db.collection('users').updateOne(
+    { email: lowerEmail },
+    { $set: updateData },
+    { upsert: true }
+  );
 };
 
 const getOpportunities = async () => {

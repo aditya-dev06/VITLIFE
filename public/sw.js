@@ -56,8 +56,8 @@ self.addEventListener('activate', event => {
 
 // Fetch Event
 self.addEventListener('fetch', event => {
-  // Only intercept and cache GET requests
-  if (event.request.method !== 'GET') {
+  // Only intercept and cache HTTP/HTTPS GET requests
+  if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
     return;
   }
 
@@ -88,8 +88,8 @@ self.addEventListener('fetch', event => {
           if (response.status === 200) {
             const responseClone = response.clone();
             caches.open(API_CACHE_NAME).then(cache => {
-              cache.put(event.request, responseClone);
-            });
+              cache.put(event.request, responseClone).catch(() => {});
+            }).catch(() => {});
           }
           return response;
         })
@@ -126,7 +126,7 @@ self.addEventListener('fetch', event => {
           fetch(event.request)
             .then(networkResponse => {
               if (networkResponse.status === 200) {
-                caches.open(CACHE_NAME).then(cache => cache.put(event.request, networkResponse));
+                caches.open(CACHE_NAME).then(cache => cache.put(event.request, networkResponse)).catch(() => {});
               }
             })
             .catch(() => {});
@@ -139,9 +139,9 @@ self.addEventListener('fetch', event => {
           return networkResponse;
         }
         const responseClone = networkResponse.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone)).catch(() => {});
         return networkResponse;
-      });
+      }).catch(() => fetch(event.request));
     })
   );
 });

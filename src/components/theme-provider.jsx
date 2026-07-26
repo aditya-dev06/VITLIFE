@@ -24,15 +24,17 @@ export function ThemeProvider({
     root.classList.remove('light', 'dark', 'light-theme');
     body.classList.remove('light', 'dark', 'light-theme');
 
-    let effectiveTheme = theme;
-    if (theme === 'system') {
+    let effectiveTheme = (typeof theme === 'string' && ['light', 'dark', 'system'].includes(theme)) ? theme : 'dark';
+    if (effectiveTheme === 'system') {
       effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
         ? 'dark'
         : 'light';
     }
 
-    root.classList.add(effectiveTheme);
-    body.classList.add(effectiveTheme);
+    if (effectiveTheme === 'light' || effectiveTheme === 'dark') {
+      root.classList.add(effectiveTheme);
+      body.classList.add(effectiveTheme);
+    }
 
     if (effectiveTheme === 'light') {
       root.classList.add('light-theme');
@@ -43,9 +45,15 @@ export function ThemeProvider({
   const value = {
     theme,
     setTheme: (newTheme) => {
-      localStorage.setItem(storageKey, newTheme);
-      localStorage.setItem('ds_ai_theme', newTheme);
-      setThemeState(newTheme);
+      setThemeState((prevTheme) => {
+        const resolvedTheme = typeof newTheme === 'function' ? newTheme(prevTheme) : newTheme;
+        const validTheme = (typeof resolvedTheme === 'string' && ['light', 'dark', 'system'].includes(resolvedTheme)) ? resolvedTheme : 'dark';
+        try {
+          localStorage.setItem(storageKey, validTheme);
+          localStorage.setItem('ds_ai_theme', validTheme);
+        } catch {}
+        return validTheme;
+      });
     },
   };
 
