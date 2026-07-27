@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, X, Send } from 'lucide-react';
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/InputGroup';
+import FacultyDirectory from './FacultyDirectory';
 
 const EXAM_TYPES = ['MTE', 'TEE', 'CAT-1', 'CAT-2', 'FAT'];
 const ACADEMIC_YEARS = ['2023-24', '2024-25', '2025-26'];
@@ -1513,6 +1514,12 @@ function CommunityPage({ user }) {
           💬 Student Chats
         </button>
         <button
+          className={`community-tab-btn ${activeSubTab === 'cabins' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('cabins')}
+        >
+          🏫 Faculty Cabins
+        </button>
+        <button
           className={`community-tab-btn ${activeSubTab === 'marketplace' ? 'active' : ''}`}
           onClick={() => setActiveSubTab('marketplace')}
         >
@@ -1735,6 +1742,12 @@ function CommunityPage({ user }) {
 
       {activeSubTab === 'chats' && (
         <StudentChatSection user={user} />
+      )}
+
+      {activeSubTab === 'cabins' && (
+        <div className="pyq-workspace animate-fade-in" style={{ paddingBottom: '95px' }}>
+          <FacultyDirectory user={user} />
+        </div>
       )}
 
       {activeSubTab === 'marketplace' && (
