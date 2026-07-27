@@ -38,6 +38,67 @@ if (fs.existsSync(envPath)) {
   });
 }
 
+function parseRedisUrlRobust(urlStr) {
+  if (!urlStr) return null;
+  let clean = urlStr.trim().replace(/^['"]|['"]$/g, '');
+
+  const isSsl = clean.startsWith('rediss://') || process.env.REDIS_TLS === 'true';
+  
+  // Clean off protocol
+  clean = clean.replace(/^(?:rediss?|https?):\/\//, '');
+
+  let username;
+  let password;
+  let hostPort = clean;
+
+  const atIdx = clean.lastIndexOf('@');
+  if (atIdx !== -1) {
+    const userPass = clean.substring(0, atIdx);
+    hostPort = clean.substring(atIdx + 1);
+    const colonIdx = userPass.indexOf(':');
+    if (colonIdx !== -1) {
+      username = userPass.substring(0, colonIdx);
+      password = userPass.substring(colonIdx + 1);
+    } else {
+      password = userPass;
+    }
+  }
+
+  let host = hostPort;
+  let port = 6379;
+  let db = 0;
+
+  const slashIdx = hostPort.indexOf('/');
+  if (slashIdx !== -1) {
+    db = parseInt(hostPort.substring(slashIdx + 1), 10) || 0;
+    hostPort = hostPort.substring(0, slashIdx);
+  }
+
+  const colonIdx = hostPort.lastIndexOf(':');
+  if (colonIdx !== -1) {
+    host = hostPort.substring(0, colonIdx);
+    port = parseInt(hostPort.substring(colonIdx + 1), 10) || 6379;
+  }
+
+  const options = {
+    host,
+    port,
+    username: username ? decodeURIComponent(username) : (process.env.REDIS_USER || undefined),
+    password: password ? decodeURIComponent(password) : (process.env.REDIS_PASSWORD || undefined),
+    db,
+    maxRetriesPerRequest: 2,
+    connectTimeout: 5000,
+    retryStrategy: (times) => times > 3 ? null : Math.min(times * 500, 2000),
+    lazyConnect: true
+  };
+
+  if (isSsl) {
+    options.tls = { rejectUnauthorized: false };
+  }
+
+  return options;
+}
+
 // Redis Presence & Caching Engine Setup (conditional — supports REDIS_URL, REDIS_URI, KV_URL)
 let redisClient = null;
 let redisConnected = false;
@@ -46,16 +107,8 @@ const REDIS_URL = process.env.REDIS_URL || process.env.REDIS_URI || process.env.
 if (REDIS_URL) {
   import('ioredis').then(({ default: Redis }) => {
     try {
-      const redisOptions = {
-        maxRetriesPerRequest: 2,
-        connectTimeout: 5000,
-        retryStrategy: (times) => times > 3 ? null : Math.min(times * 500, 2000),
-        lazyConnect: true
-      };
-      if (REDIS_URL.startsWith('rediss://')) {
-        redisOptions.tls = { rejectUnauthorized: false };
-      }
-      redisClient = new Redis(REDIS_URL, redisOptions);
+      const redisOptions = parseRedisUrlRobust(REDIS_URL);
+      redisClient = new Redis(redisOptions);
 
       redisClient.on('connect', () => {
         redisConnected = true;
