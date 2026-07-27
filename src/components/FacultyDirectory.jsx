@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { FACULTY_DIRECTORY } from '../data/facultyDirectory';
+import { SkeletonGrid, FacultyCardSkeleton } from './SkeletonLoader';
 import { InputGroup, InputGroupInput, InputGroupAddon } from './ui/InputGroup';
 import './FacultyDirectory.css';
 

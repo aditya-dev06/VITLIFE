@@ -6643,6 +6643,74 @@ a {
   }
 }
 
+/* ── Pixel-Perfect Shimmer Skeleton Loaders ── */
+.skeleton-card {
+  position: relative;
+  overflow: hidden;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.skeleton-box {
+  background: rgba(255, 255, 255, 0.06);
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.skeleton-avatar {
+  border-radius: 50% !important;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.skeleton-line {
+  border-radius: 6px;
+}
+
+.skeleton-badge {
+  border-radius: 20px;
+}
+
+.skeleton-btn {
+  border-radius: 8px;
+}
+
+.skeleton-box::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.12) 50%,
+    transparent 100%
+  );
+  animation: skeletonShimmer 1.4s infinite cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes skeletonShimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.light-theme .skeleton-box {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+.light-theme .skeleton-box::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 0, 0, 0.08) 50%,
+    transparent 100%
+  ) !important;
+}
+
+
 .fade-in-up {
   contain: layout style;
   transform: translateZ(0);

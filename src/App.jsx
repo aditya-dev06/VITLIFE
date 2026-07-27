@@ -683,15 +683,10 @@ function App() {
     );
   }
 
-  // If loading user profile, show brief loading screen
-  if (token && loading && !user) {
-    return <FullPageLoader text="VIT LIFE • Initializing Campus Hub..." />;
-  }
-
   // Render Login/Signup if not authenticated (guests bypass this with user.isGuest)
   if (!token && !user?.isGuest) {
     return (
-      <Suspense fallback={<FullPageLoader text="VIT LIFE • Initializing Campus Hub..." />}>
+      <Suspense fallback={null}>
         <Auth onLoginSuccess={handleLoginSuccess} theme={theme} setTheme={setTheme} onShowFeedback={() => setShowFeedback(true)} />
       </Suspense>
     );
@@ -839,7 +834,7 @@ function App() {
           </nav>
         </header>
 
-        <Suspense fallback={<FullPageLoader text="VIT LIFE • Loading section..." />}>
+        <Suspense fallback={null}>
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
