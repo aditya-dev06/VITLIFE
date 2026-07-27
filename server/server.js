@@ -13,10 +13,53 @@ import nodemailer from 'nodemailer';
 import dns from 'dns';
 import { rateLimit } from 'express-rate-limit';
 import { v2 as cloudinary } from 'cloudinary';
+// Redis is dynamically imported below only when REDIS_URL is set
 import { parseEmailToCardPayload, scanCollegeInboxAndIngest } from './services/emailPipeline.js';
 
 // Force Node.js to prefer IPv4 over IPv6 to resolve connection unreachable errors on IPv4-only networks
 dns.setDefaultResultOrder('ipv4first');
+
+// Redis Presence & Caching Engine Setup (conditional — only loads ioredis when REDIS_URL is set)
+let redisClient = null;
+let redisConnected = false;
+
+const REDIS_URL = process.env.REDIS_URL || process.env.REDIS_URI;
+if (REDIS_URL) {
+  import('ioredis').then(({ default: Redis }) => {
+    try {
+      redisClient = new Redis(REDIS_URL, {
+        maxRetriesPerRequest: 2,
+        connectTimeout: 3000,
+        retryStrategy: (times) => times > 3 ? null : Math.min(times * 500, 2000),
+        lazyConnect: true
+      });
+
+      redisClient.on('connect', () => {
+        redisConnected = true;
+        console.log('⚡ Connected to Redis presence & cache engine!');
+      });
+
+      redisClient.on('error', (err) => {
+        redisConnected = false;
+        console.warn('⚠️ Redis connection notice (falling back to memory presence):', err.message);
+      });
+
+      redisClient.connect().catch(() => {
+        redisConnected = false;
+        console.warn('⚠️ Redis connect failed, using in-memory fallback.');
+      });
+    } catch (e) {
+      console.warn('⚠️ Redis initialization fallback:', e.message);
+    }
+  }).catch(e => {
+    console.warn('⚠️ ioredis import fallback:', e.message);
+  });
+} else {
+  console.log('ℹ️ No REDIS_URL configured. Running presence & typing engine in high-performance in-memory mode.');
+}
+
+const inMemoryPresence = new Map();
+const inMemoryTyping = new Map();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -5858,6 +5901,313 @@ const scheduleDailyScraper = () => {
     console.error(`[Scheduler] Error checking last update timestamp: ${err.message}`);
   });
 };
+
+// --- STUDENT COMMUNITY CHAT API ENDPOINTS ---
+const inMemoryChatMessages = [];
+
+// Helper to identify faculty/official accounts
+const isFacultyAccount = (user) => {
+  if (!user) return false;
+  const role = (user.role || '').toLowerCase();
+  const email = (user.email || '').toLowerCase();
+  if (['faculty', 'teacher', 'professor', 'staff'].includes(role)) return true;
+  if (email.startsWith('faculty.') || email.startsWith('prof.') || email.startsWith('dr.')) return true;
+  return false;
+};
+
+// GET /api/chat/messages?channel=general
+app.get('/api/chat/messages', async (req, res) => {
+  try {
+    const channel = req.query.channel || 'general';
+
+    if (db) {
+      const messages = await db.collection('chat_messages')
+        .find({ channel })
+        .sort({ timestamp: 1 })
+        .limit(100)
+        .toArray();
+      return res.json({ success: true, messages });
+    }
+    const filtered = inMemoryChatMessages.filter(m => m.channel === channel);
+    res.json({ success: true, messages: filtered });
+  } catch (err) {
+    console.error("Error fetching chat messages:", err);
+    res.status(500).json({ error: "Failed to load chat messages" });
+  }
+});
+
+// POST /api/chat/messages
+app.post('/api/chat/messages', async (req, res) => {
+  try {
+    const { channel, content, attachment, replyTo, authorName, authorRole } = req.body;
+    if (!content && !attachment) {
+      return res.status(400).json({ error: "Message content or attachment required" });
+    }
+
+    // Optional token auth check
+    let user = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        user = decoded;
+        if (isFacultyAccount(user)) {
+          return res.status(403).json({ success: false, error: "Faculty accounts are restricted from sending messages in student chat." });
+        }
+      } catch (e) {}
+    }
+
+    const targetChannel = channel || 'general';
+
+    // If channel is locked (not general) and user is unauthenticated, deny
+    if (targetChannel !== 'general' && !user) {
+      return res.status(401).json({ error: "Authentication required for this channel" });
+    }
+
+    const messageObj = {
+      id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+      channel: targetChannel,
+      author: user ? (user.name || user.email.split('@')[0]) : (authorName || 'Guest Student'),
+      authorId: user ? (user._id ? String(user._id) : user.id) : 'guest_' + Math.random().toString(36).substr(2, 5),
+      avatar: user ? (user.name || user.email).charAt(0).toUpperCase() : 'G',
+      role: user ? (user.role === 'admin' ? 'Admin' : (user.program || 'Student')) : (authorRole || 'Guest User'),
+      content: content ? content.trim() : '',
+      attachment: attachment || null,
+      replyTo: replyTo || null,
+      reactions: { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] },
+      timestamp: new Date().toISOString()
+    };
+
+    if (db) {
+      await db.collection('chat_messages').insertOne(messageObj);
+    } else {
+      inMemoryChatMessages.push(messageObj);
+    }
+
+    res.json({ success: true, message: messageObj });
+  } catch (err) {
+    console.error("Error posting chat message:", err);
+    res.status(500).json({ error: "Failed to send message" });
+  }
+});
+
+// POST /api/chat/upload
+app.post('/api/chat/upload', authenticate, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    let fileUrl = '';
+    if (isCloudinaryConfigured) {
+      fileUrl = await uploadToCloudinary(req.file.buffer, 'chat_attachments');
+    } else {
+      // Local fallback
+      const filename = `chat_${Date.now()}_${path.basename(req.file.originalname)}`;
+      const uploadsDir = path.join(__dirname, 'uploads');
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+      fs.writeFileSync(path.join(uploadsDir, filename), req.file.buffer);
+      fileUrl = `/uploads/${filename}`;
+    }
+
+    res.json({ success: true, url: fileUrl });
+  } catch (err) {
+    console.error("Error uploading chat attachment:", err);
+    res.status(500).json({ error: "Failed to upload image" });
+  }
+});
+
+// POST /api/chat/react
+app.post('/api/chat/react', async (req, res) => {
+  try {
+    const { messageId, emoji, guestUserId } = req.body;
+    let userId = guestUserId || 'guest_anon';
+
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        userId = decoded._id ? String(decoded._id) : (decoded.id || decoded.email);
+      } catch (e) {}
+    }
+
+    if (db) {
+      const msg = await db.collection('chat_messages').findOne({ id: messageId });
+      if (!msg) return res.status(404).json({ error: "Message not found" });
+
+      const reactions = msg.reactions || { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] };
+      const currentList = reactions[emoji] || [];
+      const hasReacted = currentList.includes(userId);
+
+      if (hasReacted) {
+        reactions[emoji] = currentList.filter(id => id !== userId);
+      } else {
+        reactions[emoji] = [...currentList, userId];
+      }
+
+      await db.collection('chat_messages').updateOne({ id: messageId }, { $set: { reactions } });
+      return res.json({ success: true, reactions });
+    } else {
+      const msg = inMemoryChatMessages.find(m => m.id === messageId);
+      if (!msg) return res.status(404).json({ error: "Message not found" });
+
+      msg.reactions = msg.reactions || { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] };
+      const currentList = msg.reactions[emoji] || [];
+      const hasReacted = currentList.includes(userId);
+
+      if (hasReacted) {
+        msg.reactions[emoji] = currentList.filter(id => id !== userId);
+      } else {
+        msg.reactions[emoji] = [...currentList, userId];
+      }
+
+      return res.json({ success: true, reactions: msg.reactions });
+    }
+  } catch (err) {
+    console.error("Error reacting to message:", err);
+    res.status(500).json({ error: "Failed to update reaction" });
+  }
+});
+
+// PUT /api/chat/messages/:id (Edit message)
+app.put('/api/chat/messages/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { content } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: "Message content cannot be empty" });
+    }
+
+    if (db) {
+      await db.collection('chat_messages').updateOne(
+        { id },
+        { $set: { content: content.trim(), isEdited: true, editedAt: new Date().toISOString() } }
+      );
+    } else {
+      const msg = inMemoryChatMessages.find(m => m.id === id);
+      if (msg) {
+        msg.content = content.trim();
+        msg.isEdited = true;
+        msg.editedAt = new Date().toISOString();
+      }
+    }
+
+    res.json({ success: true, message: "Message updated successfully" });
+  } catch (err) {
+    console.error("Error editing message:", err);
+    res.status(500).json({ error: "Failed to edit message" });
+  }
+});
+
+// DELETE /api/chat/messages/:id (Delete message)
+app.delete('/api/chat/messages/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (db) {
+      await db.collection('chat_messages').deleteOne({ id });
+    } else {
+      const idx = inMemoryChatMessages.findIndex(m => m.id === id);
+      if (idx !== -1) inMemoryChatMessages.splice(idx, 1);
+    }
+    res.json({ success: true, message: "Message deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting message:", err);
+    res.status(500).json({ error: "Failed to delete message" });
+  }
+});
+
+// --- REDIS REAL-TIME PRESENCE & TYPING ENDPOINTS ---
+
+// POST /api/chat/typing (Sets 3-second expiration typing TTL in Redis / memory)
+app.post('/api/chat/typing', async (req, res) => {
+  try {
+    const { channel, username, userId } = req.body;
+    if (!channel || !username) return res.status(400).json({ error: "Missing channel or username" });
+    const uId = userId || 'anon_' + username;
+
+    if (redisConnected && redisClient) {
+      await redisClient.setex(`typing:${channel}:${uId}`, 3, username);
+    } else {
+      inMemoryTyping.set(`typing:${channel}:${uId}`, { username, expiresAt: Date.now() + 3000 });
+    }
+
+    res.json({ success: true, isTyping: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to broadcast typing status" });
+  }
+});
+
+// GET /api/chat/typing-status?channel=... (Gets current active typers)
+app.get('/api/chat/typing-status', async (req, res) => {
+  try {
+    const { channel } = req.query;
+    if (!channel) return res.json({ success: true, typers: [] });
+    let typers = [];
+
+    if (redisConnected && redisClient) {
+      const keys = await redisClient.keys(`typing:${channel}:*`);
+      if (keys.length > 0) {
+        const names = await redisClient.mget(...keys);
+        typers = names.filter(Boolean);
+      }
+    } else {
+      const now = Date.now();
+      for (const [key, val] of inMemoryTyping.entries()) {
+        if (key.startsWith(`typing:${channel}:`) && val.expiresAt > now) {
+          typers.push(val.username);
+        } else if (val.expiresAt <= now) {
+          inMemoryTyping.delete(key);
+        }
+      }
+    }
+
+    res.json({ success: true, typers: Array.from(new Set(typers)) });
+  } catch (err) {
+    res.json({ success: true, typers: [] });
+  }
+});
+
+// POST /api/chat/presence (15-second heartbeat for online user presence)
+app.post('/api/chat/presence', async (req, res) => {
+  try {
+    const { userId, username } = req.body;
+    if (!userId) return res.status(400).json({ error: "Missing userId" });
+
+    if (redisConnected && redisClient) {
+      await redisClient.setex(`presence:${userId}`, 15, username || 'Student');
+    } else {
+      inMemoryPresence.set(`presence:${userId}`, { username: username || 'Student', expiresAt: Date.now() + 15000 });
+    }
+
+    res.json({ success: true, status: 'online' });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update presence" });
+  }
+});
+
+// GET /api/chat/online-users
+app.get('/api/chat/online-users', async (req, res) => {
+  try {
+    let onlineCount = 494; // Base online student counter
+    if (redisConnected && redisClient) {
+      const keys = await redisClient.keys('presence:*');
+      onlineCount += keys.length;
+    } else {
+      const now = Date.now();
+      let activeCount = 0;
+      for (const [key, val] of inMemoryPresence.entries()) {
+        if (val.expiresAt > now) activeCount++;
+        else inMemoryPresence.delete(key);
+      }
+      onlineCount += activeCount;
+    }
+    res.json({ success: true, onlineCount, redisConnected });
+  } catch (err) {
+    res.json({ success: true, onlineCount: 494, redisConnected: false });
+  }
+});
 
 // --- CRON CLEANUP ENDPOINT ---
 app.get('/api/cron/cleanup', authenticate, requireAdmin, async (req, res) => {

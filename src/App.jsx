@@ -295,6 +295,15 @@ function App() {
     setShowMobileProfileSheet(false);
   }, []);
 
+  const handleRequireAuth = useCallback(() => {
+    localStorage.removeItem('ds_guest_user');
+    localStorage.removeItem('ds_ai_token');
+    localStorage.removeItem('ds_ai_user');
+    setToken(null);
+    setUser(null);
+    setActiveTab('auth');
+  }, []);
+
   const handleLogout = useCallback(() => {
     if (token) {
       fetch('/api/auth/logout', {
@@ -617,10 +626,22 @@ function App() {
             syncStatus={profileSyncStatus}
           />
         );
+      case 'chats':
+        return (
+          <CommunityPage 
+            user={user}
+            onRequireAuth={handleRequireAuth}
+            initialSubTab="chats"
+            onBackToApp={() => setActiveTab('dashboard')}
+          />
+        );
       case 'community':
         return (
           <CommunityPage 
             user={user}
+            onRequireAuth={handleRequireAuth}
+            initialSubTab="pyq"
+            onBackToApp={() => setActiveTab('dashboard')}
           />
         );
       case 'campus':
@@ -931,24 +952,9 @@ function App() {
         });
 
         if (user) {
-          // Logged in user order: Home, Schedule, Community (Center), Opps, Guide (if visible/admin), College Life
+          // Logged in user order: Home, Community, Chat (Center), Opps, College Life
           
-          // 2. Schedule
-          dockItems.push({
-            icon: (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <line x1="16" y1="2" x2="16" y2="6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <line x1="8" y1="2" x2="8" y2="6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <line x1="3" y1="10" x2="21" y2="10" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            ),
-            label: 'Schedule',
-            onClick: () => handleTabClick('timetable'),
-            className: activeTab === 'timetable' ? 'active' : ''
-          });
-
-          // 3. Community (Exactly Center of 5!)
+          // 2. Community
           dockItems.push({
             icon: (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
@@ -961,6 +967,18 @@ function App() {
             label: 'Community',
             onClick: () => handleTabClick('community'),
             className: activeTab === 'community' ? 'active' : ''
+          });
+
+          // 3. Chat (CENTER)
+          dockItems.push({
+            icon: (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ),
+            label: 'Chat',
+            onClick: () => handleTabClick('chats'),
+            className: activeTab === 'chats' ? 'active' : ''
           });
 
           // 4. Opps
@@ -1006,9 +1024,9 @@ function App() {
           });
 
         } else {
-          // Guest order: Home, Community (Center), Opps, Guide (if visible)
+          // Guest order: Home, Community, Chat, Opps
           
-          // 2. Community (Exactly Center of 3!)
+          // 2. Community
           dockItems.push({
             icon: (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
@@ -1021,6 +1039,18 @@ function App() {
             label: 'Community',
             onClick: () => handleTabClick('community'),
             className: activeTab === 'community' ? 'active' : ''
+          });
+
+          // 3. Chat (CENTER for Guests)
+          dockItems.push({
+            icon: (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ),
+            label: 'Chat',
+            onClick: () => handleTabClick('chats'),
+            className: activeTab === 'chats' ? 'active' : ''
           });
 
           // 3. Opps
@@ -1059,7 +1089,7 @@ function App() {
             panelHeight={52}
             baseItemSize={40}
             magnification={58}
-            outerClassName={navHidden ? 'nav-hidden' : ''}
+            outerClassName={`${navHidden || activeTab === 'chats' ? 'nav-hidden' : ''}`}
           />
         );
       })()}

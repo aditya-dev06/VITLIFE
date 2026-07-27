@@ -14,10 +14,11 @@ import { SkeletonGrid, FacultyCardSkeleton } from './SkeletonLoader';
 import { InputGroup, InputGroupInput, InputGroupAddon } from './ui/InputGroup';
 import './FacultyDirectory.css';
 
-const FacultyDirectory = memo(function FacultyDirectory() {
+const FacultyDirectory = memo(function FacultyDirectory({ user, onRequireAuth }) {
   const [search, setSearch] = useState('');
   const [selectedSchool, setSelectedSchool] = useState('ALL');
   const [copiedId, setCopiedId] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const filteredFaculty = useMemo(() => {
     let list = FACULTY_DIRECTORY;
@@ -42,6 +43,7 @@ const FacultyDirectory = memo(function FacultyDirectory() {
       list = list.filter(
         (f) =>
           (f.name && f.name.toLowerCase().includes(q)) ||
+          (f.building && f.building.toLowerCase().includes(q)) ||
           (f.cabinNo && f.cabinNo.toLowerCase().includes(q)) ||
           (f.roomNo && f.roomNo.toLowerCase().includes(q)) ||
           (f.empId && f.empId.toLowerCase().includes(q)) ||
@@ -176,23 +178,7 @@ const FacultyDirectory = memo(function FacultyDirectory() {
                 </div>
 
                 <div className="faculty-details">
-                  <div className="detail-item location-item">
-                    <Building2 size={15} className="detail-icon" />
-                    <span className="location-tag">
-                      <strong>{f.building && f.building.includes('AB1') ? 'Block AB1' : 'Block AB2'}</strong>
-                      {f.roomNo && f.roomNo !== 'N/A' && f.roomNo !== 'AB2' ? (
-                        <> • <strong>Room {f.roomNo.startsWith('AB') ? f.roomNo : `AB${f.roomNo}`}</strong></>
-                      ) : (
-                        <> • <strong className="opacity-60">Room N/A</strong></>
-                      )}
-                      {f.cabinNo && f.cabinNo !== 'N/A' && f.cabinNo !== 'AB2' && f.cabinNo !== 'AB2 Block' ? (
-                        <> • <span>Cabin {f.cabinNo}</span></>
-                      ) : (
-                        <> • <span className="opacity-60">Cabin N/A</span></>
-                      )}
-                    </span>
-                  </div>
-
+                  {/* Metadata Pills */}
                   <div className="detail-row">
                     {f.empId && <span className="emp-pill">EMP #{f.empId}</span>}
                     {f.school && (
@@ -200,29 +186,61 @@ const FacultyDirectory = memo(function FacultyDirectory() {
                         {f.school}
                       </span>
                     )}
-                    <span className="building-pill">{f.building || 'Academic Block'}</span>
+                  </div>
+
+                  {/* Location Banner (Prominent & Un-truncated at bottom) */}
+                  <div className="location-item prominent-location">
+                    <Building2 size={15} className="detail-icon text-cyan-400" />
+                    <span className="location-tag">
+                      <strong className="text-sky-400">{f.building || 'Block AB1'}</strong>
+                      {f.roomNo && f.roomNo !== 'N/A' && (
+                        <> • <strong className="text-white">Room {f.roomNo}</strong></>
+                      )}
+                      {f.cabinNo && f.cabinNo !== 'N/A' ? (
+                        <> • <span className="text-emerald-400 font-semibold">Cabin {f.cabinNo}</span></>
+                      ) : (
+                        <> • <span className="opacity-60">Cabin N/A</span></>
+                      )}
+                    </span>
                   </div>
 
                   {/* Phone & Email Action Box */}
                   <div className="contact-actions-grid">
+                    {/* Phone Row */}
                     {f.phone ? (
-                      <div className="contact-action-box">
-                        <Phone size={14} className="contact-icon text-cyan-400" />
-                        <a href={`tel:${f.phone}`} className="contact-link" title="Click to call">
-                          {f.phone}
-                        </a>
-                        <button
-                          className="copy-btn"
-                          onClick={() => handleCopy(f.phone, `${cardKey}-phone`)}
-                          title="Copy phone number"
+                      (!user || user?.isGuest) ? (
+                        <div 
+                          className="contact-action-box guest-blurred"
+                          onClick={() => setShowAuthModal(true)}
+                          title="Log in to view phone number"
                         >
-                          {copiedId === `${cardKey}-phone` ? (
-                            <Check size={13} className="text-emerald-400" />
-                          ) : (
-                            <Copy size={13} />
-                          )}
-                        </button>
-                      </div>
+                          <div className="guest-blur-content" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', width: '100%', filter: 'blur(5.5px)', select: 'none', userSelect: 'none', pointerEvents: 'none' }}>
+                            <Phone size={14} className="contact-icon text-cyan-400" />
+                            <span className="contact-link">{f.phone}</span>
+                          </div>
+                          <div className="guest-lock-overlay">
+                            <span style={{ fontSize: '0.72rem' }}>🔒 Login to View Phone</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="contact-action-box">
+                          <Phone size={14} className="contact-icon text-cyan-400" />
+                          <a href={`tel:${f.phone}`} className="contact-link" title="Click to call">
+                            {f.phone}
+                          </a>
+                          <button
+                            className="copy-btn"
+                            onClick={() => handleCopy(f.phone, `${cardKey}-phone`)}
+                            title="Copy phone number"
+                          >
+                            {copiedId === `${cardKey}-phone` ? (
+                              <Check size={13} className="text-emerald-400" />
+                            ) : (
+                              <Copy size={13} />
+                            )}
+                          </button>
+                        </div>
+                      )
                     ) : (
                       <div className="contact-action-box disabled">
                         <Phone size={14} className="contact-icon opacity-40" />
@@ -230,24 +248,41 @@ const FacultyDirectory = memo(function FacultyDirectory() {
                       </div>
                     )}
 
+                    {/* Email Row */}
                     {f.email ? (
-                      <div className="contact-action-box">
-                        <Mail size={14} className="contact-icon text-purple-400" />
-                        <a href={`mailto:${f.email}`} className="contact-link" title="Click to email">
-                          {f.email}
-                        </a>
-                        <button
-                          className="copy-btn"
-                          onClick={() => handleCopy(f.email, `${cardKey}-email`)}
-                          title="Copy email address"
+                      (!user || user?.isGuest) ? (
+                        <div 
+                          className="contact-action-box guest-blurred"
+                          onClick={() => setShowAuthModal(true)}
+                          title="Log in to view email address"
                         >
-                          {copiedId === `${cardKey}-email` ? (
-                            <Check size={13} className="text-emerald-400" />
-                          ) : (
-                            <Copy size={13} />
-                          )}
-                        </button>
-                      </div>
+                          <div className="guest-blur-content" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', width: '100%', filter: 'blur(5.5px)', select: 'none', userSelect: 'none', pointerEvents: 'none' }}>
+                            <Mail size={14} className="contact-icon text-purple-400" />
+                            <span className="contact-link">{f.email}</span>
+                          </div>
+                          <div className="guest-lock-overlay">
+                            <span style={{ fontSize: '0.72rem' }}>🔒 Login to View Email</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="contact-action-box">
+                          <Mail size={14} className="contact-icon text-purple-400" />
+                          <a href={`mailto:${f.email}`} className="contact-link" title="Click to email">
+                            {f.email}
+                          </a>
+                          <button
+                            className="copy-btn"
+                            onClick={() => handleCopy(f.email, `${cardKey}-email`)}
+                            title="Copy email address"
+                          >
+                            {copiedId === `${cardKey}-email` ? (
+                              <Check size={13} className="text-emerald-400" />
+                            ) : (
+                              <Copy size={13} />
+                            )}
+                          </button>
+                        </div>
+                      )
                     ) : null}
                   </div>
                 </div>
@@ -263,6 +298,77 @@ const FacultyDirectory = memo(function FacultyDirectory() {
           <button className="reset-btn" onClick={() => { setSearch(''); setSelectedSchool('ALL'); }}>
             Reset Search
           </button>
+        </div>
+      )}
+
+      {/* Auth Prompt Modal for Guest Users */}
+      {showAuthModal && (
+        <div className="aurora-modal-overlay" onClick={() => setShowAuthModal(false)} style={{ zIndex: 99999 }}>
+          <div 
+            className="aurora-modal-card glass-panel" 
+            onClick={(e) => e.stopPropagation()} 
+            style={{ 
+              maxWidth: '460px', 
+              width: '90%', 
+              padding: '1.75rem', 
+              borderRadius: '20px', 
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '1rem'
+            }}
+          >
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              background: 'hsla(var(--primary) / 0.15)',
+              border: '1px solid hsla(var(--primary) / 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.8rem'
+            }}>
+              🔒
+            </div>
+            <div>
+              <h3 style={{ margin: '0 0 0.4rem 0', fontSize: '1.25rem', fontWeight: 800, color: 'hsl(var(--text-primary))' }}>
+                Login Required
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', lineHeight: 1.5 }}>
+                Faculty phone numbers and direct email addresses are reserved for registered VIT students. Please log in or create an account to view contact details.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', width: '100%', marginTop: '0.5rem' }}>
+              <button
+                onClick={() => {
+                  setShowAuthModal(false);
+                  if (onRequireAuth) onRequireAuth();
+                }}
+                className="aurora-submit-btn"
+                style={{ flex: 1, padding: '0.65rem 1rem', fontSize: '0.85rem', borderRadius: '10px' }}
+              >
+                Log In / Create Account
+              </button>
+              <button
+                onClick={() => setShowAuthModal(false)}
+                style={{
+                  padding: '0.65rem 1rem',
+                  fontSize: '0.85rem',
+                  borderRadius: '10px',
+                  border: '1px solid hsla(var(--border-glass))',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: 'hsl(var(--text-secondary))',
+                  cursor: 'pointer',
+                  fontWeight: 600
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

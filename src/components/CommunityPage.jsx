@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, memo, startTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, X, Send } from 'lucide-react';
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/InputGroup';
 import FacultyDirectory from './FacultyDirectory';
+import { encryptText, decryptText } from '../utils/crypto.js';
 
 const EXAM_TYPES = ['MTE', 'TEE', 'CAT-1', 'CAT-2', 'FAT'];
 const ACADEMIC_YEARS = ['2023-24', '2024-25', '2025-26'];
@@ -98,10 +99,66 @@ const getImageDimensions = (base64) => {
     img.onload = () => {
       resolve({ width: img.width, height: img.height });
     };
-    img.onerror = () => {
-      resolve({ width: 800, height: 1130 }); // Default A4 ratio fallback
-    };
   });
+};
+
+export const getSafeAuthorName = (u) => {
+  if (!u || u.isGuest) return 'Guest Student';
+  if (u.name && typeof u.name === 'string' && u.name.trim()) return u.name.trim();
+  if (u.email && typeof u.email === 'string' && u.email.includes('@')) return u.email.split('@')[0];
+  if (u.username && typeof u.username === 'string' && u.username.trim()) return u.username.trim();
+  return 'Student';
+};
+
+export const getUserBatchYear = (user) => {
+  if (!user || user.isGuest) return null;
+
+  // 1. Check explicit regNo / registrationNo / regNumber field on user
+  const regNo = user.regNo || user.registrationNo || user.regNumber || user.studentId || '';
+  if (regNo) {
+    const match = String(regNo).trim().match(/^(\d{2})/);
+    if (match) return match[1];
+  }
+
+  // 2. Parse Email prefix (e.g. 23bce10045@vitbhopal.ac.in or 25bse10012@vitbhopal.ac.in)
+  const email = (user.email || '').trim().toLowerCase();
+  
+  // Starts directly with 2 digits (e.g. 25bce10045...)
+  const directMatch = email.match(/^(\d{2})/);
+  if (directMatch) return directMatch[1];
+
+  // Regex pattern for VIT Registration number in email (e.g. 25bce10045)
+  const regPatternMatch = email.match(/(\d{2})[a-z]{2,4}\d{4,5}/i);
+  if (regPatternMatch) return regPatternMatch[1];
+
+  // Any 2 digits after dot/underscore (e.g. aditya.24bse10012)
+  const dotPatternMatch = email.split('@')[0].match(/(?:^|[._-])(\d{2})[a-z]+/i);
+  if (dotPatternMatch) return dotPatternMatch[1];
+
+  // 3. Check username / name if it starts with 2 digits
+  const username = (user.username || user.name || '').trim();
+  const unameMatch = username.match(/^(\d{2})/);
+  if (unameMatch) return unameMatch[1];
+
+  return null;
+};
+
+export const isFacultyOrOfficial = (user) => {
+  if (!user || user.isGuest) return false;
+  const role = (user.role || '').toLowerCase();
+  const email = (user.email || '').toLowerCase();
+
+  // Explicit faculty roles only
+  if (role === 'faculty' || role === 'teacher' || role === 'professor' || role === 'staff') {
+    return true;
+  }
+
+  // Explicit faculty email prefixes only
+  if (email.startsWith('faculty.') || email.startsWith('prof.') || email.startsWith('dr.')) {
+    return true;
+  }
+
+  return false;
 };
 
 const convertImagesToPDF = async (base64Images) => {
@@ -825,79 +882,296 @@ const ModerationCard = memo(function ModerationCard({ paper, onApprove, onDelete
 });
 
 /**
- * ChatMessageItem Component
- * High performance memoized chat message row.
+ * Helper to get or create persistent guest client ID
  */
-const ChatMessageItem = memo(function ChatMessageItem({ message, currentUser, onLike }) {
-  const isSelf = currentUser && message.author === (currentUser.name || currentUser.email);
-  const handleLike = useCallback(() => {
-    if (onLike) onLike(message.id);
-  }, [message.id, onLike]);
+const getGuestClientId = () => {
+  let id = localStorage.getItem('ds_guest_client_id');
+  if (!id) {
+    id = 'guest_' + Math.random().toString(36).substr(2, 8);
+    localStorage.setItem('ds_guest_client_id', id);
+  }
+  return id;
+};
+
+/**
+ * ChatMessageItem Component
+ * 1:1 WhatsApp Web style message bubble with Reply Quotes, Voice Notes, Polls, Starred Messages, Edit, Delete, and Reactions.
+ */
+const ChatMessageItem = memo(function ChatMessageItem({ 
+  message, 
+  currentUser, 
+  onReact, 
+  onEdit, 
+  onDelete, 
+  onReply, 
+  onStar, 
+  onVotePoll, 
+  onForward, 
+  onRequireAuth, 
+  onPreviewImage 
+}) {
+  const currentUserId = currentUser && !currentUser.isGuest 
+    ? (currentUser._id || currentUser.id || currentUser.email)
+    : getGuestClientId();
+
+  const isOwner = Boolean(
+    (message.authorId && message.authorId === currentUserId) || 
+    (currentUser && !currentUser.isGuest && currentUser.name === message.author)
+  );
+
+  const reactions = message.reactions || { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] };
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(message.content || '');
+  const [showMenu, setShowMenu] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+
+  const handleSaveEdit = () => {
+    if (!editText.trim()) return;
+    if (onEdit) onEdit(message.id, editText.trim());
+    setIsEditing(false);
+  };
+
+  const handleCopyText = () => {
+    if (message.content) {
+      navigator.clipboard.writeText(message.content);
+      alert("Copied to clipboard!");
+    }
+    setShowMenu(false);
+  };
 
   return (
-    <div style={{
-      display: 'flex',
-      gap: '0.75rem',
-      padding: '0.85rem 1rem',
-      borderRadius: '12px',
-      background: isSelf ? 'hsla(var(--primary) / 0.08)' : 'rgba(255, 255, 255, 0.02)',
-      border: `1px solid ${isSelf ? 'hsla(var(--primary) / 0.2)' : 'rgba(255, 255, 255, 0.06)'}`,
-      alignItems: 'flex-start',
-      transition: 'background 0.2s ease'
-    }}>
-      <div style={{
-        width: '38px',
-        height: '38px',
-        borderRadius: '50%',
-        background: isSelf ? 'linear-gradient(135deg, #3b82f6, #6366f1)' : 'linear-gradient(135deg, #8b5cf6, #ec4899)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontWeight: '700',
-        fontSize: '0.85rem',
-        color: '#ffffff',
-        flexShrink: 0
-      }}>
-        {message.avatar || (message.author ? message.author.charAt(0).toUpperCase() : 'U')}
-      </div>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'hsl(var(--text-primary))' }}>
-              {message.author}
-            </span>
+    <div className={`wa-msg-row ${isOwner ? 'sent' : 'received'} animate-fade-in`}>
+      <div className={`wa-msg-bubble ${isOwner ? 'sent' : 'received'}`}>
+        {/* Header Name for Received Messages */}
+        {!isOwner && (
+          <div className="wa-msg-author">
+            {message.author}
             {message.role && (
-              <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', fontWeight: 600 }}>
+              <span style={{ fontSize: '0.65rem', marginLeft: '0.4rem', padding: '0.05rem 0.35rem', borderRadius: '4px', background: 'rgba(255,255,255,0.1)', color: '#aebac1' }}>
                 {message.role}
               </span>
             )}
           </div>
-          <span style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))' }}>
-            {message.timestamp}
-          </span>
+        )}
+
+        {/* WhatsApp Hover Dropdown Trigger Chevron for ALL Messages */}
+        <button
+          className="wa-msg-dropdown-trigger"
+          onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+          title="Message options"
+        >
+          ▼
+        </button>
+
+        {showMenu && (
+          <div className="wa-dropdown-menu" onClick={(e) => e.stopPropagation()}>
+            <div className="wa-dropdown-item" onClick={() => { setShowMenu(false); onReply && onReply(message); }}>
+              <span>💬 Reply</span>
+            </div>
+            <div className="wa-dropdown-item" onClick={() => { setShowMenu(false); onStar && onStar(message.id); }}>
+              <span>{message.isStarred ? '⭐ Unstar' : '⭐ Star Message'}</span>
+            </div>
+            <div className="wa-dropdown-item" onClick={handleCopyText}>
+              <span>📋 Copy Text</span>
+            </div>
+            <div className="wa-dropdown-item" onClick={() => { setShowMenu(false); onForward && onForward(message); }}>
+              <span>↪️ Forward</span>
+            </div>
+            {isOwner && (
+              <>
+                <div className="wa-dropdown-item" onClick={() => { setIsEditing(true); setEditText(message.content || ''); setShowMenu(false); }}>
+                  <span>✏️ Edit Message</span>
+                </div>
+                <div className="wa-dropdown-item delete" onClick={() => { setShowMenu(false); if (window.confirm("Delete this message?")) onDelete && onDelete(message.id); }}>
+                  <span>🗑️ Delete Message</span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* WhatsApp Quoted Reply Preview */}
+        {message.replyTo && (
+          <div style={{
+            background: 'rgba(0, 0, 0, 0.25)',
+            borderLeft: '4px solid #00a884',
+            borderRadius: '6px',
+            padding: '0.35rem 0.6rem',
+            marginBottom: '0.4rem',
+            fontSize: '0.78rem'
+          }}>
+            <div style={{ color: '#00a884', fontWeight: 700, fontSize: '0.72rem' }}>
+              {message.replyTo.author}
+            </div>
+            <div style={{ color: '#aebac1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {message.replyTo.content || 'Photo attachment'}
+            </div>
+          </div>
+        )}
+
+        {/* Voice Note Bubble */}
+        {message.isAudio ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.3rem 0.2rem', minWidth: '180px' }}>
+            <button
+              onClick={() => setIsPlayingAudio(!isPlayingAudio)}
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                background: '#00a884',
+                border: 'none',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '0.9rem'
+              }}
+            >
+              {isPlayingAudio ? '⏸️' : '▶️'}
+            </button>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+              <div style={{ height: '6px', background: 'rgba(255,255,255,0.2)', borderRadius: '3px', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ width: isPlayingAudio ? '100%' : '35%', height: '100%', background: '#00a884', transition: isPlayingAudio ? 'width 3s linear' : 'none' }} />
+              </div>
+              <div style={{ fontSize: '0.68rem', color: '#8696a0' }}>
+                🎙️ Voice Note • {message.audioDuration || '0:05'}
+              </div>
+            </div>
+          </div>
+        ) : isEditing ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.2rem' }}>
+            <input
+              type="text"
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              style={{
+                width: '100%',
+                background: '#111b21',
+                border: '1px solid #00a884',
+                borderRadius: '6px',
+                color: '#e9edef',
+                fontSize: '0.88rem',
+                padding: '0.4rem 0.6rem',
+                outline: 'none'
+              }}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setIsEditing(false)}
+                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#aebac1', borderRadius: '4px', padding: '0.2rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                style={{ background: '#00a884', border: 'none', color: '#ffffff', borderRadius: '4px', padding: '0.2rem 0.6rem', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        ) : (
+          message.content && (
+            <div style={{ color: '#e9edef', fontSize: '0.9rem', lineHeight: '1.45', wordBreak: 'break-word', paddingTop: isOwner ? '0.1rem' : 0 }}>
+              {message.content}
+            </div>
+          )
+        )}
+
+        {/* WhatsApp Poll Bubble */}
+        {message.poll && (
+          <div style={{ marginTop: '0.5rem', background: '#111b21', borderRadius: '8px', padding: '0.65rem', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#e9edef', marginBottom: '0.5rem' }}>
+              📊 {message.poll.question}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              {message.poll.options.map((opt, idx) => {
+                const votes = message.poll.votes ? (message.poll.votes[idx] || 0) : 0;
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => onVotePoll && onVotePoll(message.id, idx)}
+                    style={{
+                      display: 'flex',
+                      justify: 'space-between',
+                      alignItems: 'center',
+                      background: '#202c33',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '6px',
+                      padding: '0.4rem 0.65rem',
+                      color: '#e9edef',
+                      fontSize: '0.82rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span>{opt}</span>
+                    <span style={{ fontWeight: 700, color: '#00a884', fontSize: '0.75rem' }}>{votes} votes</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Attachment Image */}
+        {message.attachment && (
+          <div style={{ marginTop: '0.35rem' }}>
+            <img 
+              src={message.attachment} 
+              alt="Chat attachment" 
+              onClick={() => onPreviewImage && onPreviewImage(message.attachment)}
+              style={{
+                maxWidth: '240px',
+                maxHeight: '180px',
+                borderRadius: '8px',
+                objectFit: 'cover',
+                border: '1px solid rgba(255,255,255,0.15)',
+                cursor: 'pointer',
+                transition: 'transform 0.2s ease'
+              }}
+            />
+          </div>
+        )}
+
+        {/* Timestamp & Read Receipt */}
+        <div className="wa-msg-meta">
+          {message.isStarred && <span style={{ color: '#eab308', marginRight: '0.2rem' }}>⭐</span>}
+          {message.isEdited && <span style={{ fontSize: '0.65rem', fontStyle: 'italic', marginRight: '0.2rem' }}>(edited)</span>}
+          <span>{message.timestamp}</span>
+          {isOwner && <span className="wa-msg-checks">✓✓</span>}
         </div>
-        <p style={{ margin: 0, fontSize: '0.88rem', color: 'hsl(var(--text-secondary))', lineHeight: '1.45', wordBreak: 'break-word' }}>
-          {message.content}
-        </p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.35rem' }}>
-          <button
-            onClick={handleLike}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: message.liked ? '#f43f5e' : 'hsl(var(--text-muted))',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.25rem',
-              padding: 0
-            }}
-          >
-            <span>{message.liked ? '❤️' : '🤍'}</span>
-            <span>{message.likes || 0}</span>
-          </button>
+
+        {/* Reactions Bar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.35rem', flexWrap: 'wrap', clear: 'both' }}>
+          {['👍', '❤️', '💡', '🔥', '🚀'].map(emoji => {
+            const list = reactions[emoji] || [];
+            const count = list.length;
+            const hasReacted = list.includes(currentUserId);
+            return (
+              <button
+                key={emoji}
+                onClick={() => onReact && onReact(message.id, emoji)}
+                style={{
+                  background: hasReacted ? 'rgba(0, 168, 132, 0.25)' : 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid ' + (hasReacted ? '#00a884' : 'rgba(255, 255, 255, 0.08)'),
+                  borderRadius: '10px',
+                  padding: '0.1rem 0.35rem',
+                  fontSize: '0.7rem',
+                  cursor: 'pointer',
+                  color: '#e9edef',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.2rem',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <span>{emoji}</span>
+                {count > 0 && <span style={{ fontWeight: 700, fontSize: '0.65rem' }}>{count}</span>}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -906,163 +1180,1083 @@ const ChatMessageItem = memo(function ChatMessageItem({ message, currentUser, on
 
 /**
  * StudentChatSection Component
- * Memoized chat feed and channel manager for Student Chats sub-tab.
+ * WhatsApp Web Style Community Chat.
  */
-const StudentChatSection = memo(function StudentChatSection({ user }) {
+const StudentChatSection = memo(function StudentChatSection({ user, onRequireAuth, onBackToApp }) {
+  // Faculty & VIT Official Access Restriction: Chat section is strictly for students
+  const isFaculty = useMemo(() => isFacultyOrOfficial(user), [user]);
+
   const [activeChannel, setActiveChannel] = useState('general');
-  const [messages, setMessages] = useState([
-    { id: '1', channel: 'general', author: 'Rahul Sharma', avatar: 'R', role: 'CSE 3rd Year', content: 'Hey everyone! Has anyone downloaded the CAT-2 Discrete Mathematics papers from 2024?', timestamp: '10:14 AM', likes: 4, liked: false },
-    { id: '2', channel: 'general', author: 'Ananya Verma', avatar: 'A', role: 'ECE 2nd Year', content: 'Yes! Check out the MAT3002 section under PYQ Hub, all sets are updated with OCR text tags.', timestamp: '10:18 AM', likes: 7, liked: true },
-    { id: '3', channel: 'pyq-doubts', author: 'Vikram Singh', avatar: 'V', role: 'MECH 4th Year', content: 'Does anyone have solution keys for Thermofluids TEE 2024-25 paper?', timestamp: '11:05 AM', likes: 2, liked: false },
-    { id: '4', channel: 'exam-prep', author: 'Priya Nair', avatar: 'P', role: 'CSE 1st Year', content: 'Forming a study group for Data Structures Mid Terms tomorrow at Central Library floor 2. Anyone interested?', timestamp: '11:30 AM', likes: 9, liked: true }
-  ]);
+  const [showMobileChat, setShowMobileChat] = useState(false);
+  const [messages, setMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ds_community_messages_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Clean out legacy preseeded mock message IDs ('1', '2', '3', '4')
+          return parsed.filter(m => m.id !== '1' && m.id !== '2' && m.id !== '3' && m.id !== '4');
+        }
+      }
+    } catch (e) {}
+    return [];
+  });
+
   const [chatSearch, setChatSearch] = useState('');
   const [debouncedChatSearch, setDebouncedChatSearch] = useState('');
   const [newMessage, setNewMessage] = useState('');
+  const [selectedAttachment, setSelectedAttachment] = useState(null);
+  const [attachmentPreview, setAttachmentPreview] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [previewImageModal, setPreviewImageModal] = useState(null);
+  const [unreadCounts, setUnreadCounts] = useState({});
+  const [replyingToMessage, setReplyingToMessage] = useState(null);
+  const [showPollModal, setShowPollModal] = useState(false);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOpt1, setPollOpt1] = useState('');
+  const [pollOpt2, setPollOpt2] = useState('');
+
+  const fileInputRef = useRef(null);
+  const chatScrollRef = useRef(null);
+
+  // Sync messages to localStorage whenever modified
+  useEffect(() => {
+    try {
+      localStorage.setItem('ds_community_messages_v2', JSON.stringify(messages));
+    } catch (e) {}
+  }, [messages]);
+
+  const ALL_BATCH_CHANNELS = useMemo(() => [
+    { id: 'batch-2023', label: '23-batch-lounge', icon: '🎓', name: '23 Batch Lounge', desc: 'Exclusive community channel for 2023 Batch students', batchYear: '23', isPublic: false, isBatch: true },
+    { id: 'batch-2024', label: '24-batch-lounge', icon: '🎓', name: '24 Batch Lounge', desc: 'Exclusive community channel for 2024 Batch students', batchYear: '24', isPublic: false, isBatch: true },
+    { id: 'batch-2025', label: '25-batch-lounge', icon: '🎓', name: '25 Batch Lounge', desc: 'Exclusive community channel for 2025 Batch students', batchYear: '25', isPublic: false, isBatch: true },
+    { id: 'batch-2026', label: '26-batch-lounge', icon: '🎓', name: '26 Batch Lounge', desc: 'Exclusive community channel for 2026 Batch students', batchYear: '26', isPublic: false, isBatch: true }
+  ], []);
+
+  const userBatchYear = useMemo(() => getUserBatchYear(user), [user]);
+
+  const CHANNELS = useMemo(() => {
+    const baseChannels = [
+      { id: 'general', label: 'general-discussion', icon: '💬', name: 'General Campus', desc: 'General campus discussion & updates', isPublic: true },
+      { id: 'pyq-doubts', label: 'pyq-doubt-solver', icon: '📄', name: 'PYQ Doubts', desc: 'Past year paper solutions & doubts', isPublic: false },
+      { id: 'exam-prep', label: 'exam-prep-groups', icon: '📚', name: 'Exam Prep', desc: 'Study circles & CAT/TEE prep', isPublic: false },
+      { id: 'buy-sell', label: 'campus-buy-sell', icon: '🛍️', name: 'Buy & Sell', desc: 'Textbooks, bicycles & hostel gear', isPublic: false },
+      { id: 'placements', label: 'placements-internships', icon: '💼', name: 'Placements', desc: 'OA questions & placement prep', isPublic: false },
+      { id: 'lost-found', label: 'lost-and-found', icon: '🔍', name: 'Lost & Found', desc: 'Campus lost & found items', isPublic: false }
+    ];
+
+    // Guests: Show base channels and batch lounge channels marked as locked
+    if (!user || user.isGuest) {
+      return [
+        ...baseChannels,
+        ...ALL_BATCH_CHANNELS
+      ];
+    }
+
+    // Admin & Faculty can view all batch lounges
+    if (user.role === 'admin' || user.role === 'Faculty' || user.role === 'Teacher') {
+      return [...baseChannels, ...ALL_BATCH_CHANNELS];
+    }
+
+    // Students: ONLY show the specific batch lounge they belong to (e.g. 25 Batch Lounge for 25bce... emails)
+    if (userBatchYear) {
+      const matchBatch = ALL_BATCH_CHANNELS.find(b => b.batchYear === userBatchYear) || {
+        id: `batch-20${userBatchYear}`,
+        label: `${userBatchYear}-batch-lounge`,
+        icon: '🎓',
+        name: `${userBatchYear} Batch Lounge`,
+        desc: `Exclusive community channel for 20${userBatchYear} Batch students`,
+        batchYear: userBatchYear,
+        isPublic: false,
+        isBatch: true
+      };
+      return [...baseChannels, matchBatch];
+    }
+
+    // Fallback: If student account has no batch prefix in email, show all batch lounges
+    return [...baseChannels, ...ALL_BATCH_CHANNELS];
+  }, [user, userBatchYear, ALL_BATCH_CHANNELS]);
+
+  const activeChannelObj = CHANNELS.find(c => c.id === activeChannel) || CHANNELS[0];
+  const isGuestUser = !user || user.isGuest;
+  const isChannelLockedForGuest = isGuestUser && activeChannel !== 'general' && !activeChannelObj.isPublic;
+
+  // Auto-switch to general if active channel is not visible to current user
+  useEffect(() => {
+    const isChannelAvailable = CHANNELS.some(c => c.id === activeChannel);
+    if (!isChannelAvailable) {
+      setActiveChannel('general');
+    }
+  }, [CHANNELS, activeChannel]);
+
+  // Fetch messages from backend API & merge with decryption
+  useEffect(() => {
+    fetch(`/api/chat/messages?channel=${activeChannel}`)
+      .then(res => res.json())
+      .then(async (data) => {
+        if (data.success && data.messages && data.messages.length > 0) {
+          const decryptedMsgs = await Promise.all(data.messages.map(async (m) => ({
+            ...m,
+            content: await decryptText(m.content)
+          })));
+          setMessages(prev => {
+            const existingIds = new Set(prev.map(m => m.id));
+            const newServerMsgs = decryptedMsgs.filter(m => !existingIds.has(m.id));
+            if (newServerMsgs.length === 0) return prev;
+            return [...prev, ...newServerMsgs];
+          });
+        }
+      })
+      .catch(err => console.log("Using cached chat feed:", err));
+  }, [activeChannel]);
+
+  // Clear unread count when switching channel
+  const handleChannelSelect = (chId) => {
+    setActiveChannel(chId);
+    setUnreadCounts(prev => ({ ...prev, [chId]: 0 }));
+    setShowMobileChat(true);
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedChatSearch(chatSearch), 150);
     return () => clearTimeout(timer);
   }, [chatSearch]);
 
-  const handleLikeMessage = useCallback((id) => {
-    setMessages(prev => prev.map(m => m.id === id ? { ...m, likes: m.liked ? m.likes - 1 : m.likes + 1, liked: !m.liked } : m));
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [messages, activeChannel]);
+
+  // Handle Image Selection
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Image size should be less than 5MB");
+      return;
+    }
+    setSelectedAttachment(file);
+    setAttachmentPreview(URL.createObjectURL(file));
+  };
+
+  // React to Message
+  const handleReactMessage = useCallback((messageId, emoji) => {
+    const token = localStorage.getItem('ds_ai_token');
+    const isGuest = !user || user.isGuest;
+    if (isGuest && activeChannel !== 'general') {
+      if (onRequireAuth) onRequireAuth();
+      return;
+    }
+
+    const userId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
+
+    setMessages(prev => prev.map(m => {
+      if (m.id !== messageId) return m;
+      const reactions = m.reactions || { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] };
+      const currentList = reactions[emoji] || [];
+      const hasReacted = currentList.includes(userId);
+      const updatedList = hasReacted ? currentList.filter(id => id !== userId) : [...currentList, userId];
+      return { ...m, reactions: { ...reactions, [emoji]: updatedList } };
+    }));
+
+    fetch('/api/chat/react', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ messageId, emoji, guestUserId: userId })
+    }).catch(err => console.error("Reaction sync failed:", err));
+  }, [user, activeChannel, onRequireAuth]);
+
+  const [isPeerTyping, setIsPeerTyping] = useState(false);
+  const [typingPeerName, setTypingPeerName] = useState('Rahul Sharma');
+
+  // Connect to Redis Presence & Typing Engine
+  // Presence & typing polling (throttled for performance)
+  useEffect(() => {
+    const userId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
+    const username = user && !user.isGuest ? (user.name || user.email) : 'Guest Student';
+
+    // Delayed initial presence heartbeat (don't block mount)
+    const initTimer = setTimeout(() => {
+      fetch('/api/chat/presence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, username })
+      }).catch(() => {});
+    }, 3000);
+
+    // Presence heartbeat every 30s (was 10s)
+    const presenceInterval = setInterval(() => {
+      fetch('/api/chat/presence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, username })
+      }).catch(() => {});
+    }, 30000);
+
+    // Typing poll every 5s (was 2s)
+    const typingPollInterval = setInterval(() => {
+      fetch(`/api/chat/typing-status?channel=${activeChannel}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.typers) {
+            const activeTypers = data.typers.filter(name => name !== username);
+            if (activeTypers.length > 0) {
+              setIsPeerTyping(true);
+              setTypingPeerName(activeTypers[0]);
+            }
+          }
+        }).catch(() => {});
+    }, 5000);
+
+    return () => {
+      clearTimeout(initTimer);
+      clearInterval(presenceInterval);
+      clearInterval(typingPollInterval);
+    };
+  }, [activeChannel, user]);
+
+  // Debounced typing notifier (fires at most once per 2s instead of every keystroke)
+  const lastTypingNotify = useRef(0);
+  const handleInputChange = (e) => {
+    setNewMessage(e.target.value);
+
+    // Debounce typing API calls — max once every 2 seconds
+    const now = Date.now();
+    if (now - lastTypingNotify.current > 2000) {
+      lastTypingNotify.current = now;
+      const userId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
+      const username = user && !user.isGuest ? (user.name || user.email) : 'Guest Student';
+      fetch('/api/chat/typing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: activeChannel, username, userId })
+      }).catch(() => {});
+    }
+  };
+
+  // Star / Unstar Message Handler
+  const handleStarMessage = useCallback((messageId) => {
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, isStarred: !m.isStarred } : m));
   }, []);
 
-  const handleSendMessage = useCallback((e) => {
+  // Poll Vote Handler
+  const handleVotePoll = useCallback((messageId, optionIdx) => {
+    setMessages(prev => prev.map(m => {
+      if (m.id !== messageId || !m.poll) return m;
+      const votes = [...(m.poll.votes || [0, 0])];
+      votes[optionIdx] = (votes[optionIdx] || 0) + 1;
+      return { ...m, poll: { ...m.poll, votes } };
+    }));
+  }, []);
+
+  // Forward Message Handler
+  const handleForwardMessage = useCallback((msgToForward) => {
+    const targetChannel = window.prompt("Enter target channel (general, pyq-doubts, exam-prep, buy-sell, placements, lost-found):", "general");
+    if (!targetChannel) return;
+    const currentAuthorId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
+    const forwardedMsg = {
+      ...msgToForward,
+      id: String(Date.now()),
+      channel: targetChannel,
+      author: getSafeAuthorName(user),
+      authorId: currentAuthorId,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isForwarded: true
+    };
+    setMessages(prev => [...prev, forwardedMsg]);
+    alert(`Forwarded to #${targetChannel}!`);
+  }, [user]);
+
+  // Voice Note Handler
+  const handleSendVoiceNote = () => {
+    const isGuest = !user || user.isGuest;
+    if (isGuest && activeChannel !== 'general') {
+      if (onRequireAuth) onRequireAuth();
+      return;
+    }
+    setIsRecordingVoice(true);
+    setTimeout(() => {
+      setIsRecordingVoice(false);
+      const currentAuthorId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
+      const voiceMsg = {
+        id: String(Date.now()),
+        channel: activeChannel,
+        author: getSafeAuthorName(user),
+        authorId: currentAuthorId,
+        avatar: user && user.name ? user.name.charAt(0).toUpperCase() : 'G',
+        role: user && !user.isGuest ? (user.role === 'admin' ? 'Admin' : (user.program || 'Student')) : 'Guest User',
+        isAudio: true,
+        audioDuration: '0:05',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        reactions: { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] }
+      };
+      setMessages(prev => [...prev, voiceMsg]);
+    }, 1800);
+  };
+
+  // Submit Poll Creator
+  const handleCreatePollSubmit = (e) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    if (!pollQuestion.trim() || !pollOpt1.trim() || !pollOpt2.trim()) return;
+    const currentAuthorId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
+    const pollMsg = {
+      id: String(Date.now()),
+      channel: activeChannel,
+      author: getSafeAuthorName(user),
+      authorId: currentAuthorId,
+      avatar: user && user.name ? user.name.charAt(0).toUpperCase() : 'G',
+      role: user && !user.isGuest ? (user.role === 'admin' ? 'Admin' : (user.program || 'Student')) : 'Guest User',
+      poll: {
+        question: pollQuestion.trim(),
+        options: [pollOpt1.trim(), pollOpt2.trim()],
+        votes: [0, 0]
+      },
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      reactions: { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] }
+    };
+    setMessages(prev => [...prev, pollMsg]);
+    setPollQuestion('');
+    setPollOpt1('');
+    setPollOpt2('');
+    setShowPollModal(false);
+  };
+
+  // Send Message
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    const isGuest = !user || user.isGuest;
+
+    // If on a locked channel and user is a guest, prompt login
+    if (isGuest && activeChannel !== 'general') {
+      if (onRequireAuth) onRequireAuth();
+      return;
+    }
+
+    if (!newMessage.trim() && !selectedAttachment) return;
+
+    setUploading(true);
+    let attachmentUrl = null;
+
+    if (selectedAttachment) {
+      const formData = new FormData();
+      formData.append('file', selectedAttachment);
+      const token = localStorage.getItem('ds_ai_token');
+      try {
+        const res = await fetch('/api/chat/upload', {
+          method: 'POST',
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+          body: formData
+        });
+        const data = await res.json();
+        if (data.success) attachmentUrl = data.url;
+      } catch (err) {
+        attachmentUrl = attachmentPreview;
+      }
+    }
+
+    const currentAuthorId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
+    const rawText = newMessage.trim();
+    const encryptedContent = await encryptText(rawText);
+
     const msg = {
       id: String(Date.now()),
       channel: activeChannel,
-      author: user ? (user.name || user.email) : 'Student',
-      avatar: user && user.name ? user.name.charAt(0).toUpperCase() : 'S',
-      role: user && user.role === 'admin' ? 'Admin' : 'Student',
-      content: newMessage.trim(),
+      author: getSafeAuthorName(user),
+      authorId: currentAuthorId,
+      avatar: user && user.name ? user.name.charAt(0).toUpperCase() : 'G',
+      role: user && !user.isGuest ? (user.role === 'admin' ? 'Admin' : (user.program || 'Student')) : 'Guest User',
+      content: rawText,
+      attachment: attachmentUrl,
+      replyTo: replyingToMessage ? { author: replyingToMessage.author, content: replyingToMessage.content } : null,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      likes: 0,
-      liked: false
+      reactions: { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] }
     };
+
     setMessages(prev => [...prev, msg]);
     setNewMessage('');
-  }, [newMessage, activeChannel, user]);
+    setSelectedAttachment(null);
+    setAttachmentPreview(null);
+    setReplyingToMessage(null);
+    setUploading(false);
+
+    const token = localStorage.getItem('ds_ai_token');
+    fetch('/api/chat/messages', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ 
+        channel: activeChannel, 
+        content: encryptedContent, 
+        attachment: attachmentUrl,
+        authorName: msg.author,
+        authorRole: msg.role
+      })
+    }).catch(err => console.error("Server message sync failed:", err));
+  };
+
+  // Edit Message Handler
+  const handleEditMessage = useCallback(async (messageId, newContent) => {
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: newContent, isEdited: true } : m));
+    const encrypted = await encryptText(newContent);
+    fetch(`/api/chat/messages/${messageId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: encrypted })
+    }).catch(err => console.error("Edit sync failed:", err));
+  }, []);
+
+  // Delete Message Handler
+  const handleDeleteMessage = useCallback((messageId) => {
+    setMessages(prev => prev.filter(m => m.id !== messageId));
+    fetch(`/api/chat/messages/${messageId}`, {
+      method: 'DELETE'
+    }).catch(err => console.error("Delete sync failed:", err));
+  }, []);
 
   const filteredMessages = useMemo(() => {
     let list = messages.filter(m => m.channel === activeChannel);
     const q = debouncedChatSearch.trim().toLowerCase();
     if (q) {
-      list = list.filter(m => m.content.toLowerCase().includes(q) || m.author.toLowerCase().includes(q));
+      list = list.filter(m => (m.content && m.content.toLowerCase().includes(q)) || (m.author && m.author.toLowerCase().includes(q)));
     }
     return list;
   }, [messages, activeChannel, debouncedChatSearch]);
 
-  const CHANNELS = [
-    { id: 'general', label: 'general-discussion', icon: '💬' },
-    { id: 'pyq-doubts', label: 'pyq-doubts-clearing', icon: '📄' },
-    { id: 'exam-prep', label: 'exam-prep-groups', icon: '📚' }
-  ];
+  // Interactive Popup States for WhatsApp Buttons
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showProfileDrawer, setShowProfileDrawer] = useState(false);
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+  const [showChannelInfoModal, setShowChannelInfoModal] = useState(false);
+  const [inHeaderSearch, setInHeaderSearch] = useState(false);
 
-  const activeChannelObj = CHANNELS.find(c => c.id === activeChannel) || CHANNELS[0];
+  const EMOJI_LIST = ['😊', '😂', '🔥', '🚀', '👍', '❤️', '💡', '🎉', '🙌', '👏', '💯', '📄', '📚', '🎓', '💻', '⭐', '✅', '📌'];
 
-  return (
-    <div className="pyq-workspace animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div className="pyq-header-banner" style={{ background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.08))' }}>
-        <div className="pyq-banner-content">
-          <h2>💬 Student Community Chats & Study Circles</h2>
-          <p>Real-time peer discussions, course doubt-solving, and study group coordination.</p>
+  const handleInsertEmoji = (emoji) => {
+    setNewMessage(prev => prev + emoji);
+    setShowEmojiPicker(false);
+  };
+
+  const handleClearHistory = () => {
+    if (window.confirm(`Clear all messages in #${activeChannelObj.label}?`)) {
+      setMessages(prev => prev.filter(m => m.channel !== activeChannel));
+      setShowHeaderMenu(false);
+    }
+  };
+
+  if (isFaculty) {
+    return (
+      <div style={{ padding: '3rem 2rem', textAlign: 'center', background: '#111b21', color: '#e9edef', borderRadius: '16px', border: '1px solid #2a3942', maxWidth: '640px', margin: '4rem auto', boxShadow: '0 12px 32px rgba(0,0,0,0.4)' }}>
+        <div style={{ fontSize: '3.8rem', marginBottom: '1rem', filter: 'drop-shadow(0 4px 12px rgba(239,68,68,0.3))' }}>🛡️</div>
+        <h2 style={{ color: '#00a884', fontSize: '1.45rem', fontWeight: 800, marginBottom: '0.8rem', letterSpacing: '-0.02em' }}>
+          Student-Only Encrypted Zone
+        </h2>
+        <p style={{ color: '#8696a0', fontSize: '0.95rem', lineHeight: 1.65, maxWidth: '480px', margin: '0 auto 1.5rem auto' }}>
+          The Community Chat section is strictly restricted to <strong>VIT Bhopal Students</strong> to maintain peer privacy and end-to-end encrypted discussions.
+        </p>
+        <div style={{ padding: '0.75rem 1.25rem', background: '#202c33', borderRadius: '50px', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#fb7185', border: '1px solid rgba(251,113,133,0.2)' }}>
+          🔒 Faculty & Official Accounts Are Restricted From Accessing Chat
         </div>
       </div>
+    );
+  }
 
-      <div className="chat-layout-grid">
-        {/* Sidebar Channels */}
-        <div className="chat-channels-sidebar">
-          <span className="chat-channels-title">
-            Channels
-          </span>
-          <div className="chat-channels-list">
-            {CHANNELS.map(ch => (
-              <button
-                key={ch.id}
-                onClick={() => setActiveChannel(ch.id)}
-                className={`chat-channel-btn ${activeChannel === ch.id ? 'active' : ''}`}
-              >
-                <span>{ch.icon}</span>
-                <span>#{ch.label}</span>
-              </button>
-            ))}
+  return (
+    <div className="wa-container animate-fade-in" onClick={() => { setShowHeaderMenu(false); setShowAttachMenu(false); setShowEmojiPicker(false); }}>
+      {/* WhatsApp Left Sidebar */}
+      <div className={`wa-sidebar ${showMobileChat ? 'mobile-hidden' : ''}`}>
+        {/* Sidebar Header */}
+        <div className="wa-sidebar-header">
+          <div 
+            style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}
+            onClick={(e) => { e.stopPropagation(); setShowProfileDrawer(true); }}
+            title="Click to view profile"
+          >
+            <div className="wa-user-avatar">
+              {user && user.name ? user.name.charAt(0).toUpperCase() : 'G'}
+            </div>
+            <div>
+              <div style={{ color: '#e9edef', fontWeight: 700, fontSize: '0.9rem' }}>
+                {getSafeAuthorName(user)}
+              </div>
+              <div style={{ color: '#00a884', fontSize: '0.7rem', fontWeight: 600 }}>
+                ● Online
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <button
+              onClick={(e) => { e.stopPropagation(); if (onBackToApp) onBackToApp(); }}
+              title="Return to Main App"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                background: 'rgba(0, 168, 132, 0.15)',
+                border: '1px solid rgba(0, 168, 132, 0.3)',
+                borderRadius: '20px',
+                color: '#00a884',
+                padding: '0.35rem 0.75rem',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              ← Back to App
+            </button>
+            <span 
+              title="Campus Status Stories" 
+              onClick={(e) => { e.stopPropagation(); setShowStatusModal(true); }}
+              style={{ cursor: 'pointer', fontSize: '1.1rem', color: '#aebac1' }}
+            >
+              ⭕
+            </span>
           </div>
         </div>
 
-        {/* Chat Feed */}
-        <div className="chat-feed-box">
-          {/* Header & Filter */}
-          <div className="chat-feed-header">
-            <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'hsl(var(--text-primary))' }}>
-              #{activeChannelObj.label}
-            </h4>
-            <div className="chat-search-input-box">
-              <InputGroup style={{ height: '34px' }}>
-                <InputGroupAddon align="inline-start">
-                  <Search size={14} />
-                </InputGroupAddon>
-                <InputGroupInput
-                  type="text"
-                  placeholder="Filter messages..."
-                  value={chatSearch}
-                  onChange={(e) => setChatSearch(e.target.value)}
-                  style={{ fontSize: '0.78rem' }}
-                />
-              </InputGroup>
+        {/* Search Bar */}
+        <div className="wa-search-box">
+          <div style={{ position: 'relative', width: '100%' }}>
+            <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#8696a0', fontSize: '0.85rem' }}>🔍</span>
+            <input
+              type="text"
+              placeholder="Search or start new chat"
+              value={chatSearch}
+              onChange={(e) => setChatSearch(e.target.value)}
+              className="wa-search-input"
+            />
+          </div>
+        </div>
+
+        {/* Rooms List */}
+        <div className="wa-chat-list">
+          {CHANNELS.map(ch => {
+            const isLocked = isGuestUser && !ch.isPublic;
+            const channelMsgs = messages.filter(m => m.channel === ch.id);
+            const lastMsg = channelMsgs[channelMsgs.length - 1];
+
+            return (
+              <div
+                key={ch.id}
+                onClick={() => handleChannelSelect(ch.id)}
+                className={`wa-chat-item ${activeChannel === ch.id ? 'active' : ''}`}
+              >
+                <div className="wa-chat-item-avatar">
+                  {ch.icon}
+                </div>
+                <div className="wa-chat-item-info">
+                  <div className="wa-chat-item-name">
+                    <span>#{ch.label}</span>
+                    <span className="wa-chat-item-time">{lastMsg ? lastMsg.timestamp : ''}</span>
+                  </div>
+                  <div className="wa-chat-item-preview">
+                    {isLocked ? (
+                      <span style={{ color: '#fb7185', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                        🔒 Locked for Guest
+                      </span>
+                    ) : (
+                      <span>{lastMsg ? `${(lastMsg.author || 'Student').split(' ')[0]}: ${lastMsg.content || 'Photo attachment'}` : ch.desc}</span>
+                    )}
+                  </div>
+                </div>
+                {!isLocked && unreadCounts[ch.id] > 0 && activeChannel !== ch.id && (
+                  <div style={{ background: '#00a884', color: '#111b21', borderRadius: '50%', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.68rem', fontWeight: 800 }}>
+                    {unreadCounts[ch.id]}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* WhatsApp Right Chat Panel */}
+      <div className={`wa-chat-panel ${!showMobileChat ? 'mobile-hidden' : ''}`}>
+        {/* Header */}
+        <div className="wa-chat-header">
+          {/* Mobile Back Button */}
+          <button 
+            className="wa-mobile-back-btn" 
+            onClick={(e) => { e.stopPropagation(); setShowMobileChat(false); }}
+            title="Back to Chats"
+          >
+            ←
+          </button>
+          <div 
+            style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', cursor: 'pointer', flex: 1, minWidth: 0, overflow: 'hidden' }}
+            onClick={(e) => { e.stopPropagation(); setShowChannelInfoModal(true); }}
+            title="Click for Channel Details"
+          >
+            <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#2a3942', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', flexShrink: 0 }}>
+              {activeChannelObj.icon}
+            </div>
+            <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+              <div style={{ color: '#e9edef', fontWeight: 700, fontSize: '0.92rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.2' }}>
+                #{activeChannelObj.label}
+              </div>
+              <div style={{ color: isPeerTyping ? '#00a884' : '#8696a0', fontSize: '0.7rem', fontWeight: isPeerTyping ? 700 : 400, transition: 'color 0.2s ease', display: 'flex', alignItems: 'center', gap: '0.35rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {isPeerTyping ? (
+                  `🟢 ${typingPeerName} is typing...`
+                ) : (
+                  <>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>online • 494 members</span>
+                    <span style={{ color: '#00a884', background: 'rgba(0,168,132,0.12)', padding: '1px 5px', borderRadius: '4px', fontSize: '0.62rem', fontWeight: 600, flexShrink: 0 }}>🔒 E2EE</span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Messages list */}
-          <div className="chat-messages-scroll-area">
-            {filteredMessages.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'hsl(var(--text-muted))' }}>
-                <span>💬</span>
-                <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.85rem' }}>No messages found in this channel.</p>
-              </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: '#aebac1', position: 'relative' }}>
+            {/* Inline Header Search Bar */}
+            {inHeaderSearch ? (
+              <input
+                type="text"
+                placeholder="Search messages..."
+                value={chatSearch}
+                onChange={(e) => setChatSearch(e.target.value)}
+                autoFocus
+                onClick={(e) => e.stopPropagation()}
+                style={{ background: '#111b21', border: '1px solid #00a884', borderRadius: '6px', color: '#e9edef', padding: '0.25rem 0.6rem', fontSize: '0.82rem', outline: 'none', width: '160px' }}
+              />
             ) : (
-              filteredMessages.map(msg => (
-                <ChatMessageItem
-                  key={msg.id}
-                  message={msg}
-                  currentUser={user}
-                  onLike={handleLikeMessage}
-                />
-              ))
+              <span 
+                title="Search Messages" 
+                onClick={(e) => { e.stopPropagation(); setInHeaderSearch(true); }} 
+                style={{ cursor: 'pointer', fontSize: '1.1rem' }}
+              >
+                🔍
+              </span>
+            )}
+
+            {/* Header Options Menu Button */}
+            <span 
+              title="Channel Options" 
+              onClick={(e) => { e.stopPropagation(); setShowHeaderMenu(!showHeaderMenu); }} 
+              style={{ cursor: 'pointer', fontSize: '1.2rem' }}
+            >
+              ⋮
+            </span>
+
+            {/* Floating Options Dropdown Menu */}
+            {showHeaderMenu && (
+              <div className="wa-dropdown-menu" onClick={(e) => e.stopPropagation()} style={{ right: 0, top: '35px', width: '180px' }}>
+                <div className="wa-dropdown-item" onClick={() => { setShowChannelInfoModal(true); setShowHeaderMenu(false); }}>
+                  <span>ℹ️ Channel Info</span>
+                </div>
+                <div className="wa-dropdown-item" onClick={() => { alert("Notifications muted for 8 hours."); setShowHeaderMenu(false); }}>
+                  <span>🔔 Mute Notifications</span>
+                </div>
+                <div className="wa-dropdown-item" onClick={handleClearHistory}>
+                  <span>🧹 Clear Messages</span>
+                </div>
+                {isGuestUser && (
+                  <div className="wa-dropdown-item" onClick={() => { if (onRequireAuth) onRequireAuth(); setShowHeaderMenu(false); }}>
+                    <span>🔒 Log In Account</span>
+                  </div>
+                )}
+              </div>
             )}
           </div>
-
-          {/* Message input form */}
-          <form onSubmit={handleSendMessage} className="chat-message-form">
-            <input
-              type="text"
-              placeholder={`Message #${activeChannelObj.label}...`}
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              className="chat-input-field"
-            />
-            <button
-              type="submit"
-              disabled={!newMessage.trim()}
-              className="chat-send-btn"
-            >
-              <span>Send</span>
-              <Send size={14} />
-            </button>
-          </form>
         </div>
+
+        {/* Locked Screen for Guest Accounts on non-general channels */}
+        {isChannelLockedForGuest ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+            <div style={{ background: '#202c33', padding: '2.5rem 2rem', borderRadius: '16px', maxWidth: '400px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <span style={{ fontSize: '3rem', display: 'block', marginBottom: '0.8rem' }}>🔒</span>
+              <h3 style={{ color: '#e9edef', margin: '0 0 0.5rem 0', fontSize: '1.25rem', fontWeight: 800 }}>
+                #{activeChannelObj.label} is Locked
+              </h3>
+              <p style={{ color: '#8696a0', fontSize: '0.85rem', lineHeight: 1.5, marginBottom: '1.5rem' }}>
+                Only <strong>#general-discussion</strong> is open for guest previews. Please log in to unlock PYQ doubt solvers, study groups, placement QAs, and campus trading.
+              </p>
+              <button 
+                onClick={() => { if (onRequireAuth) onRequireAuth(); }}
+                style={{
+                  width: '100%',
+                  backgroundColor: '#00a884',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '0.75rem 1.5rem',
+                  fontSize: '0.9rem',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                Log In / Create Account
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Messages Area */}
+            <div className="wa-chat-messages-area" ref={chatScrollRef}>
+              <div className="wa-date-divider">TODAY</div>
+              {filteredMessages.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#8696a0' }}>
+                  <span style={{ fontSize: '2.5rem' }}>💬</span>
+                  <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.88rem' }}>No messages yet in #{activeChannelObj.label}. Send a message to get started!</p>
+                </div>
+              ) : (
+                filteredMessages.map(msg => (
+                  <ChatMessageItem
+                    key={msg.id}
+                    message={msg}
+                    currentUser={user}
+                    onReact={handleReactMessage}
+                    onEdit={handleEditMessage}
+                    onDelete={handleDeleteMessage}
+                    onReply={(m) => setReplyingToMessage(m)}
+                    onStar={handleStarMessage}
+                    onVotePoll={handleVotePoll}
+                    onForward={handleForwardMessage}
+                    onRequireAuth={onRequireAuth}
+                    onPreviewImage={(url) => setPreviewImageModal(url)}
+                  />
+                ))
+              )}
+
+              {/* Animated WhatsApp Typing Bubble */}
+              {isPeerTyping && (
+                <div className="wa-msg-row received animate-fade-in">
+                  <div className="wa-msg-bubble received" style={{ padding: '0.4rem 0.85rem 0.4rem 0.85rem' }}>
+                    <div className="wa-msg-author" style={{ fontSize: '0.75rem', marginBottom: '0.15rem' }}>
+                      {typingPeerName}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.15rem 0' }}>
+                      <span className="wa-typing-dot">●</span>
+                      <span className="wa-typing-dot delay-1">●</span>
+                      <span className="wa-typing-dot delay-2">●</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Replying To Message Banner */}
+            {replyingToMessage && (
+              <div style={{ padding: '0.4rem 1rem', background: '#182229', borderLeft: '4px solid #00a884', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                <div>
+                  <div style={{ fontSize: '0.72rem', color: '#00a884', fontWeight: 700 }}>Replying to {replyingToMessage.author}</div>
+                  <div style={{ fontSize: '0.8rem', color: '#aebac1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '300px' }}>{replyingToMessage.content || 'Attachment'}</div>
+                </div>
+                <button onClick={() => setReplyingToMessage(null)} style={{ background: 'none', border: 'none', color: '#fb7185', fontSize: '1.1rem', cursor: 'pointer' }}>✕</button>
+              </div>
+            )}
+
+            {/* Attachment Preview Bar */}
+            {attachmentPreview && (
+              <div style={{ padding: '0.5rem 1.25rem', background: '#202c33', display: 'flex', alignItems: 'center', gap: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                <img src={attachmentPreview} alt="Preview" style={{ width: '44px', height: '44px', borderRadius: '6px', objectFit: 'cover' }} />
+                <span style={{ fontSize: '0.82rem', color: '#e9edef', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {selectedAttachment ? selectedAttachment.name : 'Attached Image'}
+                </span>
+                <button 
+                  onClick={() => { setSelectedAttachment(null); setAttachmentPreview(null); }}
+                  style={{ background: 'none', border: 'none', color: '#f43f5e', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 800 }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* Input Bar with Emojis & Attachment Popup */}
+            <form onSubmit={handleSendMessage} className="wa-input-bar" style={{ position: 'relative' }}>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                accept="image/*,.pdf,.doc,.docx" 
+                style={{ display: 'none' }} 
+              />
+
+              {/* Emoji Picker Trigger */}
+              <span 
+                title="Emojis" 
+                onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(!showEmojiPicker); setShowAttachMenu(false); }}
+                style={{ color: '#8696a0', fontSize: '1.3rem', cursor: 'pointer' }}
+              >
+                😊
+              </span>
+
+              {/* Floating Emoji Picker Palette */}
+              {showEmojiPicker && (
+                <div 
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    position: 'absolute',
+                    bottom: '70px',
+                    left: '10px',
+                    background: '#233138',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '12px',
+                    padding: '0.65rem',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(6, 1fr)',
+                    gap: '0.4rem',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                    zIndex: 200
+                  }}
+                >
+                  {EMOJI_LIST.map(em => (
+                    <button
+                      key={em}
+                      type="button"
+                      onClick={() => handleInsertEmoji(em)}
+                      style={{ background: 'none', border: 'none', fontSize: '1.25rem', cursor: 'pointer', padding: '0.2rem' }}
+                    >
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Attachment Menu Paperclip Button */}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowAttachMenu(!showAttachMenu); setShowEmojiPicker(false); }}
+                title="Attach File or Image"
+                style={{ background: 'none', border: 'none', color: '#8696a0', fontSize: '1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+              >
+                📎
+              </button>
+
+              {/* Floating Attachment Menu Popup */}
+              {showAttachMenu && (
+                <div 
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    position: 'absolute',
+                    bottom: '70px',
+                    left: '45px',
+                    background: '#233138',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '12px',
+                    padding: '0.4rem 0',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                    zIndex: 200,
+                    minWidth: '170px'
+                  }}
+                >
+                  <div className="wa-dropdown-item" onClick={() => { setShowAttachMenu(false); if (fileInputRef.current) fileInputRef.current.click(); }}>
+                    <span>📷 Photos & Videos</span>
+                  </div>
+                  <div className="wa-dropdown-item" onClick={() => { setShowAttachMenu(false); if (fileInputRef.current) fileInputRef.current.click(); }}>
+                    <span>📄 PYQ Document</span>
+                  </div>
+                  <div className="wa-dropdown-item" onClick={() => { setShowAttachMenu(false); setShowPollModal(true); }}>
+                    <span>📊 Create Poll</span>
+                  </div>
+                </div>
+              )}
+
+              {/* WhatsApp Message Field */}
+              <input
+                type="text"
+                placeholder={isRecordingVoice ? "🎙️ Recording Voice Note..." : "Type a message"}
+                value={newMessage}
+                onChange={handleInputChange}
+                className="wa-input-field"
+                disabled={isRecordingVoice}
+              />
+
+              {/* WhatsApp Voice Mic or Send Button */}
+              {(!newMessage.trim() && !selectedAttachment) ? (
+                <button
+                  type="button"
+                  onClick={handleSendVoiceNote}
+                  className="wa-send-btn"
+                  title="Send Voice Note"
+                  style={{ background: isRecordingVoice ? '#f43f5e' : '#00a884' }}
+                >
+                  🎙️
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={uploading}
+                  className="wa-send-btn"
+                  title="Send Message"
+                >
+                  <Send size={18} />
+                </button>
+              )}
+            </form>
+          </>
+        )}
       </div>
+
+      {/* WhatsApp Interactive Poll Creator Modal */}
+      {showPollModal && (
+        <div className="aurora-modal-overlay" onClick={() => setShowPollModal(false)} style={{ zIndex: 99999 }}>
+          <div className="aurora-modal-card glass-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px', padding: '1.5rem', borderRadius: '16px', background: '#111b21', color: '#e9edef' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>📊 Create WhatsApp Poll</h3>
+              <button onClick={() => setShowPollModal(false)} style={{ background: 'none', border: 'none', color: '#fb7185', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
+            <form onSubmit={handleCreatePollSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div>
+                <label style={{ fontSize: '0.78rem', color: '#8696a0', fontWeight: 600 }}>Question</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Is CAT-2 preparation complete?"
+                  value={pollQuestion}
+                  onChange={(e) => setPollQuestion(e.target.value)}
+                  required
+                  style={{ width: '100%', background: '#202c33', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '0.5rem', color: '#e9edef', marginTop: '0.2rem', outline: 'none' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.78rem', color: '#8696a0', fontWeight: 600 }}>Option 1</label>
+                <input
+                  type="text"
+                  placeholder="Option 1"
+                  value={pollOpt1}
+                  onChange={(e) => setPollOpt1(e.target.value)}
+                  required
+                  style={{ width: '100%', background: '#202c33', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '0.5rem', color: '#e9edef', marginTop: '0.2rem', outline: 'none' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.78rem', color: '#8696a0', fontWeight: 600 }}>Option 2</label>
+                <input
+                  type="text"
+                  placeholder="Option 2"
+                  value={pollOpt2}
+                  onChange={(e) => setPollOpt2(e.target.value)}
+                  required
+                  style={{ width: '100%', background: '#202c33', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '0.5rem', color: '#e9edef', marginTop: '0.2rem', outline: 'none' }}
+                />
+              </div>
+              <button
+                type="submit"
+                style={{ width: '100%', marginTop: '0.5rem', padding: '0.65rem', borderRadius: '8px', background: '#00a884', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+              >
+                Post Poll to Chat
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Campus Status Modal */}
+      {showStatusModal && (
+        <div className="aurora-modal-overlay" onClick={() => setShowStatusModal(false)} style={{ zIndex: 99999 }}>
+          <div className="aurora-modal-card glass-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '420px', padding: '1.5rem', borderRadius: '16px', background: '#111b21', color: '#e9edef' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>⭕ Campus Stories & Status</h3>
+              <button onClick={() => setShowStatusModal(false)} style={{ background: 'none', border: 'none', color: '#fb7185', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
+            <div style={{ textAlign: 'center', padding: '1.5rem', color: '#8696a0', fontSize: '0.88rem' }}>
+              <span>⭕ No active campus stories at the moment.</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* User Profile Drawer */}
+      {showProfileDrawer && (
+        <div className="aurora-modal-overlay" onClick={() => setShowProfileDrawer(false)} style={{ zIndex: 99999 }}>
+          <div className="aurora-modal-card glass-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '380px', padding: '1.5rem', borderRadius: '16px', background: '#111b21', color: '#e9edef', textAlign: 'center' }}>
+            <div className="wa-user-avatar" style={{ width: '64px', height: '64px', fontSize: '1.8rem', margin: '0 auto 0.75rem auto' }}>
+              {user && user.name ? user.name.charAt(0).toUpperCase() : 'G'}
+            </div>
+            <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.2rem', fontWeight: 800 }}>
+              {getSafeAuthorName(user)}
+            </h3>
+            <span style={{ fontSize: '0.78rem', background: 'rgba(0,168,132,0.2)', color: '#00a884', padding: '0.2rem 0.6rem', borderRadius: '12px', fontWeight: 700 }}>
+              {user && !user.isGuest ? (user.program || 'Verified Student') : 'Guest Account Mode'}
+            </span>
+            <p style={{ fontSize: '0.82rem', color: '#8696a0', marginTop: '1rem', lineHeight: 1.4 }}>
+              {user && !user.isGuest ? 'Access to all student community channels unlocked.' : 'Guest accounts can send messages in #general-discussion. Log in to unlock specialized doubt solvers and trade markets.'}
+            </p>
+            {isGuestUser ? (
+              <button 
+                onClick={() => { setShowProfileDrawer(false); if (onRequireAuth) onRequireAuth(); }}
+                style={{ width: '100%', marginTop: '0.75rem', padding: '0.65rem', borderRadius: '10px', background: '#00a884', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+              >
+                Log In / Create Account
+              </button>
+            ) : (
+              <button 
+                onClick={() => { setShowProfileDrawer(false); localStorage.removeItem('ds_ai_token'); window.location.reload(); }}
+                style={{ width: '100%', marginTop: '0.75rem', padding: '0.65rem', borderRadius: '10px', background: 'rgba(244,63,94,0.2)', color: '#fb7185', border: '1px solid rgba(244,63,94,0.3)', fontWeight: 700, cursor: 'pointer' }}
+              >
+                Sign Out
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Channel Info Modal */}
+      {showChannelInfoModal && (
+        <div className="aurora-modal-overlay" onClick={() => setShowChannelInfoModal(false)} style={{ zIndex: 99999 }}>
+          <div className="aurora-modal-card glass-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px', padding: '1.5rem', borderRadius: '16px', background: '#111b21', color: '#e9edef', textAlign: 'center' }}>
+            <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#2a3942', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', margin: '0 auto 0.75rem auto' }}>
+              {activeChannelObj.icon}
+            </div>
+            <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.25rem', fontWeight: 800 }}>
+              #{activeChannelObj.label}
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: '#8696a0', margin: '0 0 1rem 0' }}>
+              {activeChannelObj.desc}
+            </p>
+            <div style={{ background: '#202c33', borderRadius: '10px', padding: '0.85rem', textStyle: 'left', fontSize: '0.82rem', color: '#aebac1' }}>
+              <div>👥 494 Members (VIT Bhopal)</div>
+              <div style={{ marginTop: '0.35rem' }}>⚡ Real-time Peer Discussion</div>
+              <div style={{ marginTop: '0.35rem' }}>📄 PYQ & Notes attachments supported</div>
+            </div>
+            <button 
+              onClick={() => setShowChannelInfoModal(false)}
+              style={{ width: '100%', marginTop: '1rem', padding: '0.6rem', borderRadius: '10px', background: '#2a3942', color: '#e9edef', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+            >
+              Close Info
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Image Zoom Modal */}
+      {previewImageModal && (
+        <div className="aurora-modal-overlay" onClick={() => setPreviewImageModal(null)} style={{ zIndex: 99999 }}>
+          <div className="aurora-modal-card glass-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '90vh', padding: '1rem', borderRadius: '16px', textAlign: 'center', background: '#111b21' }}>
+            <img src={previewImageModal} alt="Expanded Attachment" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: '10px', objectFit: 'contain' }} />
+            <button 
+              onClick={() => setPreviewImageModal(null)}
+              style={{ marginTop: '0.75rem', padding: '0.5rem 1.5rem', fontSize: '0.85rem', borderRadius: '8px', background: '#00a884', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+            >
+              Close Preview
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
 
 /* ── MAIN COMMUNITY PAGE COMPONENT ── */
 
-function CommunityPage({ user }) {
-  const [activeSubTab, setActiveSubTab] = useState('pyq'); // 'pyq' | 'chats' | 'marketplace'
+function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp }) {
+  const [activeSubTab, setActiveSubTab] = useState(initialSubTab); // 'pyq' | 'chats' | 'marketplace'
+
+  useEffect(() => {
+    if (initialSubTab) setActiveSubTab(initialSubTab);
+  }, [initialSubTab]);
+
   const [papers, setPapers] = useState([]);
   const [pendingPapers, setPendingPapers] = useState([]);
 
@@ -1119,8 +2313,7 @@ function CommunityPage({ user }) {
         setPapers([]);
         return;
       }
-      const text = await res.text();
-      const data = text ? JSON.parse(text) : {};
+      const data = await res.json();
       setPapers(data.papers || []);
     } catch (err) {
       console.error('Failed to fetch papers:', err);
@@ -1498,34 +2691,30 @@ function CommunityPage({ user }) {
   }, []);
 
   return (
-    <div className="community-container">
-      {/* Upper Navigation Tabs */}
-      <div className="community-tabs">
-        <button
-          className={`community-tab-btn ${activeSubTab === 'pyq' ? 'active' : ''}`}
-          onClick={() => setActiveSubTab('pyq')}
-        >
-          📄 PYQ Hub
-        </button>
-        <button
-          className={`community-tab-btn ${activeSubTab === 'chats' ? 'active' : ''}`}
-          onClick={() => setActiveSubTab('chats')}
-        >
-          💬 Student Chats
-        </button>
-        <button
-          className={`community-tab-btn ${activeSubTab === 'cabins' ? 'active' : ''}`}
-          onClick={() => setActiveSubTab('cabins')}
-        >
-          🏫 Faculty Cabins
-        </button>
-        <button
-          className={`community-tab-btn ${activeSubTab === 'marketplace' ? 'active' : ''}`}
-          onClick={() => setActiveSubTab('marketplace')}
-        >
-          🛍️ Buy & Sell
-        </button>
-      </div>
+    <div className={`community-container ${activeSubTab === 'chats' ? 'chats-mode-active' : ''}`}>
+      {/* Upper Navigation Tabs (Hidden in pure Chat mode) */}
+      {activeSubTab !== 'chats' && (
+        <div className="community-tabs">
+          <button
+            className={`community-tab-btn ${activeSubTab === 'pyq' ? 'active' : ''}`}
+            onClick={() => startTransition(() => setActiveSubTab('pyq'))}
+          >
+            📄 PYQ Hub
+          </button>
+          <button
+            className={`community-tab-btn ${activeSubTab === 'cabins' ? 'active' : ''}`}
+            onClick={() => startTransition(() => setActiveSubTab('cabins'))}
+          >
+            🏫 Faculty Cabins
+          </button>
+          <button
+            className={`community-tab-btn ${activeSubTab === 'marketplace' ? 'active' : ''}`}
+            onClick={() => startTransition(() => setActiveSubTab('marketplace'))}
+          >
+            🛍️ Buy & Sell
+          </button>
+        </div>
+      )}
 
       {activeSubTab === 'pyq' && (
         <div className="pyq-workspace animate-fade-in">
@@ -1741,12 +2930,12 @@ function CommunityPage({ user }) {
       )}
 
       {activeSubTab === 'chats' && (
-        <StudentChatSection user={user} />
+        <StudentChatSection user={user} onRequireAuth={onRequireAuth} onBackToApp={onBackToApp} />
       )}
 
       {activeSubTab === 'cabins' && (
         <div className="pyq-workspace animate-fade-in" style={{ paddingBottom: '95px' }}>
-          <FacultyDirectory user={user} />
+          <FacultyDirectory user={user} onRequireAuth={onRequireAuth} />
         </div>
       )}
 
