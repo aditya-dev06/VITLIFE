@@ -2,17 +2,37 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } fr
 import { gsap } from 'gsap';
 import './Masonry.css';
 
+const DEFAULT_MEDIA_QUERIES = ['(min-width:1500px)', '(min-width:1000px)', '(min-width:768px)'];
+const DEFAULT_MEDIA_VALUES = [5, 4, 3];
+
 const useMedia = (queries, values, defaultValue) => {
   const [value, setValue] = useState(() => {
-    return values[queries.findIndex(q => matchMedia(q).matches)] ?? defaultValue;
+    const idx = queries.findIndex(q => matchMedia(q).matches);
+    return idx !== -1 ? values[idx] : defaultValue;
   });
 
   useEffect(() => {
+    const mqls = queries.map(q => matchMedia(q));
     const handler = () => {
-      setValue(values[queries.findIndex(q => matchMedia(q).matches)] ?? defaultValue);
+      const idx = mqls.findIndex(mql => mql.matches);
+      setValue(idx !== -1 ? values[idx] : defaultValue);
     };
-    queries.forEach(q => matchMedia(q).addEventListener('change', handler));
-    return () => queries.forEach(q => matchMedia(q).removeEventListener('change', handler));
+    mqls.forEach(mql => {
+      if (mql.addEventListener) {
+        mql.addEventListener('change', handler);
+      } else if (mql.addListener) {
+        mql.addListener(handler);
+      }
+    });
+    return () => {
+      mqls.forEach(mql => {
+        if (mql.removeEventListener) {
+          mql.removeEventListener('change', handler);
+        } else if (mql.removeListener) {
+          mql.removeListener(handler);
+        }
+      });
+    };
   }, [queries, values, defaultValue]);
 
   return value;
@@ -24,15 +44,19 @@ const useMeasure = () => {
 
   useLayoutEffect(() => {
     if (!ref.current) return;
+    let rafId = null;
     const ro = new ResizeObserver(([entry]) => {
       if (!entry) return;
       const { width, height } = entry.contentRect;
-      requestAnimationFrame(() => {
+      rafId = requestAnimationFrame(() => {
         setSize({ width, height });
       });
     });
     ro.observe(ref.current);
-    return () => ro.disconnect();
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      ro.disconnect();
+    };
   }, []);
 
   return [ref, size];
@@ -73,8 +97,8 @@ const Masonry = ({
   colorShiftOnHover = false
 }) => {
   const columns = useMedia(
-    ['(min-width:1500px)', '(min-width:1000px)', '(min-width:768px)'],
-    [5, 4, 3],
+    DEFAULT_MEDIA_QUERIES,
+    DEFAULT_MEDIA_VALUES,
     1
   );
 

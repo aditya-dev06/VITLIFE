@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
+  optimizeDeps: {
+    include: ['lucide-react', 'motion/react', 'three', 'postprocessing', 'react', 'react-dom']
+  },
   plugins: [react()],
   build: {
     target: 'esnext',
@@ -12,6 +15,9 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
+            if (id.includes('lucide-react')) {
+              return 'vendor-lucide';
+            }
             if (id.includes('three')) {
               return 'vendor-three';
             }
@@ -37,6 +43,11 @@ export default defineConfig({
         codeSplitting: {
           minSize: 0, // ensure all chunks are split regardless of size
           groups: [
+            {
+              name: 'vendor-lucide',
+              test: /[\\/]node_modules[\\/]lucide-react[\\/]/,
+              priority: 10
+            },
             {
               name: 'vendor-three',
               test: /[\\/]node_modules[\\/]three[\\/]/,

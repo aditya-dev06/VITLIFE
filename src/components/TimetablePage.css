@@ -112,6 +112,8 @@
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
+  contain: layout style;
+  transform: translateZ(0);
 }
 
 .tool-card-wide {
@@ -675,6 +677,8 @@ kbd {
   padding: 1rem;
   margin-bottom: 0.75rem;
   border: 1px solid hsla(var(--border-glass));
+  contain: layout style;
+  transform: translateZ(0);
 }
 
 .mobile-card-left {
@@ -733,6 +737,10 @@ kbd {
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
+  .tt-toast {
+    bottom: calc(var(--bottom-nav-height, 64px) + env(safe-area-inset-bottom, 16px) + 1rem) !important;
+  }
+
   .timetable-tools-grid {
     grid-template-columns: 1fr;
     gap: 1rem;

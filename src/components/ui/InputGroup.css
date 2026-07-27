@@ -12,7 +12,9 @@
 }
 
 .input-group:focus-within {
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.25);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
 }
 
 /* The actual <input> */
@@ -20,8 +22,9 @@
   flex: 1;
   min-width: 0;
   background: transparent;
-  border: none;
-  outline: none;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
   padding: 0.7rem 0.75rem;
   font-size: 0.9rem;
   font-family: var(--font-body, 'Inter', sans-serif);
@@ -47,6 +50,7 @@
 /* Leading addon (left icon) */
 .input-group__addon--inline-start {
   padding: 0 0.25rem 0 0.85rem;
+  border-right: none !important;
 }
 
 /* Trailing addon (right — result count, button, etc.) */
@@ -56,7 +60,7 @@
   font-weight: 500;
   color: hsl(var(--text-muted, 240 4% 56%));
   white-space: nowrap;
-  border-left: 1px solid rgba(255, 255, 255, 0.07);
+  border-left: none !important;
 }
 
 /* Clear button inside addon */
@@ -87,5 +91,5 @@
 }
 
 :root.light-theme .input-group__addon--inline-end {
-  border-left-color: hsl(var(--border-base, 218 16% 80%));
+  border-left: none !important;
 }

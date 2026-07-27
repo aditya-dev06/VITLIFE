@@ -248,11 +248,13 @@ const ElectricBorder = ({
       animationRef.current = requestAnimationFrame(drawElectricBorder);
     };
 
+    let resizeRaf = null;
     // OPTIMIZATION: Use element contentRect to avoid getBoundingClientRect layout reflow reads
     const resizeObserver = new ResizeObserver(([entry]) => {
       if (!entry) return;
       const { width: contentWidth, height: contentHeight } = entry.contentRect;
-      requestAnimationFrame(() => {
+      if (resizeRaf) cancelAnimationFrame(resizeRaf);
+      resizeRaf = requestAnimationFrame(() => {
         updateCanvasSizing(contentWidth, contentHeight);
       });
     });
@@ -277,6 +279,7 @@ const ElectricBorder = ({
 
     return () => {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      if (resizeRaf) cancelAnimationFrame(resizeRaf);
       resizeObserver.disconnect();
       intersectionObserver.disconnect();
     };

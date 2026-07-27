@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, memo } from 'react';
+import { useState, useEffect, useRef, useMemo, memo, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import BounceCards from './BounceCards';
-import Hyperspeed from './Hyperspeed';
+const Hyperspeed = lazy(() => import('./Hyperspeed'));
 import { cachedFetch } from '../utils/apiClient';
 
 const DARK_HYPERSPEED_OPTIONS = {
@@ -264,6 +264,8 @@ function ClubLogo({ club, category, size = 24, borderRadius = '50%' }) {
         <img 
           src={icon} 
           alt={club?.name || ''} 
+          loading="lazy"
+          decoding="async"
           style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
           onError={() => setError(true)} 
         />
@@ -417,6 +419,8 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, th
             <img 
               src={activePoster} 
               alt={event.title} 
+              loading="lazy"
+              decoding="async"
               style={{ 
                 maxWidth: '100%', 
                 maxHeight: '320px', 
@@ -446,7 +450,7 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, th
                   transition: 'border-color 0.2s ease'
                 }}
               >
-                <img src={url} alt={`Thumbnail ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={url} alt={`Thumbnail ${idx + 1}`} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </button>
             ))}
           </div>
@@ -470,6 +474,8 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, th
               <img 
                 src={event.schedulePosterUrl} 
                 alt="Event Schedule" 
+                loading="lazy"
+                decoding="async"
                 style={{ 
                   maxWidth: '100%', 
                   maxHeight: '320px', 
@@ -1023,6 +1029,13 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
   const [showSwipeHint, setShowSwipeHint] = useState(() => {
     return !localStorage.getItem('ds_swipe_hint_seen');
   });
+  const swipeTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (swipeTimeoutRef.current) clearTimeout(swipeTimeoutRef.current);
+    };
+  }, []);
 
   // Auto-dismiss the hint after first swipe or after 6 seconds
   useEffect(() => {
@@ -1043,7 +1056,8 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
     const dirX = direction === 'right' ? 450 : -450;
     setExitDirection({ x: dirX, y: 0 });
     setSwipeAction(direction);
-    setTimeout(() => {
+    if (swipeTimeoutRef.current) clearTimeout(swipeTimeoutRef.current);
+    swipeTimeoutRef.current = setTimeout(() => {
       setCurrentStackIndex(prev => prev + 1);
       setExitDirection(null);
       setSwipeAction(null);
@@ -1872,6 +1886,68 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
             </div>
           </div>
 
+          {/* PROMINENT SHORTCUT WINDOW TO FACULTY CABINS SECTION */}
+          <div 
+            onClick={() => onNavigate('faculty')}
+            style={{
+              padding: '0.75rem 0.85rem',
+              borderRadius: '14px',
+              background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.12), rgba(56, 189, 248, 0.03))',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.6rem',
+              transition: 'all 0.25s ease',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+              position: 'relative',
+              overflow: 'hidden',
+              marginBottom: '0.75rem'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.5)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.3)';
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <div style={{
+                width: '36px', height: '36px', borderRadius: '10px',
+                background: 'rgba(56, 189, 248, 0.2)',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '1.2rem', flexShrink: 0
+              }}>
+                🏢
+              </div>
+              <div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', fontFamily: 'var(--font-heading)' }}>
+                  Faculty Cabins & Emails
+                </div>
+                <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.7)', marginTop: '0.05rem' }}>
+                  All 150+ cabins located in <strong>Academic Block 2 (AB2)</strong>
+                </div>
+              </div>
+            </div>
+            
+            <div style={{
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              padding: '0.3rem 0.6rem',
+              borderRadius: '8px',
+              background: '#38bdf8',
+              color: '#0f172a',
+              whiteSpace: 'nowrap',
+              boxShadow: '0 2px 8px rgba(56, 189, 248, 0.3)'
+            }}>
+              Find Cabins →
+            </div>
+          </div>
+
           {/* PROMINENT SHORTCUT WINDOW TO PYQ SECTION */}
           <div 
             onClick={() => onNavigate('community')}
@@ -2069,14 +2145,23 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
   };
 
   useEffect(() => {
+    let rafId = null;
     const checkMobile = () => {
-      const isTouch = window.matchMedia('(pointer: coarse)').matches;
-      const isLandscapeMobile = window.innerHeight <= 480;
-      setIsMobileDevice(window.innerWidth <= 768 || isLandscapeMobile || (isTouch && window.innerWidth <= 1024));
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        const isTouch = window.matchMedia('(pointer: coarse)').matches;
+        const isLandscapeMobile = window.innerHeight <= 480;
+        const nextState = window.innerWidth <= 768 || isLandscapeMobile || (isTouch && window.innerWidth <= 1024);
+        setIsMobileDevice(prev => (prev !== nextState ? nextState : prev));
+      });
     };
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', checkMobile);
+    };
   }, []);
 
   const inProgressSkills = stats.inProgressSkillsList || [];
@@ -2116,7 +2201,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
     }
   };
 
-  const getRecommendedEvents = () => {
+  const recommendedEvents = useMemo(() => {
     if (!events) return [];
     
     // Filter out ended events
@@ -2196,9 +2281,11 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
     });
 
     return scored.map(s => s.event);
-  };
+  }, [events, user]);
 
-  const recommendedEvents = getRecommendedEvents();
+  const hyperspeedOptions = useMemo(() => (
+    theme === 'light' ? LIGHT_HYPERSPEED_OPTIONS : DARK_HYPERSPEED_OPTIONS
+  ), [theme]);
 
   return (
     <div style={{ position: 'relative', width: '100%', minHeight: '100%', overflow: 'hidden' }}>
@@ -2213,7 +2300,9 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
           opacity: theme === 'light' ? 0.6 : 0.5,
           pointerEvents: 'none'
         }}>
-          <Hyperspeed effectOptions={theme === 'light' ? LIGHT_HYPERSPEED_OPTIONS : DARK_HYPERSPEED_OPTIONS} />
+          <Suspense fallback={null}>
+            <Hyperspeed effectOptions={hyperspeedOptions} />
+          </Suspense>
         </div>
       )}
       <div style={{ position: 'relative', zIndex: 1 }}>

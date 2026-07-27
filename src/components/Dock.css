@@ -3,12 +3,14 @@
 .dock-outer {
   position: fixed;
   bottom: calc(0.65rem + env(safe-area-inset-bottom, 12px));
-  left: 50%;
-  transform: translateX(-50%);
+  left: calc(50% + (env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) / 2);
+  transform: translateX(-50%) translateZ(0);
   z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
+  height: 54px;
+  contain: layout style;
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   will-change: transform, opacity;
   touch-action: manipulation;
@@ -17,7 +19,7 @@
 
 /* Hide on scroll down past threshold */
 .dock-outer.nav-hidden {
-  transform: translate(-50%, calc(100% + 2.5rem)) scale(0.95);
+  transform: translate(-50%, calc(100% + 2.5rem)) scale(0.95) translateZ(0);
   opacity: 0;
   pointer-events: none;
 }
@@ -38,6 +40,8 @@
     0 10px 40px rgba(0, 0, 0, 0.4),
     0 0 20px rgba(99, 91, 255, 0.05);
   position: relative;
+  contain: layout style;
+  transform: translateZ(0);
 }
 
 .dock-item {
@@ -56,6 +60,8 @@
   outline: none;
   z-index: 1;
   transition: transform 0.2s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .dock-item:active {
@@ -67,19 +73,28 @@
   position: absolute;
   top: 4px;
   bottom: 4px;
-  background: hsla(var(--primary) / 0.16);
-  border: 1px solid hsla(var(--primary) / 0.45);
+  background: hsla(var(--primary) / 0.22);
+  border: none !important;
   border-radius: 99px; /* Capsule shape */
   z-index: 0;
   box-shadow: 0 0 16px hsla(var(--primary) / 0.25);
   pointer-events: none;
 }
 
+.dock-item:focus,
+.dock-item:focus-visible,
+.dock-item:active {
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
 .dock-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.78);
   transition: color 0.2s ease;
 }
 
@@ -95,7 +110,7 @@
 .dock-label-static {
   font-size: 0.65rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.78);
   transition: color 0.2s ease;
 }
 

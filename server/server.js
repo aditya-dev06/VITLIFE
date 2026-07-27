@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import compression from 'compression';
+import zlib from 'zlib';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -12,6 +13,7 @@ import nodemailer from 'nodemailer';
 import dns from 'dns';
 import { rateLimit } from 'express-rate-limit';
 import { v2 as cloudinary } from 'cloudinary';
+import { parseEmailToCardPayload, scanCollegeInboxAndIngest } from './services/emailPipeline.js';
 
 // Force Node.js to prefer IPv4 over IPv6 to resolve connection unreachable errors on IPv4-only networks
 dns.setDefaultResultOrder('ipv4first');
@@ -43,7 +45,34 @@ const PORT = process.env.PORT || 5000;
 // Trust Vercel's proxy for accurate client IP retrieval (express-rate-limit compliance)
 app.set('trust proxy', 1);
 
-app.use(compression());
+// Enforce Vary: Accept-Encoding header for cache correctness across client encodings
+app.use((req, res, next) => {
+  res.setHeader('Vary', 'Accept-Encoding');
+  next();
+});
+
+// Custom compression filter to avoid overhead on tiny payloads (< 1KB), binary files, or SSE stream responses
+const shouldCompress = (req, res) => {
+  if (req.headers['x-no-compression']) return false;
+  if (req.headers['accept'] === 'text/event-stream') return false;
+  const contentType = res.getHeader('Content-Type') || '';
+  if (typeof contentType === 'string' && /image|video|audio|pdf|zip|gzip|brotli|event-stream/i.test(contentType)) {
+    return false;
+  }
+  return compression.filter(req, res);
+};
+
+// Configure compression middleware with Brotli quality 4 and Gzip level 6
+app.use(compression({
+  threshold: 1024, // 1KB minimum payload size
+  filter: shouldCompress,
+  level: 6,
+  brotli: {
+    params: {
+      [zlib.constants.BROTLI_PARAM_QUALITY]: 4
+    }
+  }
+}));
 const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
 app.use(cors((req, callback) => {
   const origin = req.header('Origin');
@@ -129,20 +158,51 @@ const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
-app.use('/uploads', express.static(uploadsDir));
+app.use('/uploads', express.static(uploadsDir, {
+  maxAge: '30d',
+  etag: true,
+  lastModified: true,
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+  }
+}));
 
-// Smart Caching Middleware for read-only public resources
-app.use((req, res, next) => {
-  if (req.method === 'GET') {
+// Enable strong ETags for aggressive caching
+app.set('etag', 'strong');
+
+// Optimal Cache-Control Middleware: differentiates static assets vs live API routes
+app.use('/api', (req, res, next) => {
+  // Default for all live API routes, state-changing endpoints, and authenticated data:
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
+  // Optimal public caching strategy ONLY for safe, unauthenticated read-only GET endpoints
+  if (req.method === 'GET' && !req.headers.authorization) {
     const p = req.path;
-    if (
-      p.startsWith('/api/clubs') ||
-      p.startsWith('/api/opportunities') ||
-      p.startsWith('/api/mess-menu') ||
-      p.startsWith('/api/events') ||
-      p.startsWith('/api/settings/')
-    ) {
-      res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
+    // Exclude user-specific or private paths under these routes
+    const isPrivateUserRoute = p.includes('/my-') || p.includes('/saved') || p.startsWith('/user/');
+    if (!isPrivateUserRoute) {
+      if (
+        p.startsWith('/clubs') ||
+        p.startsWith('/opportunities') ||
+        p.startsWith('/mess-menu') ||
+        p.startsWith('/papers') ||
+        p.startsWith('/recruitments') ||
+        p.startsWith('/events')
+      ) {
+        res.setHeader('Cache-Control', 'public, max-age=120, stale-while-revalidate=600');
+        res.removeHeader('Pragma');
+        res.removeHeader('Expires');
+      } else if (p.startsWith('/settings/')) {
+        res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
+        res.removeHeader('Pragma');
+        res.removeHeader('Expires');
+      } else if (p === '/auth/config') {
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.removeHeader('Pragma');
+        res.removeHeader('Expires');
+      }
     }
   }
   next();
@@ -386,7 +446,11 @@ const createSession = async (email, token, req) => {
     if (db) {
       try {
         // Enforce single active session by revoking all other tokens for this user
-        const existingSessions = await db.collection('sessions').find({ email: sessionDoc.email }).toArray();
+        const existingSessions = await db.collection('sessions')
+          .find({ email: sessionDoc.email }, { projection: { _id: 1, tokenHash: 1 } })
+          .hint({ email: 1 })
+          .limit(50)
+          .toArray();
         for (const oldSession of existingSessions) {
           await db.collection('sessions').deleteOne({ _id: oldSession._id });
           notifySessionRevoked(oldSession.tokenHash);
@@ -419,7 +483,7 @@ const verifySession = async (token) => {
 
     if (db) {
       try {
-        const session = await db.collection('sessions').findOne({ tokenHash });
+        const session = await db.collection('sessions').findOne({ tokenHash }, { hint: { tokenHash: 1 } });
         if (session) {
           // Update lastActive asynchronously
           db.collection('sessions').updateOne(
@@ -451,7 +515,11 @@ const getUserSessions = async (email) => {
   const lowerEmail = email.toLowerCase().trim();
   if (db) {
     try {
-      const list = await db.collection('sessions').find({ email: lowerEmail }).toArray();
+      const list = await db.collection('sessions')
+        .find({ email: lowerEmail }, { projection: { userAgent: 1, deviceType: 1, os: 1, browser: 1, ip: 1, lastActive: 1, createdAt: 1, tokenHash: 1, _id: 1 } })
+        .hint({ email: 1 })
+        .limit(50)
+        .toArray();
       return list.map(s => ({
         id: s._id.toString(),
         userAgent: s.userAgent,
@@ -753,7 +821,11 @@ const cleanupExpiredEvents = async () => {
   if (dbConnectingPromise) await dbConnectingPromise;
   if (db) {
     try {
-      const allEvents = await db.collection('events').find({}).toArray();
+      const allEvents = await db.collection('events')
+        .find({}, { projection: { id: 1, title: 1, posterUrl: 1, schedulePosterUrl: 1, posterUrls: 1, eventEndDateTime: 1, eventStartDateTime: 1, date: 1 } })
+        .hint({ date: -1 })
+        .limit(1000)
+        .toArray();
       const expiredEvents = allEvents.filter(event => {
         let eventTime = null;
         if (event.eventEndDateTime) {
@@ -1009,7 +1081,7 @@ const authRateLimiter = (limit = 5, windowMs = 15 * 60 * 1000) => {
     if (db) {
       try {
         const col = db.collection('rate_limits');
-        const record = await col.findOne({ key });
+        const record = await col.findOne({ key }, { hint: { key: 1 } });
         if (record) {
           const lastAttemptTime = record.lastAttempt instanceof Date ? record.lastAttempt.getTime() : record.lastAttempt;
           if (now - lastAttemptTime > windowMs) {
@@ -1062,17 +1134,24 @@ const ensureIndexes = async (database) => {
   try {
     await database.collection('uploads').createIndex({ filename: 1 }, { unique: true });
     await database.collection('users').createIndex({ email: 1 }, { unique: true });
+    await database.collection('users').createIndex({ role: 1 });
+    await database.collection('users').createIndex({ clubId: 1 });
+    await database.collection('users').createIndex({ clubId: 1, role: 1, verified: 1 });
+    await database.collection('users').createIndex({ verified: 1 });
     await database.collection('clubs').createIndex({ id: 1 }, { unique: true });
     await database.collection('events').createIndex({ id: 1 }, { unique: true });
+    await database.collection('events').createIndex({ title: 1 });
     await database.collection('events').createIndex({ clubId: 1 });
-    await database.collection('events').createIndex({ date: 1 });
-    await database.collection('events').createIndex({ category: 1 });
+    await database.collection('events').createIndex({ date: -1 });
+    await database.collection('events').createIndex({ category: 1, date: -1 });
     await database.collection('recruitments').createIndex({ id: 1 }, { unique: true });
     await database.collection('recruitments').createIndex({ clubId: 1 });
     await database.collection('recruitments').createIndex({ deadline: 1 });
     await database.collection('opportunities').createIndex({ type: 1 });
+    await database.collection('opportunities').createIndex({ title: 1 });
     await database.collection('opportunities').createIndex({ matchScore: -1 });
     await database.collection('opportunities').createIndex({ tags: 1 });
+    await database.collection('opportunities').createIndex({ createdAt: -1 });
     await database.collection('settings').createIndex({ key: 1 }, { unique: true });
     await database.collection('activity_logs').createIndex({ timestamp: -1 });
     await database.collection('activity_logs').createIndex({ email: 1 });
@@ -1084,6 +1163,11 @@ const ensureIndexes = async (database) => {
     await database.collection('sessions').createIndex({ email: 1 });
     await database.collection('sessions').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL index automatically deletes expired sessions
     
+    // Feedback & Papers Indexes
+    await database.collection('feedback').createIndex({ createdAt: -1 });
+    await database.collection('papers').createIndex({ _id: 1 });
+    await database.collection('papers').createIndex({ subject: 1 });
+
     console.log("✅ Database indexes verified/created successfully.");
   } catch (err) {
     console.error("❌ Failed to verify database indexes:", err.message);
@@ -1094,6 +1178,9 @@ if (MONGODB_URI) {
   console.log("Connecting to MongoDB Atlas...");
   dbConnectionStatus = "Connecting";
   client = new MongoClient(MONGODB_URI, {
+    maxPoolSize: 50,
+    minPoolSize: 5,
+    maxIdleTimeMS: 30000,
     connectTimeoutMS: 5000,
     serverSelectionTimeoutMS: 5000
   });
@@ -1129,7 +1216,11 @@ if (MONGODB_URI) {
 
       // Migration: Clean OCR fullText noise and extract missing month metadata for stored papers
       try {
-        const papersCursor = await db.collection('papers').find({ fullText: { $exists: true, $ne: '' } }).toArray();
+        const papersCursor = await db.collection('papers')
+          .find({ fullText: { $exists: true, $ne: '' } }, { projection: { fullText: 1, month: 1 } })
+          .hint({ _id: 1 })
+          .limit(1000)
+          .toArray();
         const monthRegex = /\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b/i;
         const monthMap = {
           jan: 'Jan', january: 'Jan', feb: 'Feb', february: 'Feb', mar: 'Mar', march: 'Mar',
@@ -1315,7 +1406,7 @@ const ensureJwtSecret = async () => {
         }
         if (db) {
           const settingsColl = db.collection('settings');
-          const doc = await settingsColl.findOne({ key: 'jwt_secret' });
+          const doc = await settingsColl.findOne({ key: 'jwt_secret' }, { hint: { key: 1 } });
           if (doc && doc.value && doc.value.trim().length >= 32) {
             JWT_SECRET = doc.value.trim();
             console.log("🔒 Loaded persistent JWT_SECRET from MongoDB Atlas settings.");
@@ -1328,14 +1419,14 @@ const ensureJwtSecret = async () => {
                 { $setOnInsert: { value: newSecret } },
                 { upsert: true, returnDocument: 'after' }
               );
-              const finalDoc = await settingsColl.findOne({ key: 'jwt_secret' });
+              const finalDoc = await settingsColl.findOne({ key: 'jwt_secret' }, { hint: { key: 1 } });
               if (finalDoc && finalDoc.value && finalDoc.value.trim().length >= 32) {
                 JWT_SECRET = finalDoc.value.trim();
               } else {
                 JWT_SECRET = newSecret;
               }
             } catch (updateErr) {
-              const finalDoc = await settingsColl.findOne({ key: 'jwt_secret' });
+              const finalDoc = await settingsColl.findOne({ key: 'jwt_secret' }, { hint: { key: 1 } });
               if (finalDoc && finalDoc.value && finalDoc.value.trim().length >= 32) {
                 JWT_SECRET = finalDoc.value.trim();
               } else {
@@ -1580,12 +1671,29 @@ const saveUsers = (users) => {
 };
 
 // Database interface methods — STRICT MONGODB ONLY (No file fallback)
+const userCache = new Map();
+const USER_CACHE_TTL = 10 * 1000; // 10 seconds in-memory cache to eliminate repetitive DB lookups
+
+const clearUserCache = (email = null) => {
+  if (email) {
+    userCache.delete(email.toLowerCase().trim());
+  } else {
+    userCache.clear();
+  }
+};
+
 const findUserByEmail = async (email) => {
   if (typeof email !== 'string') return null;
   const lowerEmail = email.toLowerCase().trim();
   if (lowerEmail === '__proto__' || lowerEmail === 'constructor' || lowerEmail === 'prototype') {
     return null;
   }
+  const now = Date.now();
+  const cached = userCache.get(lowerEmail);
+  if (cached && (now - cached.timestamp < USER_CACHE_TTL)) {
+    return cached.user;
+  }
+
   if (dbConnectingPromise) {
     await dbConnectingPromise;
   }
@@ -1594,8 +1702,9 @@ const findUserByEmail = async (email) => {
     return null;
   }
   try {
-    const user = await db.collection('users').findOne({ email: lowerEmail });
+    const user = await db.collection('users').findOne({ email: lowerEmail }, { hint: { email: 1 } });
     if (user && user.email !== '__proto__' && user.email !== 'constructor' && user.email !== 'prototype') {
+      userCache.set(lowerEmail, { user, timestamp: now });
       return user;
     }
   } catch (err) {
@@ -1604,7 +1713,20 @@ const findUserByEmail = async (email) => {
   return null;
 };
 
-const getAdminEmails = async () => {
+let cachedAdminEmails = null;
+let cachedAdminEmailsTime = 0;
+const ADMIN_EMAILS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const clearAdminEmailsCache = () => {
+  cachedAdminEmails = null;
+  cachedAdminEmailsTime = 0;
+};
+
+const getAdminEmails = async (forceRefresh = false) => {
+  const now = Date.now();
+  if (!forceRefresh && cachedAdminEmails && (now - cachedAdminEmailsTime < ADMIN_EMAILS_CACHE_TTL)) {
+    return cachedAdminEmails;
+  }
   const adminSet = new Set();
   if (dbConnectingPromise) await dbConnectingPromise;
   if (!db) {
@@ -1612,13 +1734,19 @@ const getAdminEmails = async () => {
     return adminSet;
   }
   try {
-    const admins = await db.collection('users').find({ role: 'admin' }, { projection: { email: 1 } }).toArray();
+    const admins = await db.collection('users')
+      .find({ role: 'admin' }, { projection: { email: 1, _id: 0 } })
+      .hint({ role: 1 })
+      .limit(50)
+      .toArray();
     for (const u of admins) {
       if (u.email) adminSet.add(u.email.toLowerCase().trim());
     }
   } catch (err) {
     console.error('[DB Error] MongoDB getAdminEmails error:', err);
   }
+  cachedAdminEmails = adminSet;
+  cachedAdminEmailsTime = now;
   return adminSet;
 };
 
@@ -1628,6 +1756,7 @@ const saveUser = async (email, userData) => {
   if (lowerEmail === '__proto__' || lowerEmail === 'constructor' || lowerEmail === 'prototype') {
     return;
   }
+  clearUserCache(lowerEmail);
   if (dbConnectingPromise) {
     await dbConnectingPromise;
   }
@@ -1651,7 +1780,7 @@ const getOpportunities = async () => {
   if (db) {
     try {
       // Self-healing migration check: check if the old single-document format exists and migrate it
-      const oldDoc = await db.collection('opportunities').findOne({ type: 'metadata' });
+      const oldDoc = await db.collection('opportunities').findOne({ type: 'metadata' }, { hint: { type: 1 } });
       if (oldDoc && Array.isArray(oldDoc.opportunities)) {
         console.log("Found legacy opportunities structure in MongoDB. Migrating to individual documents...");
         
@@ -1682,9 +1811,13 @@ const getOpportunities = async () => {
 
       // Read new normalized structure
       const meta = await db.collection('opportunities').findOne({ _id: 'metadata' });
-      const opportunities = await db.collection('opportunities')
+      const rawOpps = await db.collection('opportunities')
         .find({ _id: { $ne: 'metadata' } })
+        .sort({ createdAt: -1 })
+        .hint({ createdAt: -1 })
+        .limit(200)
         .toArray();
+      const opportunities = rawOpps;
 
       return {
         lastUpdated: meta ? meta.lastUpdated : '',
@@ -1728,7 +1861,11 @@ const getPapers = async (forceRefresh = false) => {
   }
   if (db) {
     try {
-      const papers = await db.collection('papers').find().toArray();
+      const papers = await db.collection('papers')
+        .find({})
+        .sort({ createdAt: -1 })
+        .limit(1000)
+        .toArray();
       if (papers && papers.length > 0) result = papers;
     } catch (err) {
       console.error("MongoDB getPapers error, falling back to file:", err);
@@ -2009,7 +2146,11 @@ const getClubs = async (forceRefresh = false) => {
   if (dbConnectingPromise) await dbConnectingPromise;
   if (db) {
     try {
-      clubs = await db.collection('clubs').find({}).toArray();
+      clubs = await db.collection('clubs')
+        .find({})
+        .hint({ id: 1 })
+        .limit(200)
+        .toArray();
       if (clubs && clubs.length > 0) {
         cachedClubs = clubs;
         cachedClubsTime = now;
@@ -2120,13 +2261,32 @@ const autoUnpinEndedEvents = async (eventsList) => {
 
   if (endedPinnedEventIds.length > 0) {
     console.log(`📌 Unpinning ${endedPinnedEventIds.length} ended events:`, endedPinnedEventIds);
-    for (const id of endedPinnedEventIds) {
+    if (dbConnectingPromise) await dbConnectingPromise;
+    if (db) {
       try {
-        await updateEvent(id, { pinned: false });
+        await db.collection('events').updateMany(
+          { id: { $in: endedPinnedEventIds } },
+          { $set: { pinned: false } }
+        );
       } catch (err) {
-        console.error(`Failed to automatically unpin event ${id}:`, err.message);
+        console.error(`Failed to batch unpin ended events:`, err.message);
       }
+    } else if (fs.existsSync(EVENTS_FILE)) {
+      try {
+        const fileData = JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf-8'));
+        let modified = false;
+        for (const e of (fileData.events || [])) {
+          if (endedPinnedEventIds.includes(e.id)) {
+            e.pinned = false;
+            modified = true;
+          }
+        }
+        if (modified) {
+          fs.writeFileSync(EVENTS_FILE, JSON.stringify(fileData, null, 2), 'utf-8');
+        }
+      } catch (e) {}
     }
+    clearEventsCache();
     // Update local representation in current request
     for (const event of eventsList) {
       if (endedPinnedEventIds.includes(event.id)) {
@@ -2143,7 +2303,7 @@ const clearEventsCache = () => { cachedEvents = null; cachedEventsTime = 0; };
 
 const getEvents = async (categoryFilter, forceRefresh = false) => {
   const now = Date.now();
-  if (!forceRefresh && !categoryFilter && cachedEvents && (now - cachedEventsTime < 300000)) {
+  if (!forceRefresh && !categoryFilter && cachedEvents && (now - cachedEventsTime < 10000)) {
     return cachedEvents;
   }
   if (dbConnectingPromise) await dbConnectingPromise;
@@ -2152,7 +2312,14 @@ const getEvents = async (categoryFilter, forceRefresh = false) => {
     try {
       const category = (typeof categoryFilter === 'string') ? categoryFilter : null;
       const query = category ? { category } : {};
-      events = await db.collection('events').find(query).sort({ date: 1 }).toArray();
+      const hintOptions = category ? { category: 1, date: -1 } : { date: -1 };
+      const rawEvents = await db.collection('events')
+        .find(query)
+        .sort({ date: -1 })
+        .hint(hintOptions)
+        .limit(200)
+        .toArray();
+      events = rawEvents;
       if (events.length > 0) {
         if (!categoryFilter) {
           cachedEvents = events;
@@ -2161,7 +2328,7 @@ const getEvents = async (categoryFilter, forceRefresh = false) => {
         return events;
       }
     } catch (err) {
-      console.error("MongoDB getEvents error, falling back to file:", err);
+      console.error("MongoDB getEvents error:", err);
     }
   }
   if (!fs.existsSync(EVENTS_FILE)) return [];
@@ -2169,7 +2336,7 @@ const getEvents = async (categoryFilter, forceRefresh = false) => {
     const data = JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf-8'));
     events = data.events || [];
     if (categoryFilter) events = events.filter(e => e.category === categoryFilter);
-    events = events.sort((a, b) => new Date(a.date) - new Date(b.date));
+    events = events.sort((a, b) => new Date(b.date) - new Date(a.date));
     if (!categoryFilter) {
       cachedEvents = events;
       cachedEventsTime = now;
@@ -2179,6 +2346,7 @@ const getEvents = async (categoryFilter, forceRefresh = false) => {
 };
 
 const saveEvent = async (eventData) => {
+  clearEventsCache();
   // Sync to MongoDB
   if (dbConnectingPromise) await dbConnectingPromise;
   if (db) {
@@ -2204,6 +2372,7 @@ const saveEvent = async (eventData) => {
 };
 
 const deleteEvent = async (eventId) => {
+  clearEventsCache();
   if (typeof eventId !== 'string') return;
   // Delete from MongoDB
   if (dbConnectingPromise) await dbConnectingPromise;
@@ -2227,6 +2396,7 @@ const deleteEvent = async (eventId) => {
 };
 
 const updateEvent = async (eventId, updatedData) => {
+  clearEventsCache();
   if (typeof eventId !== 'string') return;
   // Update in MongoDB
   if (dbConnectingPromise) await dbConnectingPromise;
@@ -2259,7 +2429,11 @@ const deleteExpiredEvents = async () => {
     
     if (dbConnectingPromise) await dbConnectingPromise;
     if (db) {
-      eventsList = await db.collection('events').find({}).toArray();
+      eventsList = await db.collection('events')
+        .find({}, { projection: { id: 1, title: 1, eventEndDateTime: 1, eventStartDateTime: 1, date: 1, time: 1, posterUrl: 1, schedulePosterUrl: 1, posterUrls: 1 } })
+        .hint({ date: -1 })
+        .limit(500)
+        .toArray();
     } else if (fs.existsSync(EVENTS_FILE)) {
       try {
         const data = JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf-8'));
@@ -2314,21 +2488,26 @@ const deleteExpiredEvents = async () => {
 
         if (filename) {
           filename = filename.split('?')[0].split('#')[0];
+          const safeFilename = path.basename(filename);
+
+          // Delete from MongoDB uploads
+          if (dbConnectingPromise) await dbConnectingPromise;
           if (db) {
             try {
-              await db.collection('uploads').deleteOne({ filename });
-            } catch (err) {
-              console.error("Failed to delete poster from database:", err.message);
+              await db.collection('uploads').deleteOne({ filename: safeFilename });
+            } catch (dbErr) {
+              console.error("Failed to delete upload from MongoDB:", dbErr.message);
             }
           }
-          // Local fallback delete
-          const filePath = path.join(UPLOADS_DIR, filename);
-          try {
-            await fs.promises.access(filePath);
-            await fs.promises.unlink(filePath);
-            console.log(`Successfully unlinked expired event poster file: ${filename}`);
-          } catch (e) {
-            // File doesn't exist or is not accessible
+
+          // Delete from local disk
+          const filePath = path.join(UPLOADS_DIR, safeFilename);
+          if (fs.existsSync(filePath)) {
+            try {
+              fs.unlinkSync(filePath);
+            } catch (fsErr) {
+              console.error("Failed to delete local image file:", fsErr.message);
+            }
           }
         }
       }
@@ -2343,7 +2522,12 @@ const getRecruitments = async () => {
   if (dbConnectingPromise) await dbConnectingPromise;
   if (db) {
     try {
-      const recs = await db.collection('recruitments').find({}).sort({ deadline: 1 }).toArray();
+      const recs = await db.collection('recruitments')
+        .find({})
+        .sort({ deadline: 1 })
+        .hint({ deadline: 1 })
+        .limit(200)
+        .toArray();
       if (recs.length > 0) return recs;
     } catch (err) {
       console.error("MongoDB getRecruitments error, falling back to file:", err);
@@ -2507,9 +2691,32 @@ const generateToken = async (email, passwordHash) => {
   return `${signature}.${base64Email}.${expiresAt}.${hashPiece}`;
 };
 
+const tokenVerificationCache = new Map();
+const TOKEN_CACHE_TTL = 30 * 1000; // 30 seconds
+
+const clearTokenCache = (userEmail = null) => {
+  if (userEmail) {
+    const lower = userEmail.toLowerCase().trim();
+    for (const [key, val] of tokenVerificationCache.entries()) {
+      if (val.user && val.user.email && val.user.email.toLowerCase() === lower) {
+        tokenVerificationCache.delete(key);
+      }
+    }
+  } else {
+    tokenVerificationCache.clear();
+  }
+};
+
 const verifyToken = async (token) => {
   // Prevent DoS on massive input strings
   if (typeof token !== 'string' || token.length > 500) return null;
+
+  // Fast-path in-memory cache hit check to eliminate redundant DB lookups
+  const now = Date.now();
+  const cached = tokenVerificationCache.get(token);
+  if (cached && (now - cached.timestamp < TOKEN_CACHE_TTL)) {
+    return cached.user;
+  }
   
   try {
     const parts = token.split('.');
@@ -2557,6 +2764,7 @@ const verifyToken = async (token) => {
       return null; // Password changed, session is invalid
     }
     
+    tokenVerificationCache.set(token, { user, timestamp: now });
     return user;
   } catch (e) {
     return null;
@@ -3245,7 +3453,7 @@ app.delete('/api/user/sessions/:id', authenticate, async (req, res) => {
       } catch {
         query._id = id;
       }
-      targetSession = await db.collection('sessions').findOne(query);
+      targetSession = await db.collection('sessions').findOne(query, { hint: { email: 1 } });
     } else {
       targetSession = inMemorySessions.get(id);
     }
@@ -3263,6 +3471,68 @@ app.delete('/api/user/sessions/:id', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Failed to revoke session:', error);
     res.status(500).json({ error: 'An unexpected server error occurred while revoking session.' });
+  }
+});
+
+// Secret Admin Pipeline Endpoint: Ingest Raw Email Payload & Post Live Cards
+app.post('/api/admin/pipeline/ingest', async (req, res) => {
+  try {
+    const pipelineSecret = req.headers['x-pipeline-secret'];
+    const expectedSecret = process.env.ADMIN_PIPELINE_SECRET || 'vitlife_secret_pipeline_key_2026';
+
+    if (pipelineSecret !== expectedSecret) {
+      return res.status(403).json({ error: 'Unauthorized pipeline access.' });
+    }
+
+    const { subject, bodyText, htmlText, sender } = req.body;
+    if (!subject || (!bodyText && !htmlText)) {
+      return res.status(400).json({ error: 'Subject and email body text are required.' });
+    }
+
+    const card = parseEmailToCardPayload(subject, bodyText || '', htmlText || '', sender || 'college@vitbhopal.ac.in');
+    
+    if (db) {
+      if (card.type === 'event') {
+        await db.collection('events').updateOne(
+          { title: card.payload.title },
+          { $set: card.payload },
+          { upsert: true }
+        );
+      } else if (card.type === 'opportunity') {
+        await db.collection('opportunities').updateOne(
+          { title: card.payload.title },
+          { $set: card.payload },
+          { upsert: true }
+        );
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Email ingested and live card posted successfully.',
+      card
+    });
+  } catch (err) {
+    console.error('Pipeline ingestion error:', err);
+    res.status(500).json({ error: 'Failed to ingest email payload.' });
+  }
+});
+
+// Secret Admin Pipeline Endpoint: Trigger Direct IMAP Fetch Worker
+app.post('/api/admin/pipeline/run', async (req, res) => {
+  try {
+    const pipelineSecret = req.headers['x-pipeline-secret'];
+    const expectedSecret = process.env.ADMIN_PIPELINE_SECRET || 'vitlife_secret_pipeline_key_2026';
+
+    if (pipelineSecret !== expectedSecret) {
+      return res.status(403).json({ error: 'Unauthorized pipeline access.' });
+    }
+
+    const result = await scanCollegeInboxAndIngest(db);
+    res.json({ success: true, result });
+  } catch (err) {
+    console.error('Pipeline execution error:', err);
+    res.status(500).json({ error: 'Failed to execute email pipeline scanner.' });
   }
 });
 
@@ -3452,7 +3722,7 @@ app.get('/api/settings/guide-visible', async (req, res) => {
   try {
     let visible = false; // Default is hidden
     if (db) {
-      const doc = await db.collection('settings').findOne({ key: 'guide_visible' });
+      const doc = await db.collection('settings').findOne({ key: 'guide_visible' }, { hint: { key: 1 } });
       if (doc) {
         visible = !!doc.value;
       }
@@ -3494,7 +3764,7 @@ app.get('/api/settings/events-locked', async (req, res) => {
   try {
     let locked = true; // Default is locked
     if (db) {
-      const doc = await db.collection('settings').findOne({ key: 'events_locked' });
+      const doc = await db.collection('settings').findOne({ key: 'events_locked' }, { hint: { key: 1 } });
       if (doc) {
         locked = !!doc.value;
       }
@@ -3928,40 +4198,123 @@ app.get('/api/mess-menu', (req, res) => {
 
 // ================= STUDENT PAPERS (PYQ) ROUTES =================
 
-// 1. GET /api/papers - Get approved papers (and pending papers uploaded by the current user) with optional search and department filters
+// 1. GET /api/papers - Get approved papers (and pending papers uploaded by the current user) with optional department filter
 app.get('/api/papers', optionalAuthenticate, async (req, res) => {
   try {
-    const { department, search } = req.query;
+    const { department, page = 1, limit = 1000 } = req.query;
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 1000;
+    const skip = (pageNum - 1) * limitNum;
 
     // Cooldown check for on-demand sync: 10 minutes (600,000 ms)
     const now = Date.now();
     if (now - lastPassVitianSyncTime > 10 * 60 * 1000) {
-      // Trigger sync asynchronously without blocking the response
       syncPassVitianPapers().catch(err => console.error('[Sync] On-demand PassVitian sync failed:', err));
     }
 
-    let list = await getPapers();
-    
-    // Filter approved papers or pending papers uploaded by this user
     const userEmail = req.user ? req.user.email : null;
+
+    if (dbConnectingPromise) await dbConnectingPromise;
+    if (db) {
+      const statusQuery = { $or: [{ status: 'approved' }, { status: { $exists: false } }] };
+      if (userEmail) statusQuery.$or.push({ uploadedBy: userEmail, status: 'pending' });
+      
+      const filters = [statusQuery];
+      if (department) filters.push({ department });
+      const dbQuery = { $and: filters };
+
+      const papers = await db.collection('papers')
+        .find(dbQuery)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .toArray();
+      
+      const total = await db.collection('papers').countDocuments(dbQuery);
+      return res.json({ success: true, papers, total, page: pageNum, pages: Math.ceil(total / limitNum) });
+    }
+
+    let list = await getPapers();
     list = list.filter(p => p.status === 'approved' || (userEmail && p.uploadedBy === userEmail && p.status === 'pending'));
 
     if (department) {
       list = list.filter(p => p.department === department);
     }
+    
+    const total = list.length;
+    list = list.slice(skip, skip + limitNum);
 
-    if (search) {
-      const cleanSearch = search.trim().toLowerCase();
-      list = list.filter(p => 
-        p.courseCode.toLowerCase().includes(cleanSearch) || 
-        p.courseTitle.toLowerCase().includes(cleanSearch)
-      );
-    }
-
-    res.json({ success: true, papers: list });
+    res.json({ success: true, papers: list, total, page: pageNum, pages: Math.ceil(total / limitNum) });
   } catch (error) {
     console.error('GET /api/papers error:', error);
     res.status(500).json({ error: 'Failed to retrieve papers.' });
+  }
+});
+
+// 1.1 GET /api/papers/search - Search papers
+app.get('/api/papers/search', optionalAuthenticate, async (req, res) => {
+  try {
+    const { search, department, page = 1, limit = 20 } = req.query;
+    
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 20;
+    const skip = (pageNum - 1) * limitNum;
+    
+    if (!search) {
+      return res.json({ success: true, papers: [], total: 0, page: pageNum, pages: 0 });
+    }
+
+    const cleanSearch = search.trim();
+    const userEmail = req.user ? req.user.email : null;
+
+    if (dbConnectingPromise) await dbConnectingPromise;
+    if (db) {
+      const statusQuery = { $or: [{ status: 'approved' }] };
+      if (userEmail) statusQuery.$or.push({ uploadedBy: userEmail, status: 'pending' });
+      
+      const filters = [
+        statusQuery,
+        {
+          $or: [
+            { courseCode: { $regex: cleanSearch, $options: 'i' } },
+            { courseTitle: { $regex: cleanSearch, $options: 'i' } }
+          ]
+        }
+      ];
+      if (department) filters.push({ department });
+      const dbQuery = { $and: filters };
+
+      const papers = await db.collection('papers')
+        .find(dbQuery)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .toArray();
+      
+      const total = await db.collection('papers').countDocuments(dbQuery);
+      return res.json({ success: true, papers, total, page: pageNum, pages: Math.ceil(total / limitNum) });
+    }
+
+    let list = await getPapers();
+    list = list.filter(p => p.status === 'approved' || (userEmail && p.uploadedBy === userEmail && p.status === 'pending'));
+
+    if (department) {
+      list = list.filter(p => p.department === department);
+    }
+    
+    const lowerSearch = cleanSearch.toLowerCase();
+    list = list.filter(p => 
+      (p.courseCode && p.courseCode.toLowerCase().includes(lowerSearch)) || 
+      (p.courseTitle && p.courseTitle.toLowerCase().includes(lowerSearch))
+    );
+    
+    const total = list.length;
+    list = list.slice(skip, skip + limitNum);
+
+    res.json({ success: true, papers: list, total, page: pageNum, pages: Math.ceil(total / limitNum) });
+  } catch (error) {
+    console.error('GET /api/papers/search error:', error);
+    res.status(500).json({ error: 'Failed to search papers.' });
   }
 });
 
@@ -4405,7 +4758,12 @@ app.get('/api/feedback', authenticate, requireAdmin, async (req, res) => {
     }
     let list = [];
     if (db) {
-      list = await db.collection('feedback').find({}).sort({ createdAt: -1 }).toArray();
+      list = await db.collection('feedback')
+        .find({})
+        .sort({ createdAt: -1 })
+        .hint({ createdAt: -1 })
+        .limit(200)
+        .toArray();
     } else if (fs.existsSync(FEEDBACK_FILE)) {
       list = JSON.parse(fs.readFileSync(FEEDBACK_FILE, 'utf-8')) || [];
       list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -4552,7 +4910,20 @@ const isValidHttpUrl = (str) => {
 // --- CLUBS ---
 app.get('/api/clubs', async (req, res) => {
   try {
-    const clubs = await getClubs();
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    let clubs;
+    if (dbConnectingPromise) await dbConnectingPromise;
+    if (db) {
+      clubs = await db.collection('clubs')
+        .find({})
+        .project({ _id: 0, id: 1, name: 1, description: 1, icon: 1, category: 1, memberCount: 1, socialLinks: 1 })
+        .hint({ id: 1 })
+        .limit(50)
+        .toArray();
+    } else {
+      const allClubs = await getClubs();
+      clubs = allClubs.slice(0, 50);
+    }
     res.json({ clubs });
   } catch (error) {
     console.error('Failed to fetch clubs:', error);
@@ -4707,8 +5078,12 @@ app.get('/api/clubs/:id/managers', async (req, res) => {
     if (db) {
       try {
         const dbUsers = await db.collection('users').find(
-          { role: 'club_manager', clubId: id, verified: true }  // exclude unverified
-        ).toArray();
+          { role: 'club_manager', clubId: id, verified: true },
+          { projection: { name: 1, email: 1, role: 1, clubId: 1, _id: 0 } }
+        )
+        .hint({ clubId: 1, role: 1, verified: 1 })
+        .limit(50)
+        .toArray();
         managers = dbUsers.map(u => ({ name: u.name, email: u.email, role: u.role, clubId: u.clubId }));
       } catch (err) {
         console.error("MongoDB get club managers error:", err);
@@ -4732,13 +5107,29 @@ app.get('/api/clubs/:id/managers', async (req, res) => {
 app.get('/api/events', async (req, res) => {
   try {
     const category = req.query.category || null;
-    const events = await getEvents(category);
+    
+    // Set Cache-Control header for sub-second data loading
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    
+    let events = [];
+    if (dbConnectingPromise) await dbConnectingPromise;
+    if (db) {
+      const query = category ? { category } : {};
+      const hintOptions = category ? { category: 1, date: -1 } : { date: -1 };
+      events = await db.collection('events')
+        .find(query)
+        .project({ _id: 0, id: 1, title: 1, description: 1, date: 1, time: 1, venue: 1, clubId: 1, clubName: 1, category: 1, posterUrl: 1, isPinned: 1, createdBy: 1, eventStartDateTime: 1, eventEndDateTime: 1, registrationLink: 1, registrationDeadline: 1, tags: 1 })
+        .sort({ date: -1 })
+        .hint(hintOptions)
+        .limit(50)
+        .toArray();
+    } else {
+      const allEvents = await getEvents(category);
+      events = allEvents.slice(0, 50);
+    }
     
     // Background task: Automatically unpin ended events without blocking HTTP response
     autoUnpinEndedEvents(events).catch(() => {});
-    
-    // Cache response on Vercel CDN for instant 0ms TTFB
-    res.setHeader('Cache-Control', 'public, max-age=120, stale-while-revalidate=86400');
     
     const processedEvents = events.map(event => {
       const creatorEmail = (event.createdBy || '').toLowerCase().trim();
@@ -5193,7 +5584,10 @@ app.get('/api/admin/users', authenticate, requireAdmin, async (req, res) => {
       users = await db.collection('users').find(
           { verified: true },  // exclude unverified — they only appear in activity logs
           { projection: { name: 1, email: 1, role: 1, clubId: 1, registrationNumber: 1, program: 1, verified: 1, _id: 0 } }
-        ).toArray();
+        )
+        .hint({ verified: 1 })
+        .limit(1000)
+        .toArray();
       } catch (err) {
         console.error("MongoDB admin/users error:", err);
       }
@@ -5312,8 +5706,17 @@ const frontendBuild = path.join(path.dirname(__dirname), 'dist');
 console.log(`Serving static files from: ${frontendBuild} (Exists: ${fs.existsSync(frontendBuild)})`);
 
 app.use(express.static(frontendBuild, {
-  maxAge: '1d', // Cache index.html / files under dist for 1 day
-  etag: true
+  maxAge: '1d',
+  etag: true,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('index.html')) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    } else if (filePath.includes(path.join('dist', 'assets'))) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+    }
+  }
 }));
 // Serve uploaded files dynamically from MongoDB Atlas or local disk fallback
 app.get('/uploads/:filename', uploadsLimiter, async (req, res) => {
@@ -5329,14 +5732,14 @@ app.get('/uploads/:filename', uploadsLimiter, async (req, res) => {
 
   // Local disk cache hit check
   if (fs.existsSync(filePath)) {
-    res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // Cache for 1 year
     return res.sendFile(filePath);
   }
 
   if (dbConnectingPromise) await dbConnectingPromise;
   if (db) {
     try {
-      const fileDoc = await db.collection('uploads').findOne({ filename: safeFilename });
+      const fileDoc = await db.collection('uploads').findOne({ filename: safeFilename }, { hint: { filename: 1 } });
       if (fileDoc) {
         const imgBuffer = Buffer.from(fileDoc.data, 'base64');
 
@@ -5348,7 +5751,7 @@ app.get('/uploads/:filename', uploadsLimiter, async (req, res) => {
         }
 
         res.setHeader('Content-Type', fileDoc.contentType || 'image/jpeg');
-        res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // Cache for 1 year
         return res.send(imgBuffer);
       }
     } catch (dbErr) {

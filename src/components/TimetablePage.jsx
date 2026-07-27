@@ -1,79 +1,39 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import {
+  SLOT_MAPPING,
+  DAYS,
+  TIMESLOTS,
+  GRID_SLOT_MAP
+} from '../utils/timetableConstants';
 import './TimetablePage.css';
 
-const SLOT_MAPPING = {
-  A11: { day: 1, start: '08:30', end: '10:00' },
-  B11: { day: 1, start: '10:05', end: '11:35' },
-  C11: { day: 1, start: '11:40', end: '13:10' },
-  A21: { day: 1, start: '13:15', end: '14:45' },
-  A14: { day: 1, start: '14:50', end: '16:20' },
-  B21: { day: 1, start: '16:25', end: '17:55' },
-  C21: { day: 1, start: '18:00', end: '19:30' },
-
-  D11: { day: 2, start: '08:30', end: '10:00' },
-  E11: { day: 2, start: '10:05', end: '11:35' },
-  F11: { day: 2, start: '11:40', end: '13:10' },
-  D21: { day: 2, start: '13:15', end: '14:45' },
-  E14: { day: 2, start: '14:50', end: '16:20' },
-  E21: { day: 2, start: '16:25', end: '17:55' },
-  F21: { day: 2, start: '18:00', end: '19:30' },
-
-  A12: { day: 3, start: '08:30', end: '10:00' },
-  B12: { day: 3, start: '10:05', end: '11:35' },
-  C12: { day: 3, start: '11:40', end: '13:10' },
-  A22: { day: 3, start: '13:15', end: '14:45' },
-  B14: { day: 3, start: '14:50', end: '16:20' },
-  B22: { day: 3, start: '16:25', end: '17:55' },
-  A24: { day: 3, start: '18:00', end: '19:30' },
-
-  D12: { day: 4, start: '08:30', end: '10:00' },
-  E12: { day: 4, start: '10:05', end: '11:35' },
-  F12: { day: 4, start: '11:40', end: '13:10' },
-  D22: { day: 4, start: '13:15', end: '14:45' },
-  F14: { day: 4, start: '14:50', end: '16:20' },
-  E22: { day: 4, start: '16:25', end: '17:55' },
-  F22: { day: 4, start: '18:00', end: '19:30' },
-
-  A13: { day: 5, start: '08:30', end: '10:00' },
-  B13: { day: 5, start: '10:05', end: '11:35' },
-  C13: { day: 5, start: '11:40', end: '13:10' },
-  A23: { day: 5, start: '13:15', end: '14:45' },
-  C14: { day: 5, start: '14:50', end: '16:20' },
-  B23: { day: 5, start: '16:25', end: '17:55' },
-  B24: { day: 5, start: '18:00', end: '19:30' },
-
-  D13: { day: 6, start: '08:30', end: '10:00' },
-  E13: { day: 6, start: '10:05', end: '11:35' },
-  F13: { day: 6, start: '11:40', end: '13:10' },
-  D23: { day: 6, start: '13:15', end: '14:45' },
-  D14: { day: 6, start: '14:50', end: '16:20' },
-  D24: { day: 6, start: '16:25', end: '17:55' },
-  E23: { day: 6, start: '18:00', end: '19:30' }
-};
-
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const TIMESLOTS = [
-  { label: '08:30 - 10:00', slotIndex: 0 },
-  { label: '10:05 - 11:35', slotIndex: 1 },
-  { label: '11:40 - 13:10', slotIndex: 2 },
-  { label: 'Lunch Break', isLunch: true },
-  { label: '13:15 - 14:45', slotIndex: 3 },
-  { label: '14:50 - 16:20', slotIndex: 4 },
-  { label: '16:25 - 17:55', slotIndex: 5 },
-  { label: '18:00 - 19:30', slotIndex: 6 }
-];
-
 export default function TimetablePage({ user, onUpdateTimetable, syncStatus = 'synced' }) {
-  const [timetable, setTimetable] = useState(user.timetable || []);
+  // 0ms state initialization
+  const [timetable, setTimetable] = useState(() => user?.timetable || []);
   const [pastedText, setPastedText] = useState('');
   const [mobileDayTab, setMobileDayTab] = useState(1); // 1 = Monday
   const [showReupload, setShowReupload] = useState(false);
   const [toast, setToast] = useState(null); // { msg, type: 'success'|'error' }
 
-  const showToast = (msg, type = 'success') => {
+  // Sync state with user prop changes synchronously
+  const prevUserTimetableRef = useRef(user?.timetable);
+  if (user?.timetable !== prevUserTimetableRef.current) {
+    prevUserTimetableRef.current = user?.timetable;
+    setTimetable(user?.timetable || []);
+  }
+
+  const toastTimerRef = useRef(null);
+  const showToast = useCallback((msg, type = 'success') => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
-  };
+    toastTimerRef.current = setTimeout(() => setToast(null), 3500);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   // Manual Add Form Modal State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -82,19 +42,45 @@ export default function TimetablePage({ user, onUpdateTimetable, syncStatus = 's
   const [newType, setNewType] = useState('LT');
   const [newRoom, setNewRoom] = useState('');
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTimetable(user.timetable || []);
-  }, [user.timetable]);
+  // O(1) timetable hashtable lookup map
+  const timetableMap = useMemo(() => {
+    const map = Object.create(null);
+    for (let i = 0; i < timetable.length; i++) {
+      const item = timetable[i];
+      if (item && item.slot) {
+        map[item.slot] = item;
+      }
+    }
+    return map;
+  }, [timetable]);
 
+  // Fast O(1) cell lookup helper using pre-computed GRID_SLOT_MAP & timetableMap
+  const getCellClass = useCallback((dayIdx, slotIdx) => {
+    const slotCode = GRID_SLOT_MAP[dayIdx]?.[slotIdx];
+    if (!slotCode) return null;
+    return {
+      slotCode,
+      classEntry: timetableMap[slotCode] || null
+    };
+  }, [timetableMap]);
 
+  // Fast memoized mobile day view computation
+  const mobileDayClasses = useMemo(() => {
+    const result = [];
+    for (let i = 0; i < timetable.length; i++) {
+      const c = timetable[i];
+      const slotInfo = SLOT_MAPPING[c.slot];
+      if (slotInfo && slotInfo.day === mobileDayTab) {
+        result.push({ ...c, start: slotInfo.start, end: slotInfo.end });
+      }
+    }
+    return result.sort((a, b) => a.start.localeCompare(b.start));
+  }, [timetable, mobileDayTab]);
 
-  const parseOcrText = (text) => {
-    // 1. Convert to uppercase
+  const parseOcrText = useCallback((text) => {
     let normalized = text.toUpperCase();
 
-    // 2. Normalize course codes: e.g. MAT2OO2 -> MAT-2002, CHYlOO5 -> CHY-1005, UHVOOO2 -> UHV-0002
-    // We match 3-4 letters, followed by optional spaces/hyphens, followed by 4 characters of digits/lookalikes
+    // Normalize course codes (e.g. MAT2OO2 -> MAT-2002)
     normalized = normalized.replace(/\b([A-Z]{3,4})[\s-]*([0-9OIL|I!ZSSBB]{4})\b/g, (match, code, digits) => {
       let normDigits = '';
       for (let i = 0; i < digits.length; i++) {
@@ -114,26 +100,24 @@ export default function TimetablePage({ user, onUpdateTimetable, syncStatus = 's
       return `${code}-${normDigits}`;
     });
 
-    // 3. Normalize slot codes: e.g. All -> A11, Bll -> B11, E2l -> E21, F1A -> F14
-    // We match slot letter [A-F], followed by two digits/lookalikes
+    // Normalize slot codes
     normalized = normalized.replace(/\b([A-F])([0-9OIL|I!Z])([0-9OIL|I!ZEAH])\b/g, (match, letter, d1, d2) => {
       let normD1 = d1;
       let normD2 = d2;
       
       if ('1IL!|'.includes(normD1) || normD1 === 'l') normD1 = '1';
       else if ('2Z'.includes(normD1)) normD1 = '2';
-      else return match; // not a valid first slot digit, keep original
+      else return match;
       
       if ('1IL!|'.includes(normD2) || normD2 === 'l') normD2 = '1';
       else if ('2Z'.includes(normD2)) normD2 = '2';
       else if ('3E'.includes(normD2)) normD2 = '3';
       else if ('4AH'.includes(normD2)) normD2 = '4';
-      else return match; // not a valid second slot digit, keep original
+      else return match;
       
       return letter + normD1 + normD2;
     });
 
-    // 4. Pattern matching for complete entries like A11-MAT-2002-LT-AB-127-FS or A11-MAT-2002-LT-AB127
     const pattern = /\b([A-F][12][1-4])[\s-]*([A-Z]{3,4})[\s-]*(\d{4})(?:[\s-]*(LTP|LT|LP|L|P|T))?(?:[\s-]*([A-Z]{2,4})[\s-]*(\d{1,4}))?/g;
     
     const parsedEntries = [];
@@ -148,7 +132,7 @@ export default function TimetablePage({ user, onUpdateTimetable, syncStatus = 's
       parsedEntries.push({ slot, courseCode, type, room });
     }
     
-    // 5. Proximity matching fallback
+    // Proximity matching fallback
     if (parsedEntries.length === 0) {
       const slotPattern = /\b([A-F][12][1-4])\b/g;
       const slotsFound = [];
@@ -177,7 +161,6 @@ export default function TimetablePage({ user, onUpdateTimetable, syncStatus = 's
         });
         
         if (nearestCourse && minDist < 65) {
-          // Look for room number in a search window
           const searchWindow = normalized.substring(
             Math.max(0, Math.min(s.index, nearestCourse.index) - 10), 
             Math.min(normalized.length, Math.max(s.index, nearestCourse.index) + 40)
@@ -196,7 +179,7 @@ export default function TimetablePage({ user, onUpdateTimetable, syncStatus = 's
     }
 
     if (parsedEntries.length > 0) {
-      const uniqueMap = {};
+      const uniqueMap = Object.create(null);
       parsedEntries.forEach(entry => {
         uniqueMap[entry.slot] = entry;
       });
@@ -208,14 +191,14 @@ export default function TimetablePage({ user, onUpdateTimetable, syncStatus = 's
     } else {
       showToast("Couldn't recognise any class slots. Paste the full VTOP page text (Ctrl+A → Ctrl+C).", 'error');
     }
-  };
+  }, [onUpdateTimetable, showToast]);
 
   const handleTextParseSubmit = (e) => {
     e.preventDefault();
     if (!pastedText.trim()) return;
     parseOcrText(pastedText);
     setPastedText('');
-    setShowReupload(false); // auto-collapse re-upload panel after parse
+    setShowReupload(false);
   };
 
   const handleSave = () => {
@@ -231,11 +214,11 @@ export default function TimetablePage({ user, onUpdateTimetable, syncStatus = 's
     }
   };
 
-  const handleDeleteClass = (slot) => {
+  const handleDeleteClass = useCallback((slot) => {
     const filtered = timetable.filter(c => c.slot !== slot);
     setTimetable(filtered);
     onUpdateTimetable(filtered);
-  };
+  }, [timetable, onUpdateTimetable]);
 
   const handleOpenAddModal = (slot) => {
     setNewSlot(slot);
@@ -256,34 +239,12 @@ export default function TimetablePage({ user, onUpdateTimetable, syncStatus = 's
       room: newRoom.trim().toUpperCase() || 'AB-101'
     };
 
-    const updated = timetable.filter(c => c.slot !== newSlot);
-    updated.push(entry);
+    // Immutable update
+    const updated = [...timetable.filter(c => c.slot !== newSlot), entry];
     
     setTimetable(updated);
     onUpdateTimetable(updated);
     setShowAddModal(false);
-  };
-
-  // Helper to match day and timeslot to a cell in the grid
-  const getCellClass = (dayIndex, slotIndex) => {
-    // Find the slot code corresponding to this day and timeslot index
-    const slotCode = Object.keys(SLOT_MAPPING).find(key => {
-      const mapping = SLOT_MAPPING[key];
-      // DAYS are Monday (1) to Saturday (6). slotIndex is 0 to 6 (skipping lunch)
-      if (mapping.day === dayIndex + 1) {
-        const timeslot = TIMESLOTS.filter(t => !t.isLunch)[slotIndex];
-        return mapping.start === timeslot.label.split(' - ')[0];
-      }
-      return false;
-    });
-
-    if (!slotCode) return null;
-
-    const classEntry = timetable.find(c => c.slot === slotCode);
-    return {
-      slotCode,
-      classEntry
-    };
   };
 
   // Sync status label config
@@ -309,7 +270,6 @@ export default function TimetablePage({ user, onUpdateTimetable, syncStatus = 's
             ? 'Copy your timetable text from VTOP and paste it below. The system will automatically map your slots and track your live schedule.'
             : 'Your schedule is active and tracking live. All changes are saved offline-first and synced to the cloud when online.'}
         </p>
-        {/* Sync status pill — only show when not cleanly synced */}
         {syncStatus !== 'synced' && (
           <div className={`sync-pill ${sc.cls}`}>
             <span className="sync-pill-icon">{sc.icon}</span>
@@ -318,22 +278,25 @@ export default function TimetablePage({ user, onUpdateTimetable, syncStatus = 's
         )}
       </div>
 
-      {/* Subtitle adapts based on whether timetable exists */}
-
-      {/* FIRST-TIME: Full guide + paste form (hidden once timetable loaded) */}
       {timetable.length === 0 && (
         <div className="timetable-tools-grid timetable-single-col">
           <div className="glass-panel tool-card tool-card-wide">
             <h3>📋 How to Copy Your Timetable from VTOP</h3>
             <div className="vtop-guide-layout">
-              {/* Guide image */}
               <div className="vtop-guide-image-wrap">
                 <div className="vtop-guide-img-container">
-                  <img
-                    src="/vtop-timetable-guide.png"
-                    alt="Your VTOP timetable – select all text from this page"
-                    className="vtop-guide-img"
-                  />
+                  <picture>
+                    <source srcSet="/vtop-timetable-guide.webp" type="image/webp" />
+                    <img
+                      src="/vtop-timetable-guide.png"
+                      alt="Your VTOP timetable – select all text from this page"
+                      className="vtop-guide-img"
+                      width="1024"
+                      height="219"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </picture>
                   <span className="vtop-img-badge">← Your timetable looks like this</span>
                 </div>
                 <p className="vtop-guide-steps-title">Steps to copy</p>
@@ -357,14 +320,12 @@ export default function TimetablePage({ user, onUpdateTimetable, syncStatus = 's
                 </div>
               </div>
 
-              {/* Paste form */}
               <form onSubmit={handleTextParseSubmit} className="vtop-paste-form">
                 <label className="paste-label">📥 Paste VTOP Timetable Text Here</label>
                 <textarea
                   value={pastedText}
                   onChange={(e) => setPastedText(e.target.value)}
-                  placeholder={`Paste the copied text from VTOP here...
-Example: A11-MAT2002-LT-AB-127-FS B11-CHY1005-LTP-AB-531-FS C11-CSE2001-LTP-LC-207-FS...`}
+                  placeholder={`Paste the copied text from VTOP here...\nExample: A11-MAT2002-LT-AB-127-FS B11-CHY1005-LTP-AB-531-FS C11-CSE2001-LTP-LC-207-FS...`}
                   required
                   className="timetable-textarea"
                 />
@@ -375,11 +336,11 @@ Example: A11-MAT2002-LT-AB-127-FS B11-CHY1005-LTP-AB-531-FS C11-CSE2001-LTP-LC-2
         </div>
       )}
 
-      {/* RETURNING USER: Compact re-upload strip (shown once timetable exists) */}
       {timetable.length > 0 && (
         <div className="reupload-strip glass-panel">
           <span className="reupload-strip-label">✅ Timetable loaded — {timetable.length} slots active</span>
           <button
+            type="button"
             className="btn-secondary reupload-btn"
             onClick={() => setShowReupload(v => !v)}
           >
@@ -388,7 +349,6 @@ Example: A11-MAT2002-LT-AB-127-FS B11-CHY1005-LTP-AB-531-FS C11-CSE2001-LTP-LC-2
         </div>
       )}
 
-      {/* Inline re-upload form (only visible when user clicks Re-upload) */}
       {timetable.length > 0 && showReupload && (
         <div className="glass-panel tool-card reupload-form-panel">
           <form onSubmit={handleTextParseSubmit} className="vtop-paste-form">
@@ -396,8 +356,7 @@ Example: A11-MAT2002-LT-AB-127-FS B11-CHY1005-LTP-AB-531-FS C11-CSE2001-LTP-LC-2
             <textarea
               value={pastedText}
               onChange={(e) => setPastedText(e.target.value)}
-              placeholder={`Paste the copied text from VTOP here...
-Example: A11-MAT2002-LT-AB-127-FS B11-CHY1005-LTP-AB-531-FS...`}
+              placeholder={`Paste the copied text from VTOP here...\nExample: A11-MAT2002-LT-AB-127-FS B11-CHY1005-LTP-AB-531-FS...`}
               required
               className="timetable-textarea"
             />
@@ -406,17 +365,15 @@ Example: A11-MAT2002-LT-AB-127-FS B11-CHY1005-LTP-AB-531-FS...`}
         </div>
       )}
 
-      {/* Control Buttons */}
       <div className="timetable-actions-bar">
-        <button className="btn-secondary" onClick={handleClear} disabled={timetable.length === 0}>
+        <button type="button" className="btn-secondary" onClick={handleClear} disabled={timetable.length === 0}>
           🗑️ Clear Schedule
         </button>
-        <button className="btn-primary" onClick={handleSave}>
+        <button type="button" className="btn-primary" onClick={handleSave}>
           💾 Save Timetable
         </button>
       </div>
 
-      {/* Desktop Grid View */}
       <div className="glass-panel grid-view-panel desktop-only">
         <h3>📅 Weekly Schedule Grid</h3>
         <div className="table-responsive-container">
@@ -460,6 +417,7 @@ Example: A11-MAT2002-LT-AB-127-FS B11-CHY1005-LTP-AB-531-FS...`}
                               <span className="cell-room">{classEntry.room}</span>
                               <span className="cell-type">{classEntry.type}</span>
                               <button 
+                                type="button"
                                 className="delete-class-btn" 
                                 onClick={(e) => { e.stopPropagation(); handleDeleteClass(slotCode); }}
                                 title="Remove Class"
@@ -493,14 +451,13 @@ Example: A11-MAT2002-LT-AB-127-FS B11-CHY1005-LTP-AB-531-FS...`}
         </div>
       </div>
 
-      {/* Mobile Day-by-Day View */}
       <div className="glass-panel mobile-only mobile-view-panel">
         <h3>📅 Daily Classes</h3>
         
-        {/* Day switch bar */}
         <div className="mobile-day-selector">
           {DAYS.map((dayName, dayIdx) => (
             <button
+              type="button"
               key={dayIdx}
               className={`day-tab-btn ${mobileDayTab === dayIdx + 1 ? 'active' : ''}`}
               onClick={() => setMobileDayTab(dayIdx + 1)}
@@ -510,30 +467,14 @@ Example: A11-MAT2002-LT-AB-127-FS B11-CHY1005-LTP-AB-531-FS...`}
           ))}
         </div>
 
-        {/* Classes list for selected day */}
         <div className="mobile-classes-list">
-          {(() => {
-            const dayClasses = timetable
-              .map(c => {
-                const slotInfo = SLOT_MAPPING[c.slot];
-                if (slotInfo && slotInfo.day === mobileDayTab) {
-                  return { ...c, start: slotInfo.start, end: slotInfo.end };
-                }
-                return null;
-              })
-              .filter(Boolean)
-              .sort((a, b) => a.start.localeCompare(b.start));
-
-            if (dayClasses.length === 0) {
-              return (
-                <div className="empty-state mobile-empty">
-                  <span style={{ fontSize: '2.5rem' }}>🌴</span>
-                  <p>No classes scheduled for this day!</p>
-                </div>
-              );
-            }
-
-            return dayClasses.map((c, idx) => (
+          {mobileDayClasses.length === 0 ? (
+            <div className="empty-state mobile-empty">
+              <span style={{ fontSize: '2.5rem' }}>🌴</span>
+              <p>No classes scheduled for this day!</p>
+            </div>
+          ) : (
+            mobileDayClasses.map((c, idx) => (
               <div key={idx} className="mobile-class-card glass-panel">
                 <div className="mobile-card-left">
                   <span className="mobile-class-time">🕒 {c.start} - {c.end}</span>
@@ -543,6 +484,7 @@ Example: A11-MAT2002-LT-AB-127-FS B11-CHY1005-LTP-AB-531-FS...`}
                 <div className="mobile-card-right">
                   <span className="mobile-class-slot">{c.slot}</span>
                   <button 
+                    type="button"
                     className="mobile-delete-btn" 
                     onClick={() => handleDeleteClass(c.slot)}
                   >
@@ -550,20 +492,26 @@ Example: A11-MAT2002-LT-AB-127-FS B11-CHY1005-LTP-AB-531-FS...`}
                   </button>
                 </div>
               </div>
-            ));
-          })()}
+            ))
+          )}
         </div>
       </div>
 
-      {/* Add Class Modal Form */}
       {showAddModal && (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <h2>➕ Add Class for Slot {newSlot}</h2>
+          <div 
+            className="modal-content" 
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-class-heading"
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 id="add-class-heading">➕ Add Class for Slot {newSlot}</h2>
             <form onSubmit={handleAddClassSubmit} className="modal-form">
               <div className="form-group">
-                <label>Course Code</label>
+                <label htmlFor="new-course-code">Course Code</label>
                 <input 
+                  id="new-course-code"
                   type="text" 
                   value={newCourseCode}
                   onChange={(e) => setNewCourseCode(e.target.value)}
@@ -574,8 +522,9 @@ Example: A11-MAT2002-LT-AB-127-FS B11-CHY1005-LTP-AB-531-FS...`}
               </div>
 
               <div className="form-group">
-                <label>Classroom/Room Number</label>
+                <label htmlFor="new-room-number">Classroom/Room Number</label>
                 <input 
+                  id="new-room-number"
                   type="text" 
                   value={newRoom}
                   onChange={(e) => setNewRoom(e.target.value)}
@@ -585,8 +534,8 @@ Example: A11-MAT2002-LT-AB-127-FS B11-CHY1005-LTP-AB-531-FS...`}
               </div>
 
               <div className="form-group">
-                <label>Class Type</label>
-                <select value={newType} onChange={(e) => setNewType(e.target.value)}>
+                <label htmlFor="new-class-type">Class Type</label>
+                <select id="new-class-type" value={newType} onChange={(e) => setNewType(e.target.value)}>
                   <option value="LT">Lecture (Theory)</option>
                   <option value="LTP">Lecture + Tutorial + Practical</option>
                   <option value="LP">Lab Practical</option>
@@ -605,3 +554,4 @@ Example: A11-MAT2002-LT-AB-127-FS B11-CHY1005-LTP-AB-531-FS...`}
     </div>
   );
 }
+

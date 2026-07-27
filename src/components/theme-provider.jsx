@@ -21,24 +21,45 @@ export function ThemeProvider({
     const root = window.document.documentElement;
     const body = window.document.body;
 
-    root.classList.remove('light', 'dark', 'light-theme');
-    body.classList.remove('light', 'dark', 'light-theme');
+    const applyTheme = () => {
+      root.classList.remove('light', 'dark', 'light-theme');
+      body.classList.remove('light', 'dark', 'light-theme');
 
-    let effectiveTheme = (typeof theme === 'string' && ['light', 'dark', 'system'].includes(theme)) ? theme : 'dark';
-    if (effectiveTheme === 'system') {
-      effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light';
-    }
+      let effectiveTheme = (typeof theme === 'string' && ['light', 'dark', 'system'].includes(theme)) ? theme : 'dark';
+      if (effectiveTheme === 'system') {
+        effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light';
+      }
 
-    if (effectiveTheme === 'light' || effectiveTheme === 'dark') {
-      root.classList.add(effectiveTheme);
-      body.classList.add(effectiveTheme);
-    }
+      if (effectiveTheme === 'light' || effectiveTheme === 'dark') {
+        root.classList.add(effectiveTheme);
+        body.classList.add(effectiveTheme);
+      }
 
-    if (effectiveTheme === 'light') {
-      root.classList.add('light-theme');
-      body.classList.add('light-theme');
+      if (effectiveTheme === 'light') {
+        root.classList.add('light-theme');
+        body.classList.add('light-theme');
+      }
+    };
+
+    applyTheme();
+
+    if (theme === 'system') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const listener = () => applyTheme();
+      if (mediaQuery.addEventListener) {
+        mediaQuery.addEventListener('change', listener);
+      } else if (mediaQuery.addListener) {
+        mediaQuery.addListener(listener);
+      }
+      return () => {
+        if (mediaQuery.removeEventListener) {
+          mediaQuery.removeEventListener('change', listener);
+        } else if (mediaQuery.removeListener) {
+          mediaQuery.removeListener(listener);
+        }
+      };
     }
   }, [theme]);
 
@@ -51,7 +72,9 @@ export function ThemeProvider({
         try {
           localStorage.setItem(storageKey, validTheme);
           localStorage.setItem('ds_ai_theme', validTheme);
-        } catch {}
+        } catch (err) {
+          // Ignore quota/private-browsing storage errors
+        }
         return validTheme;
       });
     },

@@ -22,6 +22,8 @@ export default function ConsentBanner() {
     <AnimatePresence>
       {visible && (
         <motion.div
+          role="region"
+          aria-label="Privacy & Cookie Consent Banner"
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}
@@ -34,10 +36,10 @@ export default function ConsentBanner() {
             zIndex: 9999,
             width: 'calc(100% - 2rem)',
             maxWidth: '540px',
-            backgroundColor: 'rgba(15, 18, 28, 0.92)',
+            backgroundColor: 'rgba(15, 18, 28, 0.95)',
             backdropFilter: 'blur(20px) saturate(1.8)',
             WebkitBackdropFilter: 'blur(20px) saturate(1.8)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
             borderRadius: '16px',
             padding: '1.1rem 1.25rem',
             boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.15)',
@@ -46,27 +48,31 @@ export default function ConsentBanner() {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem' }}>
-            <div style={{
-              fontSize: '1.4rem',
-              lineHeight: 1,
-              padding: '0.35rem',
-              backgroundColor: 'rgba(56, 189, 248, 0.12)',
-              borderRadius: '10px',
-              border: '1px solid rgba(56, 189, 248, 0.2)',
-              flexShrink: 0
-            }}>
+            <div 
+              style={{
+                fontSize: '1.4rem',
+                lineHeight: 1,
+                padding: '0.35rem',
+                backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                borderRadius: '10px',
+                border: '1px solid rgba(56, 189, 248, 0.2)',
+                flexShrink: 0
+              }}
+              aria-hidden="true"
+            >
               🛡️
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: '0.92rem', fontWeight: 700, letterSpacing: '0.01em', marginBottom: '0.25rem', color: '#ffffff' }}>
                 VIT Life Privacy & Local Storage
               </div>
-              <p style={{ fontSize: '0.78rem', color: 'rgba(255, 255, 255, 0.68)', lineHeight: 1.45, margin: '0 0 0.85rem 0' }}>
+              <p style={{ fontSize: '0.78rem', color: 'rgba(255, 255, 255, 0.88)', lineHeight: 1.45, margin: '0 0 0.85rem 0' }}>
                 We use local storage and essential cookies to save your timetable, mess menu preferences, and active season data directly on your device.
               </p>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
                 <button
                   onClick={handleAccept}
+                  aria-label="Accept and continue with essential local storage"
                   style={{
                     backgroundColor: '#ffffff',
                     color: '#000000',
@@ -87,8 +93,9 @@ export default function ConsentBanner() {
                     e.preventDefault();
                     window.dispatchEvent(new CustomEvent('open-privacy-policy'));
                   }}
+                  aria-label="Learn more about our privacy policy"
                   style={{
-                    color: 'rgba(255, 255, 255, 0.6)',
+                    color: 'rgba(255, 255, 255, 0.85)',
                     fontSize: '0.78rem',
                     textDecoration: 'underline',
                     cursor: 'pointer'

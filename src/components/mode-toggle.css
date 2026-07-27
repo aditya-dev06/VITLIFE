@@ -23,6 +23,13 @@
   background: var(--accent, rgba(255, 255, 255, 0.1));
 }
 
+.mode-toggle-trigger:focus-visible,
+.aurora-theme-toggle:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.4) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12) !important;
+}
+
 .mode-toggle-icon {
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
 }

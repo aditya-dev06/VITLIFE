@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo, memo } from 'react';
-import { motion } from 'motion/react';
 import BounceCards from './BounceCards';
 import Masonry from './Masonry';
 import ElectricBorder from './ElectricBorder';
@@ -83,18 +82,6 @@ function getEventStatus(event) {
   if (regDeadline && now <= regDeadline) return 'reg_open';
   return 'upcoming';
 }
-
-function isEventTooOld(event) {
-  const status = getEventStatus(event);
-  if (status !== 'ended') return false;
-  const end = event.eventEndDateTime ? new Date(event.eventEndDateTime) : null;
-  const start = event.eventStartDateTime ? new Date(event.eventStartDateTime) : (event.date ? new Date(event.date) : null);
-  const eventTime = end || start;
-  if (!eventTime) return false;
-  const threeDaysInMs = 3 * 24 * 60 * 60 * 1000;
-  return (new Date().getTime() - eventTime.getTime()) > threeDaysInMs;
-}
-
 function getStatusBadge(status) {
   switch (status) {
     case 'reg_open': return { text: '🟢 Registration Open', color: '140, 70%, 45%', bg: '140, 70%, 45%' };
@@ -134,7 +121,7 @@ const ensureAbsoluteUrl = (urlStr) => {
 };
 
 
-function ClubLogo({ club, category, size = 24, borderRadius = '50%' }) {
+const ClubLogo = memo(function ClubLogo({ club, category, size = 24, borderRadius = '50%' }) {
   const [error, setError] = useState(false);
   const icon = club?.icon;
   
@@ -171,6 +158,8 @@ function ClubLogo({ club, category, size = 24, borderRadius = '50%' }) {
         <img 
           src={icon} 
           alt={club?.name || ''} 
+          loading="lazy"
+          decoding="async"
           style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
           onError={() => setError(true)} 
         />
@@ -183,18 +172,21 @@ function ClubLogo({ club, category, size = 24, borderRadius = '50%' }) {
       <span style={{ fontSize: `${size * 0.55}px`, lineHeight: 1 }}>{icon}</span>
     </div>
   );
-}
+});
 
-function EventCardItem({
+const EventCardItem = memo(function EventCardItem({
   event,
   clubs,
+  clubsMap,
   token,
   isAdmin,
   fetchEvents,
   setSelectedEventDetails,
   isOngoingSection = false,
   isMasonry = false,
-  imgHeight
+  imgHeight,
+  precomputedStatus,
+  precomputedDaysLeft
 }) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -202,13 +194,13 @@ function EventCardItem({
   const [isHovered, setIsHovered] = useState(false);
 
   const catColor = getCategoryColor(event.category);
-  const eventClub = clubs.find(c => c.id === event.clubId);
+  const eventClub = clubsMap ? (clubsMap.get(event.clubId) || clubsMap.get(event.clubId || event._id)) : (clubs ? clubs.find(c => c.id === event.clubId) : null);
   const clubName = eventClub ? eventClub.name : event.clubName || 'Unknown Club';
 
-  const status = getEventStatus(event);
+  const status = precomputedStatus || getEventStatus(event);
   const badge = getStatusBadge(status);
   const opacity = isOngoingSection ? 1 : getCardOpacity(status);
-  const daysLeft = isOngoingSection ? null : getDaysRemaining(event.registrationDeadline || event.date);
+  const daysLeft = isOngoingSection ? null : (precomputedDaysLeft !== undefined ? precomputedDaysLeft : getDaysRemaining(event.registrationDeadline || event.date));
 
   const handleImageLoad = (e) => {
     const { naturalWidth, naturalHeight } = e.target;
@@ -229,7 +221,16 @@ function EventCardItem({
   return (
     <div
       className="glass-card event-card event-masonry-card"
+      role="button"
+      tabIndex={0}
+      aria-label={`View event details for ${event.title}`}
       onClick={() => setSelectedEventDetails(event)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setSelectedEventDetails(event);
+        }
+      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
@@ -309,6 +310,7 @@ function EventCardItem({
             src={event.posterUrl}
             alt={event.title}
             loading="lazy"
+            decoding="async"
             style={{
               position: 'absolute',
               top: 0,
@@ -346,6 +348,7 @@ function EventCardItem({
           alt={event.title}
           onLoad={handleImageLoad}
           loading="lazy"
+          decoding="async"
           style={{
             width: '100%',
             height: 'auto',
@@ -445,7 +448,7 @@ function EventCardItem({
       </div>
     </div>
   );
-}
+});
 
 function CampusLife({ 
   user, 
@@ -466,6 +469,7 @@ function CampusLife({
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [recruitments, setRecruitments] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [showCreateRecruitment, setShowCreateRecruitment] = useState(false);
   const [adminUsers, setAdminUsers] = useState([]);
@@ -480,10 +484,11 @@ function CampusLife({
 
   // Auto-select event from dashboard redirection
   useEffect(() => {
+    let timer = null;
     if (initialSelectedEventId && events.length > 0) {
       const targetEvent = events.find(e => e.id === initialSelectedEventId);
       if (targetEvent) {
-        setTimeout(() => {
+        timer = setTimeout(() => {
           setActiveSubTab('events');
           setSelectedEventDetails(targetEvent);
           if (clearInitialSelectedEvent) {
@@ -492,6 +497,9 @@ function CampusLife({
         }, 0);
       }
     }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, [initialSelectedEventId, events, clearInitialSelectedEvent]);
 
   // ─── Data Fetching ───────────────────────────────────────────────
@@ -528,11 +536,11 @@ function CampusLife({
   }, []);
 
   useEffect(() => {
-    if (activeSubTab === 'admin' && isAdmin) {
+    if (isAdmin) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchAdminUsers();
     }
-  }, [activeSubTab, isAdmin, fetchAdminUsers]);
+  }, [isAdmin, fetchAdminUsers]);
 
   // ─── Event CRUD ──────────────────────────────────────────────────
   const handleDeleteEvent = async (eventId) => {
@@ -950,48 +958,144 @@ function CampusLife({
     }
   };
 
-  // ─── Filtering & Sorting (Memoized to prevent calculations on irrelevant state updates) ───
+  // ─── Filtering & Sorting (Memoized & Pre-processed to prevent redundant date/status/search computations) ───
+  const clubsMap = useMemo(() => {
+    const map = new Map();
+    for (let i = 0; i < clubs.length; i++) {
+      const c = clubs[i];
+      if (c.id) map.set(c.id, c);
+      if (c._id) map.set(c._id, c);
+    }
+    return map;
+  }, [clubs]);
+
+  const processedEvents = useMemo(() => {
+    // eslint-disable-next-line react-hooks/purity
+    const nowMs = Date.now();
+    const threeDaysInMs = 3 * 24 * 60 * 60 * 1000;
+
+    return events.map(event => {
+      const end = event.eventEndDateTime ? new Date(event.eventEndDateTime) : null;
+      const start = event.eventStartDateTime ? new Date(event.eventStartDateTime) : (event.date ? new Date(event.date) : null);
+      const regDeadline = event.registrationDeadline ? new Date(event.registrationDeadline) : null;
+
+      let status = 'upcoming';
+      if (end && nowMs > end.getTime()) status = 'ended';
+      else if (start && nowMs >= start.getTime() && (!end || nowMs <= end.getTime())) status = 'ongoing';
+      else if (regDeadline && nowMs > regDeadline.getTime()) status = 'reg_closed';
+      else if (regDeadline && nowMs <= regDeadline.getTime()) status = 'reg_open';
+
+      const eventTime = end || start;
+      const isTooOld = status === 'ended' && eventTime && (nowMs - eventTime.getTime()) > threeDaysInMs;
+      const startDateMs = start ? start.getTime() : 0;
+      const deadlineMs = regDeadline ? regDeadline.getTime() : (event.date ? new Date(event.date).getTime() : null);
+
+      let daysLeft = null;
+      if (deadlineMs) {
+        const diff = deadlineMs - nowMs;
+        if (diff > 0) {
+          daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
+        }
+      }
+
+      const searchableText = `${event.title || ''} ${event.description || ''} ${event.clubName || ''} ${event.venue || ''} ${(event.tags || []).join(' ')}`.toLowerCase();
+
+      return {
+        event,
+        status,
+        isTooOld,
+        startDateMs,
+        daysLeft,
+        searchableText,
+        sortOrder: STATUS_SORT_ORDER[status] ?? 2
+      };
+    });
+  }, [events]);
+
   const filteredClubs = useMemo(() => {
-    return selectedCategory === 'all'
-      ? clubs
-      : clubs.filter(c => c.category === selectedCategory);
-  }, [clubs, selectedCategory]);
+    const isCategoryAll = selectedCategory === 'all';
+    const q = searchQuery.toLowerCase().trim();
+
+    return clubs.filter(c => {
+      if (!isCategoryAll && c.category !== selectedCategory) return false;
+      if (q) {
+        const nameMatch = c.name && c.name.toLowerCase().includes(q);
+        const descMatch = c.description && c.description.toLowerCase().includes(q);
+        const catMatch = c.category && c.category.toLowerCase().includes(q);
+        if (!nameMatch && !descMatch && !catMatch) return false;
+      }
+      return true;
+    });
+  }, [clubs, selectedCategory, searchQuery]);
 
   const filteredEvents = useMemo(() => {
-    const activeEvents = events.filter(e => !isEventTooOld(e));
-    return selectedCategory === 'all'
-      ? activeEvents
-      : activeEvents.filter(e => e.category === selectedCategory);
-  }, [events, selectedCategory]);
+    const q = searchQuery.toLowerCase().trim();
+    const isCategoryAll = selectedCategory === 'all';
+
+    return processedEvents.filter(item => {
+      if (item.isTooOld) return false;
+      if (!isCategoryAll && item.event.category !== selectedCategory) return false;
+      if (q && !item.searchableText.includes(q)) return false;
+      return true;
+    });
+  }, [processedEvents, selectedCategory, searchQuery]);
 
   const sortedEvents = useMemo(() => {
-    return [...filteredEvents]
-      .filter(e => getEventStatus(e) !== 'ongoing')
+    return filteredEvents
+      .filter(item => item.status !== 'ongoing')
       .sort((a, b) => {
-        if (a.pinned && !b.pinned) return -1;
-        if (!a.pinned && b.pinned) return 1;
-        const statusA = STATUS_SORT_ORDER[getEventStatus(a)] ?? 2;
-        const statusB = STATUS_SORT_ORDER[getEventStatus(b)] ?? 2;
-        if (statusA !== statusB) return statusA - statusB;
-        const dateA = new Date(a.eventStartDateTime || a.date || 0);
-        const dateB = new Date(b.eventStartDateTime || b.date || 0);
-        return dateA - dateB;
+        if (a.event.pinned && !b.event.pinned) return -1;
+        if (!a.event.pinned && b.event.pinned) return 1;
+        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+        return a.startDateMs - b.startDateMs;
       });
   }, [filteredEvents]);
 
   const ongoingEvents = useMemo(() => {
-    return filteredEvents.filter(e => getEventStatus(e) === 'ongoing');
+    return filteredEvents.filter(item => item.status === 'ongoing');
   }, [filteredEvents]);
+
+  const filteredRecruitments = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return recruitments;
+
+    return recruitments.filter(r => {
+      const titleMatch = r.title && r.title.toLowerCase().includes(q);
+      const descMatch = r.description && r.description.toLowerCase().includes(q);
+      const clubMatch = r.clubName && r.clubName.toLowerCase().includes(q);
+      const posMatch = r.positions && r.positions.some(p => p.toLowerCase().includes(q));
+      return titleMatch || descMatch || clubMatch || posMatch;
+    });
+  }, [recruitments, searchQuery]);
 
   // Masonry layout items representation
   const masonryItems = useMemo(() => {
-    return sortedEvents.map((event, idx) => ({
-      id: event.id || event._id,
-      img: event.posterUrl || '',
+    return sortedEvents.map((item, idx) => ({
+      id: item.event.id || item.event._id,
+      img: item.event.posterUrl || '',
       height: 650 + (idx % 3) * 150,
-      event
+      event: item.event,
+      status: item.status,
+      daysLeft: item.daysLeft
     }));
   }, [sortedEvents]);
+
+  const renderMasonryItem = useCallback((item) => (
+    <EventCardItem
+      event={item.event}
+      clubs={clubs}
+      clubsMap={clubsMap}
+      token={token}
+      isAdmin={isAdmin}
+      fetchEvents={fetchEvents}
+      setSelectedEventDetails={setSelectedEventDetails}
+      isOngoingSection={false}
+      isMasonry={true}
+      imgHeight={item.imgHeight}
+      precomputedStatus={item.status}
+      precomputedDaysLeft={item.daysLeft}
+    />
+  ), [clubs, clubsMap, token, isAdmin, fetchEvents]);
 
   // ─── Sub-tabs ────────────────────────────────────────────────────
   const SUB_TABS = [
@@ -1003,6 +1107,79 @@ function CampusLife({
     ...(isAdmin ? [{ key: 'admin', label: '⚙️ Admin' }] : [])
   ];
 
+  const renderedClubs = useMemo(() => {
+    if (filteredClubs.length === 0) {
+      return (
+        <div className="empty-state">
+          <span style={{ fontSize: '3rem' }}>🔍</span>
+          <p>No clubs found in this category.</p>
+        </div>
+      );
+    }
+    return (
+      <div className="opp-grid">
+        {filteredClubs.map((club, index) => {
+          const catColor = getCategoryColor(club.category);
+          const canEditClub = isAdmin || (user && user.role === 'club_manager' && user.clubId === club.id);
+          return (
+            <div key={club.id} className="fade-in-up" style={{ animationDelay: `${index * 25}ms` }}>
+              <div
+                className="club-card"
+                role="button"
+                tabIndex={0}
+                aria-label={`View details for ${club.name}`}
+                style={{ '--cat-color': catColor }}
+                onClick={() => setSelectedClubDetails(club)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedClubDetails(club);
+                  }
+                }}
+              >
+                <div className="club-card-glow-bar" />
+                <div className="club-card-header">
+                  <ClubLogo club={club} category={club.category} size={52} borderRadius="12px" />
+                  <div className="club-card-header-info">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <h3 className="club-card-name">{club.name}</h3>
+                      <span className="club-card-badge">{club.category}</span>
+                    </div>
+                    <span className="club-card-members">👥 {club.memberCount} members</span>
+                  </div>
+                </div>
+                <p className="club-card-desc">{club.description}</p>
+                <div className="club-card-footer" onClick={e => e.stopPropagation()}>
+                  <div className="club-card-socials">
+                    {club.socialLinks?.instagram && (
+                      <a href={club.socialLinks.instagram} target="_blank" rel="noopener noreferrer" title="Instagram">📸</a>
+                    )}
+                    {club.socialLinks?.linkedin && (
+                      <a href={club.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" title="LinkedIn">🔗</a>
+                    )}
+                    {club.socialLinks?.twitter && (
+                      <a href={club.socialLinks.twitter} target="_blank" rel="noopener noreferrer" title="Twitter">🐦</a>
+                    )}
+                  </div>
+                  <div className="club-card-actions">
+                    {canEditClub && (
+                      <button type="button" onClick={(e) => { e.stopPropagation(); handleStartEditClub(club); }} className="btn-secondary club-action-btn">
+                        ✏️ Edit
+                      </button>
+                    )}
+                    <button type="button" onClick={() => setSelectedClubDetails(club)} className="btn-primary club-action-btn">
+                      Details
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }, [filteredClubs, isAdmin, user]);
+
   // ─── Render ──────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -1011,9 +1188,13 @@ function CampusLife({
           <h1 className="section-title">College Life</h1>
           <p className="section-subtitle">Loading college life data...</p>
         </div>
-        <div className="empty-state">
-          <div style={{ fontSize: '3rem', marginBottom: '1rem', animation: 'pulse 1.5s ease-in-out infinite' }}>🎪</div>
-          <p>Fetching clubs, events & more...</p>
+        <div className="campus-tabs" style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+           {[1, 2, 3, 4, 5].map(i => <div key={i} style={{ height: '42px', minWidth: '130px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', animation: 'pulse 1.5s ease-in-out infinite' }} />)}
+        </div>
+        <div className="opp-grid">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="glass-card" style={{ height: '280px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', animation: 'pulse 1.5s ease-in-out infinite', backdropFilter: 'blur(10px)' }} />
+          ))}
         </div>
       </div>
     );
@@ -1066,6 +1247,55 @@ function CampusLife({
         })}
       </div>
 
+      {/* Search Filter Input Bar */}
+      {(activeSubTab === 'clubs' || activeSubTab === 'events' || activeSubTab === 'active_events' || activeSubTab === 'recruitments') && (
+        <div style={{ margin: '0.75rem 0 0.5rem 0', width: '100%', maxWidth: '480px' }}>
+          <div style={{ position: 'relative', width: '100%' }}>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={`Search ${activeSubTab === 'clubs' ? 'clubs' : activeSubTab === 'recruitments' ? 'recruitments' : 'events'} by title, venue, tag...`}
+              style={{
+                width: '100%',
+                padding: '0.65rem 2.5rem 0.65rem 2.6rem',
+                borderRadius: '12px',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid hsla(var(--border-glass))',
+                color: 'hsl(var(--text-primary))',
+                fontSize: '0.88rem',
+                outline: 'none',
+                transition: 'all 0.2s ease',
+                boxSizing: 'border-box'
+              }}
+            />
+            <span style={{ position: 'absolute', left: '0.9rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5, fontSize: '0.95rem', pointerEvents: 'none' }}>
+              🔍
+            </span>
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                style={{
+                  position: 'absolute',
+                  right: '0.75rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'hsl(var(--text-muted))',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  padding: '2px 6px'
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Category chips — visible for clubs, events, and active events */}
       {(activeSubTab === 'clubs' || activeSubTab === 'events' || activeSubTab === 'active_events') && (
         <div className="category-chips">
@@ -1110,13 +1340,21 @@ function CampusLife({
       {/* Category Filter Bottom Sheet */}
       {showFilterSheet && (
         <div className="modal-overlay" onClick={() => setShowFilterSheet(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
+          <div 
+            className="modal-content" 
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="filter-category-heading"
+            onClick={e => e.stopPropagation()} 
+            style={{ borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'hsl(var(--text-primary))' }}>
+              <h2 id="filter-category-heading" style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'hsl(var(--text-primary))' }}>
                 🔍 Filter Category
               </h2>
               <button 
                 onClick={() => setShowFilterSheet(false)} 
+                aria-label="Close filter category modal"
                 style={{
                   background: 'transparent',
                   border: 'none',
@@ -1175,89 +1413,11 @@ function CampusLife({
 
       {/* ═══════════════ TAB 1: CLUBS ═══════════════ */}
       {activeSubTab === 'clubs' && (
-        <motion.div
-          key="clubs-tab"
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -15 }}
-          transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+        <div
+          className="fade-in-up"
         >
-          {filteredClubs.length > 0 ? (
-            <div className="opp-grid">
-              {filteredClubs.map((club, index) => {
-                const catColor = getCategoryColor(club.category);
-                const canEditClub = isAdmin || (user && user.role === 'club_manager' && user.clubId === club.id);
-                return (
-                  <motion.div
-                    key={club.id}
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.35, delay: index * 0.025, ease: [0.16, 1, 0.3, 1] }}
-                  >
-                    <div
-                      className="club-card"
-                      style={{ '--cat-color': catColor }}
-                      onClick={() => setSelectedClubDetails(club)}
-                    >
-                      <div className="club-card-glow-bar" />
-                      <div className="club-card-header">
-                        <ClubLogo club={club} category={club.category} size={52} borderRadius="12px" />
-                        <div className="club-card-header-info">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            <h3 className="club-card-name">{club.name}</h3>
-                            <span className="club-card-badge">{club.category}</span>
-                          </div>
-                          <span className="club-card-members">👥 {club.memberCount} members</span>
-                        </div>
-                      </div>
-
-                      <p className="club-card-desc">{club.description}</p>
-
-                      <div className="club-card-footer" onClick={e => e.stopPropagation()}>
-                        <div className="club-card-socials">
-                          {club.socialLinks?.instagram && (
-                            <a href={club.socialLinks.instagram} target="_blank" rel="noopener noreferrer" title="Instagram">📸</a>
-                          )}
-                          {club.socialLinks?.linkedin && (
-                            <a href={club.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" title="LinkedIn">🔗</a>
-                          )}
-                          {club.socialLinks?.twitter && (
-                            <a href={club.socialLinks.twitter} target="_blank" rel="noopener noreferrer" title="Twitter">🐦</a>
-                          )}
-                        </div>
-                        <div className="club-card-actions">
-                          {canEditClub && (
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); handleStartEditClub(club); }}
-                              className="btn-secondary club-action-btn"
-                            >
-                              ✏️ Edit
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setSelectedClubDetails(club)}
-                            className="btn-primary club-action-btn"
-                          >
-                            Details
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="empty-state">
-              <span style={{ fontSize: '3rem' }}>🔍</span>
-              <p>No clubs found in this category.</p>
-            </div>
-          )}
-
-          {/* EditClubModal moved globally to bottom of file */}
-        </motion.div>
+          {renderedClubs}
+        </div>
       )}
 
       {/* ═══════════════ TAB 2: EVENTS ═══════════════ */}
@@ -1309,19 +1469,7 @@ function CampusLife({
                   hoverScale={0.95}
                   blurToFocus={true}
                   colorShiftOnHover={false}
-                  renderItem={(item) => (
-                    <EventCardItem
-                      event={item.event}
-                      clubs={clubs}
-                      token={token}
-                      isAdmin={isAdmin}
-                      fetchEvents={fetchEvents}
-                      setSelectedEventDetails={setSelectedEventDetails}
-                      isOngoingSection={false}
-                      isMasonry={true}
-                      imgHeight={item.imgHeight}
-                    />
-                  )}
+                  renderItem={renderMasonryItem}
                 />
               ) : (
                 <div className="empty-state">
@@ -1374,9 +1522,9 @@ function CampusLife({
             <>
               {ongoingEvents.length > 0 ? (
                 <div className="event-masonry-grid" style={{ marginTop: '1rem', alignItems: 'stretch' }}>
-                  {ongoingEvents.map(event => (
+                  {ongoingEvents.map(item => (
                     <ElectricBorder
-                      key={`active-border-${event.id}`}
+                      key={`active-border-${item.event.id || item.event._id}`}
                       color="#03b3c3"
                       speed={1.2}
                       chaos={0.15}
@@ -1384,14 +1532,17 @@ function CampusLife({
                       style={{ display: 'flex' }}
                     >
                       <EventCardItem
-                        event={event}
+                        event={item.event}
                         clubs={clubs}
+                        clubsMap={clubsMap}
                         token={token}
                         isAdmin={isAdmin}
                         fetchEvents={fetchEvents}
                         setSelectedEventDetails={setSelectedEventDetails}
                         isOngoingSection={true}
                         isMasonry={false}
+                        precomputedStatus={item.status}
+                        precomputedDaysLeft={null}
                       />
                     </ElectricBorder>
                   ))}
@@ -1436,9 +1587,9 @@ function CampusLife({
       {/* ═══════════════ TAB 3: RECRUITMENTS ═══════════════ */}
       {activeSubTab === 'recruitments' && (
         <>
-          {recruitments.length > 0 ? (
+          {filteredRecruitments.length > 0 ? (
             <div className="opp-grid">
-              {recruitments.map(rec => {
+              {filteredRecruitments.map(rec => {
                 const daysLeft = getDaysRemaining(rec.deadline);
                 const canDelete = isAdmin || 
                                   (user && rec.createdBy === user.email) || 
@@ -1634,41 +1785,49 @@ function CampusLife({
   );
 }
 
-function ClubDetailsModal({ club, onClose }) {
+const ClubDetailsModal = memo(function ClubDetailsModal({ club, onClose }) {
   const [managers, setManagers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
     const fetchManagers = async () => {
       try {
         const res = await fetch(`/api/clubs/${club.id}/managers`);
         if (res.ok) {
           const data = await res.json();
-          setManagers(data.managers || []);
+          if (isMounted) setManagers(data.managers || []);
         }
       } catch (err) {
         console.error("Failed to fetch managers:", err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     fetchManagers();
+    return () => {
+      isMounted = false;
+    };
   }, [club.id]);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+      <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="club-details-heading" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <ClubLogo club={club} category={club.category} size={56} borderRadius="12px" />
             <div>
-              <h2 style={{ margin: 0, fontSize: '1.4rem' }}>{club.name}</h2>
+              <h2 id="club-details-heading" style={{ margin: 0, fontSize: '1.4rem' }}>{club.name}</h2>
               <span className="club-category-badge" style={{ marginTop: '0.25rem', display: 'inline-block' }}>
                 {club.category}
               </span>
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'hsl(var(--text-muted))', fontSize: '1.25rem', cursor: 'pointer' }}>
+          <button 
+            onClick={onClose} 
+            aria-label="Close club details"
+            style={{ background: 'transparent', border: 'none', color: 'hsl(var(--text-muted))', fontSize: '1.25rem', cursor: 'pointer', padding: '4px' }}
+          >
             ✕
           </button>
         </div>
@@ -1729,9 +1888,9 @@ function ClubDetailsModal({ club, onClose }) {
       </div>
     </div>
   );
-}
+});
 
-function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, onDeleteEvent, onUpdateEvent, onUpdateEventSubmit }) {
+const EventDetailsModal = memo(function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, onDeleteEvent, onUpdateEvent, onUpdateEventSubmit }) {
   const [activePoster, setActivePoster] = useState(event.posterUrl);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editError, setEditError] = useState('');
@@ -1799,10 +1958,10 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, on
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px', padding: '2rem' }}>
+      <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="event-details-heading" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px', padding: '2rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
           <div style={{ flexGrow: 1, paddingRight: '1rem' }}>
-            <h2 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: 'hsl(var(--text-primary))', lineHeight: 1.35, letterSpacing: '-0.02em' }}>{event.title}</h2>
+            <h2 id="event-details-heading" style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: 'hsl(var(--text-primary))', lineHeight: 1.35, letterSpacing: '-0.02em' }}>{event.title}</h2>
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', marginTop: '0.65rem' }}>
               <ClubLogo club={eventClub} category={event.category} size={18} borderRadius="50%" />
               <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'hsl(var(--text-secondary))' }}>{clubName}</span>
@@ -1837,6 +1996,7 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, on
           </div>
           <button 
             onClick={onClose} 
+            aria-label="Close event details"
             style={{
               background: 'rgba(255, 255, 255, 0.03)',
               border: '1px solid rgba(255, 255, 255, 0.06)',
@@ -1884,6 +2044,8 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, on
             <img 
               src={activePoster} 
               alt={event.title} 
+              loading="lazy"
+              decoding="async"
               style={{ 
                 maxWidth: '100%', 
                 maxHeight: '320px', 
@@ -1913,7 +2075,7 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, on
                   transition: 'border-color 0.2s ease'
                 }}
               >
-                <img src={url} alt={`Thumbnail ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={url} alt={`Thumbnail ${idx + 1}`} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </button>
             ))}
           </div>
@@ -1937,6 +2099,8 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, on
               <img 
                 src={event.schedulePosterUrl} 
                 alt="Event Schedule" 
+                loading="lazy"
+                decoding="async"
                 style={{ 
                   maxWidth: '100%', 
                   maxHeight: '320px', 
@@ -2148,12 +2312,12 @@ function EventDetailsModal({ event, onClose, user, token, clubs, fetchEvents, on
       )}
     </div>
   );
-}
+});
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Edit Club Modal
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function EditClubModal({ club, onClose, onSubmit, loading }) {
+const EditClubModal = memo(function EditClubModal({ club, onClose, onSubmit, loading }) {
   const [description, setDescription] = useState(club.description || '');
   const [category, setCategory] = useState(club.category || 'tech');
   const [iconMode, setIconMode] = useState('url'); // 'url' | 'file'
@@ -2186,15 +2350,25 @@ function EditClubModal({ club, onClose, onSubmit, loading }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
+      <div 
+        className="modal-content" 
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-club-modal-heading"
+        onClick={e => e.stopPropagation()}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0 }}>
+          <h2 id="edit-club-modal-heading" style={{ fontSize: '1.25rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0 }}>
             ⚙️ Edit Club: {club.name}
           </h2>
-          <button onClick={onClose} style={{
-            background: 'none', border: 'none', color: 'hsl(var(--text-muted))',
-            fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1
-          }}>✕</button>
+          <button 
+            onClick={onClose} 
+            aria-label="Close edit club modal"
+            style={{
+              background: 'none', border: 'none', color: 'hsl(var(--text-muted))',
+              fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1
+            }}
+          >✕</button>
         </div>
 
         <form onSubmit={handleSubmit} className="modal-form">
@@ -2407,12 +2581,12 @@ function EditClubModal({ club, onClose, onSubmit, loading }) {
       </div>
     </div>
   );
-}
+});
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Create Event Modal
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
+const CreateEventModal = memo(function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [clubId, setClubId] = useState(user?.clubId || '');
@@ -2477,15 +2651,25 @@ function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
+      <div 
+        className="modal-content" 
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-event-modal-heading"
+        onClick={e => e.stopPropagation()}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0 }}>
+          <h2 id="create-event-modal-heading" style={{ fontSize: '1.25rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0 }}>
             📅 Create Event
           </h2>
-          <button onClick={onClose} style={{
-            background: 'none', border: 'none', color: 'hsl(var(--text-muted))',
-            fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1
-          }}>✕</button>
+          <button 
+            onClick={onClose} 
+            aria-label="Close create event modal"
+            style={{
+              background: 'none', border: 'none', color: 'hsl(var(--text-muted))',
+              fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1
+            }}
+          >✕</button>
         </div>
 
         {error && (
@@ -2722,12 +2906,12 @@ function CreateEventModal({ clubs, user, onSubmit, onClose, loading, error }) {
       </div>
     </div>
   );
-}
+});
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Edit Event Modal
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function EditEventModal({ event, clubs, user, onClose, loading, error, onSubmit }) {
+const EditEventModal = memo(function EditEventModal({ event, clubs, user, onClose, loading, error, onSubmit }) {
   const formatForDateTimeLocal = (dateStr) => {
     if (!dateStr) return '';
     if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dateStr)) return dateStr;
@@ -3060,12 +3244,12 @@ function EditEventModal({ event, clubs, user, onClose, loading, error, onSubmit 
       </div>
     </div>
   );
-}
+});
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Create Recruitment Modal
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function CreateRecruitmentModal({ clubs, user, onSubmit, onClose, loading, error }) {
+const CreateRecruitmentModal = memo(function CreateRecruitmentModal({ clubs, user, onSubmit, onClose, loading, error }) {
   const [clubId, setClubId] = useState(user?.clubId || '');
   const [title, setTitle] = useState('');
   const [positions, setPositions] = useState('');
@@ -3177,12 +3361,12 @@ function CreateRecruitmentModal({ clubs, user, onSubmit, onClose, loading, error
       </div>
     </div>
   );
-}
+});
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Admin Panel
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function AdminPanel({ users, clubs, onPromote, onDemote, currentUserEmail, onCreateClub, onDeleteClub, formLoading, error, setError }) {
+const AdminPanel = memo(function AdminPanel({ users, clubs, onPromote, onDemote, currentUserEmail, onCreateClub, onDeleteClub, formLoading, error, setError }) {
   const [promoteRoles, setPromoteRoles] = useState({}); // { [email]: 'club_manager' | 'admin' }
   const [promoteClubs, setPromoteClubs] = useState({}); // { [email]: clubId }
   const [showCreateClub, setShowCreateClub] = useState(false);
@@ -3381,9 +3565,9 @@ function AdminPanel({ users, clubs, onPromote, onDemote, currentUserEmail, onCre
       )}
     </div>
   );
-}
+});
 
-function CreateClubModal({ onSubmit, onClose, loading, error }) {
+const CreateClubModal = memo(function CreateClubModal({ onSubmit, onClose, loading, error }) {
   const [name, setName] = useState('');
   const [category, setCategory] = useState('tech');
   const [description, setDescription] = useState('');
@@ -3535,12 +3719,12 @@ function CreateClubModal({ onSubmit, onClose, loading, error }) {
       </div>
     </div>
   );
-}
+});
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Club Manager Portal Component
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function ManagerPortal({ 
+const ManagerPortal = memo(function ManagerPortal({ 
   user, 
   clubs, 
   events, 
@@ -3610,7 +3794,7 @@ function ManagerPortal({
               flexShrink: 0
             }}>
               {club.icon ? (
-                <img src={club.icon} alt={club.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={club.icon} alt={club.name} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 '🏛️'
               )}
@@ -3674,7 +3858,7 @@ function ManagerPortal({
                     <div key={evt.id || evt._id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', borderRadius: '14px', overflow: 'hidden', border: '1px solid hsla(var(--border-glass))' }}>
                       {evt.posterUrl && (
                         <div style={{ height: '140px', width: '100%', overflow: 'hidden', borderBottom: '1px solid hsla(var(--border-glass))' }}>
-                          <img src={evt.posterUrl} alt={evt.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <img src={evt.posterUrl} alt={evt.title} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         </div>
                       )}
                       <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flex: '1', gap: '0.75rem' }}>
@@ -3782,6 +3966,6 @@ function ManagerPortal({
       )}
     </div>
   );
-}
+});
 
 export default memo(CampusLife);

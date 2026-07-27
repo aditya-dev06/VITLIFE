@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 export default function FeedbackModal({ user, onClose }) {
   const [type, setType] = useState('Suggestion');
@@ -8,6 +8,13 @@ export default function FeedbackModal({ user, onClose }) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const autoCloseTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -42,7 +49,8 @@ export default function FeedbackModal({ user, onClose }) {
 
       setSuccess(true);
       setMessage('');
-      setTimeout(() => {
+      if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+      autoCloseTimerRef.current = setTimeout(() => {
         onClose();
       }, 3000);
     } catch (err) {
@@ -55,17 +63,28 @@ export default function FeedbackModal({ user, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 10000 }}>
-      <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px', borderRadius: '24px', background: 'rgba(15, 23, 42, 0.75)', border: '1px solid hsla(var(--border-glass))', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', padding: '2rem' }}>
+      <div 
+        className="modal-content" 
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="feedback-heading"
+        onClick={e => e.stopPropagation()} 
+        style={{ maxWidth: '520px', borderRadius: '24px', background: 'rgba(15, 23, 42, 0.75)', border: '1px solid hsla(var(--border-glass))', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', padding: '2rem' }}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.3rem', fontWeight: 800, margin: 0, background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <h2 id="feedback-heading" style={{ fontSize: '1.3rem', fontWeight: 800, margin: 0, background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             💬 Share Feedback
           </h2>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'hsl(var(--text-secondary))', cursor: 'pointer', fontSize: '1.25rem', padding: '0.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+          <button 
+            onClick={onClose} 
+            aria-label="Close feedback modal"
+            style={{ background: 'transparent', border: 'none', color: 'hsl(var(--text-secondary))', cursor: 'pointer', fontSize: '1.25rem', padding: '0.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >✕</button>
         </div>
 
         {success ? (
           <div style={{ textAlign: 'center', padding: '2rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-            <span style={{ fontSize: '3rem', animation: 'bounce 1s infinite' }}>🎉</span>
+            <span style={{ fontSize: '3rem', animation: 'bounce 1s infinite' }} aria-hidden="true">🎉</span>
             <h3 style={{ margin: 0, color: 'hsl(var(--text-primary))', fontSize: '1.15rem', fontWeight: 700 }}>Thank you for your feedback!</h3>
             <p style={{ margin: 0, color: 'hsl(var(--text-muted))', fontSize: '0.88rem', lineHeight: '1.5' }}>
               Your response has been sent to our development team. We appreciate your help in improving VIT Life!
@@ -77,14 +96,14 @@ export default function FeedbackModal({ user, onClose }) {
         ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             {error && (
-              <div style={{ padding: '0.75rem 1rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.25)', color: '#ef4444', borderRadius: '12px', fontSize: '0.85rem', fontWeight: '600' }}>
+              <div role="alert" style={{ padding: '0.75rem 1rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.25)', color: '#ef4444', borderRadius: '12px', fontSize: '0.85rem', fontWeight: '600' }}>
                 ⚠️ {error}
               </div>
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
               <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Feedback Type</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+              <div role="tablist" aria-label="Feedback type selection" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
                 {['Suggestion', 'Bug', 'Other'].map(t => {
                   const labelMap = { Suggestion: '💡 Suggest', Bug: '🐛 Bug', Other: '💬 General' };
                   const active = type === t;
@@ -92,6 +111,8 @@ export default function FeedbackModal({ user, onClose }) {
                     <button
                       key={t}
                       type="button"
+                      role="tab"
+                      aria-selected={active}
                       onClick={() => setType(t)}
                       style={{
                         padding: '0.65rem 0.5rem',
@@ -116,8 +137,9 @@ export default function FeedbackModal({ user, onClose }) {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Name (Optional)</label>
+                <label htmlFor="feedback-name" style={{ fontSize: '0.8rem', fontWeight: '700', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Name (Optional)</label>
                 <input
+                  id="feedback-name"
                   type="text"
                   placeholder="Your Name"
                   value={name}
@@ -137,8 +159,9 @@ export default function FeedbackModal({ user, onClose }) {
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email (Optional)</label>
+                <label htmlFor="feedback-email" style={{ fontSize: '0.8rem', fontWeight: '700', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email (Optional)</label>
                 <input
+                  id="feedback-email"
                   type="email"
                   placeholder="your@email.com"
                   value={email}
@@ -160,8 +183,9 @@ export default function FeedbackModal({ user, onClose }) {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Your Message</label>
+              <label htmlFor="feedback-message" style={{ fontSize: '0.8rem', fontWeight: '700', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Your Message</label>
               <textarea
+                id="feedback-message"
                 placeholder={type === 'Bug' ? "Describe the bug and how to reproduce it..." : "Your suggestions, ideas, or feedback..."}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}

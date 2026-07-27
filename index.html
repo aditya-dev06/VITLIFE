@@ -7,18 +7,24 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-    <!-- Google Fonts (Non-blocking async loading for <50ms font latency) -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Sora:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=Geist+Mono:wght@300;400;500;600;700&display=swap" media="print" onload="this.media='all'">
+    <!-- Preload critical font (Inter - body text, most used) -->
+    <link rel="preload" href="https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfMZg.ttf" as="font" type="font/ttf" crossorigin>
+
+    <!-- Google Fonts (Non-blocking — only load actually-used families) -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700;800&family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
     <noscript>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Sora:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=Geist+Mono:wght@300;400;500;600;700&display=swap">
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700;800&family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
     </noscript>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#0d0e12" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="VIT Life" />
-    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="description" content="Centralized college lifestyle and management portal for VIT Bhopal students, featuring event management, club directories, academic guidelines, and student resources." />
     <meta name="keywords" content="VIT Bhopal, VIT Life, VIT Bhopal Portal, VIT Bhopal PYQ, VIT Bhopal Timetable, VIT Bhopal Events, VIT Bhopal Clubs, Opportunities Hub" />
@@ -31,6 +37,9 @@
     <meta property="og:title" content="VIT Life - College Lifestyle & Management Portal | VIT Bhopal" />
     <meta property="og:description" content="Centralized college lifestyle and management portal for VIT Bhopal students, featuring academic management, PYQ Hub, events, and student opportunities." />
     <meta property="og:image" content="https://vitlife.vercel.app/store_icon.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
@@ -65,17 +74,22 @@
       html{height:100%}
       body{margin:0;min-height:100%;background-color:#0d0e12;color:#f5f7fa;-webkit-font-smoothing:antialiased}
       #root{min-height:100vh;display:flex;flex-direction:column}
+      /* Hide SEO fallback immediately once React mounts (prevents CLS from content displacement) */
+      #root>.seo-fallback{display:none}
       .aurora-brand-logo{font-family:'Space Grotesk',sans-serif;font-size:2.2rem;font-weight:800;display:flex;align-items:center;justify-content:center;gap:.15rem;margin-bottom:.4rem}
       .aurora-brand-vit{background:linear-gradient(135deg,#38bdf8,#818cf8,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:.04em}
       .aurora-brand-sub{font-family:sans-serif;font-size:.78rem;font-weight:400;color:rgba(255,255,255,.4);letter-spacing:.1em;text-transform:uppercase}
+      /* Font metric overrides to prevent CLS during font swap */
+      @font-face{font-family:'Inter fallback';src:local('Arial');size-adjust:107%;ascent-override:90%;descent-override:22%;line-gap-override:0%}
+      @font-face{font-family:'Space Grotesk fallback';src:local('Arial');size-adjust:105%;ascent-override:95%;descent-override:25%;line-gap-override:0%}
     </style>
     <!-- Google Sign-In SDK (async/defer — does not block render) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
     <div id="root">
-      <!-- Semantic SEO Fallback Content for Crawlers (Replaced instantly upon React boot) -->
-      <div style="padding: 20px; font-family: sans-serif; max-width: 800px; margin: 0 auto; color: #333; line-height: 1.6;">
+      <!-- Semantic SEO Fallback Content for Crawlers (Hidden by CSS once React boots, preventing CLS) -->
+      <div class="seo-fallback" style="padding: 20px; font-family: sans-serif; max-width: 800px; margin: 0 auto; color: #333; line-height: 1.6;">
         <h1>VIT Life - College Lifestyle &amp; Management Portal for VIT Bhopal</h1>
         <p><strong>VIT Life</strong> is the premier centralized platform designed specifically for students of VIT Bhopal. It integrates academic management, campus lifestyle coordination, and student growth tools into a single responsive application.</p>
         

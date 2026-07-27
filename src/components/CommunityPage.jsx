@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, X } from 'lucide-react';
+import { Search, X, Send } from 'lucide-react';
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/InputGroup';
 
 const EXAM_TYPES = ['MTE', 'TEE', 'CAT-1', 'CAT-2', 'FAT'];
@@ -395,69 +395,689 @@ const compressImage = (file) => {
   });
 };
 
+/* ── MEMOIZED SUB-COMPONENTS FOR HIGH PERFORMANCE ── */
+
+/**
+ * FilterDropdown Component
+ * Isolates open/close popover state & portal calculations to prevent main page re-renders.
+ */
+const FilterDropdown = memo(function FilterDropdown({ value, options, onChange, allLabel }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const btnRef = useRef(null);
+  const popoverRef = useRef(null);
+
+  const toggleDropdown = useCallback(() => {
+    if (!isOpen && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setCoords({
+        top: rect.bottom + 6,
+        left: Math.max(10, rect.left)
+      });
+    }
+    setIsOpen(prev => !prev);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (event) => {
+      if (
+        popoverRef.current && !popoverRef.current.contains(event.target) &&
+        btnRef.current && !btnRef.current.contains(event.target)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const handleSelect = useCallback((val) => {
+    onChange(val);
+    setIsOpen(false);
+  }, [onChange]);
+
+  return (
+    <div style={{ position: 'relative', flex: 1 }}>
+      <button
+        ref={btnRef}
+        onClick={toggleDropdown}
+        style={{
+          width: '100%',
+          padding: '0.65rem 0.9rem',
+          fontSize: '0.85rem',
+          fontWeight: 600,
+          background: 'rgba(255, 255, 255, 0.05)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          borderRadius: '12px',
+          color: '#ffffff',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.5rem',
+          transition: 'all 0.2s ease',
+          backdropFilter: 'blur(8px)'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+        }}
+      >
+        <span>{value ? value : allLabel}</span>
+        <span style={{ fontSize: '0.65rem', opacity: 0.7, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>▼</span>
+      </button>
+
+      {isOpen && createPortal(
+        <div
+          ref={popoverRef}
+          className="base-nav-menu-popover"
+          style={{
+            position: 'fixed',
+            top: `${coords.top}px`,
+            left: `${coords.left}px`,
+            width: '160px',
+            maxHeight: '260px',
+            overflowY: 'auto',
+            background: '#121215',
+            border: '1px solid rgba(255, 255, 255, 0.18)',
+            borderRadius: '14px',
+            padding: '0.45rem',
+            boxShadow: '0 16px 40px rgba(0, 0, 0, 0.95)',
+            backdropFilter: 'blur(20px)',
+            zIndex: 9999999,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.2rem'
+          }}
+        >
+          <button
+            onClick={() => handleSelect('')}
+            style={{
+              width: '100%',
+              textAlign: 'left',
+              padding: '0.38rem 0.65rem',
+              fontSize: '0.78rem',
+              fontWeight: value === '' ? 700 : 500,
+              color: value === '' ? '#38bdf8' : '#e2e8f0',
+              background: value === '' ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}
+          >
+            <span>{allLabel}</span>
+            {value === '' && <span style={{ color: '#38bdf8' }}>✓</span>}
+          </button>
+          {options.map(opt => {
+            const isSelected = value === opt;
+            return (
+              <button
+                key={opt}
+                onClick={() => handleSelect(opt)}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '0.38rem 0.65rem',
+                  fontSize: '0.78rem',
+                  fontWeight: isSelected ? 700 : 500,
+                  color: isSelected ? '#38bdf8' : '#e2e8f0',
+                  background: isSelected ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}
+              >
+                <span>{opt}</span>
+                {isSelected && <span style={{ color: '#38bdf8' }}>✓</span>}
+              </button>
+            );
+          })}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+});
+
+/**
+ * CourseGroupCard Component
+ * Memoized card item for PYQ Grid.
+ */
+const CourseGroupCard = memo(function CourseGroupCard({ group, onSelect }) {
+  const handleClick = useCallback(() => {
+    onSelect(group.courseCode);
+  }, [group.courseCode, onSelect]);
+
+  return (
+    <div
+      className="pyq-paper-card"
+      onClick={handleClick}
+      style={{ cursor: 'pointer', gap: '0.8rem', display: 'flex', flexDirection: 'column' }}
+    >
+      <div className="paper-card-header">
+        <span className="paper-sem-badge" style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '600', border: '1px solid hsla(var(--border-glass))', color: 'hsl(var(--text-secondary))' }}>
+          Sem {group.semester}
+        </span>
+        <span className="paper-count-badge" style={{ background: 'hsla(var(--primary) / 0.12)', color: 'hsl(var(--primary))', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', border: '1px solid hsla(var(--primary) / 0.25)', fontFamily: 'var(--font-accent)' }}>
+          {group.papersList.length} {group.papersList.length === 1 ? 'Paper' : 'Papers'}
+        </span>
+      </div>
+      
+      <div className="paper-card-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flexGrow: 1 }}>
+        <h4 className="paper-code">
+          {group.courseCode}
+        </h4>
+        <p className="paper-title" title={group.courseTitle} style={{ margin: '0.25rem 0 0.5rem 0', height: '2.8rem' }}>
+          {group.courseTitle}
+        </p>
+      </div>
+      
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', fontSize: '0.8rem', fontWeight: '700', color: 'hsl(var(--primary))', gap: '0.25rem', marginTop: 'auto' }}>
+        <span>View Papers</span>
+        <span style={{ transition: 'transform 0.2s' }}>→</span>
+      </div>
+    </div>
+  );
+});
+
+/**
+ * PaperFileItem Component
+ * Memoized single paper item row in course sub-page view.
+ */
+const PaperFileItem = memo(function PaperFileItem({ paper, user, onDelete }) {
+  const badgeProps = useMemo(() => {
+    const t = (paper.examType || '').toUpperCase();
+    if (t.includes('MTE')) {
+      return { bg: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.08))', border: '1px solid rgba(245, 158, 11, 0.25)', color: '#f59e0b' };
+    }
+    if (t.includes('TEE') || t.includes('FAT')) {
+      return { bg: 'linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(109, 40, 217, 0.08))', border: '1px solid rgba(139, 92, 246, 0.25)', color: '#a78bfa' };
+    }
+    return { bg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(4, 120, 87, 0.08))', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#10b981' };
+  }, [paper.examType]);
+
+  const urls = useMemo(() => getPaperUrls(paper.url), [paper.url]);
+
+  const handleOpenPaper = useCallback((e) => {
+    e.stopPropagation();
+    for (let i = 1; i < urls.length; i++) {
+      window.open(urls[i], '_blank');
+    }
+  }, [urls]);
+
+  const handleDelete = useCallback((e) => {
+    e.stopPropagation();
+    onDelete(paper._id);
+  }, [paper._id, onDelete]);
+
+  return (
+    <div 
+      className="paper-file-item" 
+      style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        gap: '1rem', 
+        padding: '1.2rem 1.4rem', 
+        background: 'hsla(var(--bg-card) / 0.55)', 
+        backdropFilter: 'blur(12px)',
+        border: '1px solid hsla(var(--border-glass))', 
+        borderRadius: '16px', 
+        boxShadow: '0 8px 32px -10px rgba(0,0,0,0.3)',
+        transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)' 
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = 'translateY(-2px)';
+        e.currentTarget.style.borderColor = 'hsla(var(--primary) / 0.35)';
+        e.currentTarget.style.boxShadow = '0 12px 40px -10px rgba(0,0,0,0.45)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'none';
+        e.currentTarget.style.borderColor = 'hsla(var(--border-glass))';
+        e.currentTarget.style.boxShadow = '0 8px 32px -10px rgba(0,0,0,0.3)';
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <span style={{ padding: '0.2rem 0.65rem', fontSize: '0.68rem', borderRadius: '6px', background: badgeProps.bg, border: badgeProps.border, color: badgeProps.color, fontWeight: '700', letterSpacing: '0.02em' }}>
+            {paper.examType}
+          </span>
+          {paper.status === 'pending' && (
+            <span style={{ 
+              padding: '0.2rem 0.65rem', 
+              fontSize: '0.68rem', 
+              borderRadius: '6px', 
+              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.08))', 
+              border: '1px solid rgba(245, 158, 11, 0.35)', 
+              color: '#f59e0b', 
+              fontWeight: '700', 
+              letterSpacing: '0.02em',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.3rem'
+            }}>
+              ⏳ In Process
+            </span>
+          )}
+          <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', fontWeight: '600' }}>
+            Year {paper.year}
+          </span>
+          {paper.month && (
+            <span style={{ fontSize: '0.72rem', color: 'hsl(var(--secondary))', fontWeight: '700', background: 'hsla(var(--secondary) / 0.08)', border: '1px solid hsla(var(--secondary) / 0.25)', padding: '0.15rem 0.55rem', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+              🗓️ {paper.month}
+            </span>
+          )}
+        </div>
+        <span style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+          👤 Contributed by {paper.uploadedBy || 'Community'}
+        </span>
+      </div>
+      
+      <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+        <a
+          href={urls[0] || '#'}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="paper-btn download"
+          onClick={handleOpenPaper}
+          style={{
+            margin: 0,
+            padding: '0.5rem 1.15rem',
+            fontSize: '0.8rem',
+            borderRadius: '10px',
+            fontWeight: '700',
+            background: 'linear-gradient(135deg, hsl(var(--primary)), #4f46e5)',
+            border: 'none',
+            color: '#fff',
+            boxShadow: '0 4px 12px hsla(var(--primary) / 0.25)',
+            textDecoration: 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-1px)';
+            e.currentTarget.style.boxShadow = '0 6px 16px hsla(var(--primary) / 0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'none';
+            e.currentTarget.style.boxShadow = '0 4px 12px hsla(var(--primary) / 0.25)';
+          }}
+        >
+          📖 Open Paper {urls.length > 1 ? `(${urls.length} Pages)` : ''}
+        </a>
+        {user && user.role === 'admin' && (
+          <button
+            className="paper-btn delete"
+            onClick={handleDelete}
+            title="Delete Paper"
+            style={{
+              position: 'static',
+              padding: '0.5rem 1.15rem',
+              fontSize: '0.8rem',
+              borderRadius: '10px',
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              color: '#ef4444',
+              fontWeight: '700',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#ef4444';
+              e.currentTarget.style.color = '#ffffff';
+              e.currentTarget.style.borderColor = '#ef4444';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+              e.currentTarget.style.color = '#ef4444';
+              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.25)';
+            }}
+          >
+            🗑️ Delete
+          </button>
+        )}
+      </div>
+    </div>
+  );
+});
+
+/**
+ * ModerationCard Component
+ * Memoized card item for Admin Moderation Queue.
+ */
+const ModerationCard = memo(function ModerationCard({ paper, onApprove, onDelete }) {
+  const urls = useMemo(() => getPaperUrls(paper.url), [paper.url]);
+
+  const handleOpenDoc = useCallback((e) => {
+    for (let i = 1; i < urls.length; i++) {
+      window.open(urls[i], '_blank');
+    }
+  }, [urls]);
+
+  const handleApprove = useCallback(() => {
+    onApprove(paper._id);
+  }, [paper._id, onApprove]);
+
+  const handleDelete = useCallback(() => {
+    onDelete(paper._id);
+  }, [paper._id, onDelete]);
+
+  return (
+    <div className="moderation-card">
+      <div className="moderation-card-header">
+        <span className="mod-badge code">{paper.courseCode}</span>
+        <span className="mod-badge dept">{paper.department}</span>
+      </div>
+      <h4>{paper.courseTitle}</h4>
+      <p className="mod-meta">
+        Type: <strong>{paper.examType}</strong> | Year: <strong>{paper.year}</strong> | Sem: <strong>{paper.semester}</strong>
+      </p>
+      <p className="mod-uploader">
+        Uploaded by: {paper.uploadedBy}
+        {paper.uploaderIp && (
+          <span style={{ display: 'block', color: 'hsl(var(--danger))', fontSize: '0.75rem', marginTop: '0.15rem', fontWeight: 600 }}>
+            📍 IP: {paper.uploaderIp}
+          </span>
+        )}
+        {paper.month && (
+          <span style={{ display: 'block', color: 'hsl(var(--secondary))', fontSize: '0.75rem', marginTop: '0.15rem', fontWeight: 600 }}>
+            🗓️ Month: {paper.month}
+          </span>
+        )}
+      </p>
+      <div className="moderation-actions">
+        <a
+          href={urls[0] || '#'}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mod-action-btn view"
+          onClick={handleOpenDoc}
+          style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          🔍 View Doc {urls.length > 1 ? `(${urls.length})` : ''}
+        </a>
+        <button onClick={handleApprove} className="mod-action-btn approve">
+          ✅ Approve
+        </button>
+        <button onClick={handleDelete} className="mod-action-btn reject">
+          ❌ Reject
+        </button>
+      </div>
+    </div>
+  );
+});
+
+/**
+ * ChatMessageItem Component
+ * High performance memoized chat message row.
+ */
+const ChatMessageItem = memo(function ChatMessageItem({ message, currentUser, onLike }) {
+  const isSelf = currentUser && message.author === (currentUser.name || currentUser.email);
+  const handleLike = useCallback(() => {
+    if (onLike) onLike(message.id);
+  }, [message.id, onLike]);
+
+  return (
+    <div style={{
+      display: 'flex',
+      gap: '0.75rem',
+      padding: '0.85rem 1rem',
+      borderRadius: '12px',
+      background: isSelf ? 'hsla(var(--primary) / 0.08)' : 'rgba(255, 255, 255, 0.02)',
+      border: `1px solid ${isSelf ? 'hsla(var(--primary) / 0.2)' : 'rgba(255, 255, 255, 0.06)'}`,
+      alignItems: 'flex-start',
+      transition: 'background 0.2s ease'
+    }}>
+      <div style={{
+        width: '38px',
+        height: '38px',
+        borderRadius: '50%',
+        background: isSelf ? 'linear-gradient(135deg, #3b82f6, #6366f1)' : 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontWeight: '700',
+        fontSize: '0.85rem',
+        color: '#ffffff',
+        flexShrink: 0
+      }}>
+        {message.avatar || (message.author ? message.author.charAt(0).toUpperCase() : 'U')}
+      </div>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'hsl(var(--text-primary))' }}>
+              {message.author}
+            </span>
+            {message.role && (
+              <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', fontWeight: 600 }}>
+                {message.role}
+              </span>
+            )}
+          </div>
+          <span style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))' }}>
+            {message.timestamp}
+          </span>
+        </div>
+        <p style={{ margin: 0, fontSize: '0.88rem', color: 'hsl(var(--text-secondary))', lineHeight: '1.45', wordBreak: 'break-word' }}>
+          {message.content}
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.35rem' }}>
+          <button
+            onClick={handleLike}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: message.liked ? '#f43f5e' : 'hsl(var(--text-muted))',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.25rem',
+              padding: 0
+            }}
+          >
+            <span>{message.liked ? '❤️' : '🤍'}</span>
+            <span>{message.likes || 0}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+/**
+ * StudentChatSection Component
+ * Memoized chat feed and channel manager for Student Chats sub-tab.
+ */
+const StudentChatSection = memo(function StudentChatSection({ user }) {
+  const [activeChannel, setActiveChannel] = useState('general');
+  const [messages, setMessages] = useState([
+    { id: '1', channel: 'general', author: 'Rahul Sharma', avatar: 'R', role: 'CSE 3rd Year', content: 'Hey everyone! Has anyone downloaded the CAT-2 Discrete Mathematics papers from 2024?', timestamp: '10:14 AM', likes: 4, liked: false },
+    { id: '2', channel: 'general', author: 'Ananya Verma', avatar: 'A', role: 'ECE 2nd Year', content: 'Yes! Check out the MAT3002 section under PYQ Hub, all sets are updated with OCR text tags.', timestamp: '10:18 AM', likes: 7, liked: true },
+    { id: '3', channel: 'pyq-doubts', author: 'Vikram Singh', avatar: 'V', role: 'MECH 4th Year', content: 'Does anyone have solution keys for Thermofluids TEE 2024-25 paper?', timestamp: '11:05 AM', likes: 2, liked: false },
+    { id: '4', channel: 'exam-prep', author: 'Priya Nair', avatar: 'P', role: 'CSE 1st Year', content: 'Forming a study group for Data Structures Mid Terms tomorrow at Central Library floor 2. Anyone interested?', timestamp: '11:30 AM', likes: 9, liked: true }
+  ]);
+  const [chatSearch, setChatSearch] = useState('');
+  const [debouncedChatSearch, setDebouncedChatSearch] = useState('');
+  const [newMessage, setNewMessage] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedChatSearch(chatSearch), 150);
+    return () => clearTimeout(timer);
+  }, [chatSearch]);
+
+  const handleLikeMessage = useCallback((id) => {
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, likes: m.liked ? m.likes - 1 : m.likes + 1, liked: !m.liked } : m));
+  }, []);
+
+  const handleSendMessage = useCallback((e) => {
+    e.preventDefault();
+    if (!newMessage.trim()) return;
+    const msg = {
+      id: String(Date.now()),
+      channel: activeChannel,
+      author: user ? (user.name || user.email) : 'Student',
+      avatar: user && user.name ? user.name.charAt(0).toUpperCase() : 'S',
+      role: user && user.role === 'admin' ? 'Admin' : 'Student',
+      content: newMessage.trim(),
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      likes: 0,
+      liked: false
+    };
+    setMessages(prev => [...prev, msg]);
+    setNewMessage('');
+  }, [newMessage, activeChannel, user]);
+
+  const filteredMessages = useMemo(() => {
+    let list = messages.filter(m => m.channel === activeChannel);
+    const q = debouncedChatSearch.trim().toLowerCase();
+    if (q) {
+      list = list.filter(m => m.content.toLowerCase().includes(q) || m.author.toLowerCase().includes(q));
+    }
+    return list;
+  }, [messages, activeChannel, debouncedChatSearch]);
+
+  const CHANNELS = [
+    { id: 'general', label: 'general-discussion', icon: '💬' },
+    { id: 'pyq-doubts', label: 'pyq-doubts-clearing', icon: '📄' },
+    { id: 'exam-prep', label: 'exam-prep-groups', icon: '📚' }
+  ];
+
+  const activeChannelObj = CHANNELS.find(c => c.id === activeChannel) || CHANNELS[0];
+
+  return (
+    <div className="pyq-workspace animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div className="pyq-header-banner" style={{ background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.08))' }}>
+        <div className="pyq-banner-content">
+          <h2>💬 Student Community Chats & Study Circles</h2>
+          <p>Real-time peer discussions, course doubt-solving, and study group coordination.</p>
+        </div>
+      </div>
+
+      <div className="chat-layout-grid">
+        {/* Sidebar Channels */}
+        <div className="chat-channels-sidebar">
+          <span className="chat-channels-title">
+            Channels
+          </span>
+          <div className="chat-channels-list">
+            {CHANNELS.map(ch => (
+              <button
+                key={ch.id}
+                onClick={() => setActiveChannel(ch.id)}
+                className={`chat-channel-btn ${activeChannel === ch.id ? 'active' : ''}`}
+              >
+                <span>{ch.icon}</span>
+                <span>#{ch.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Chat Feed */}
+        <div className="chat-feed-box">
+          {/* Header & Filter */}
+          <div className="chat-feed-header">
+            <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'hsl(var(--text-primary))' }}>
+              #{activeChannelObj.label}
+            </h4>
+            <div className="chat-search-input-box">
+              <InputGroup style={{ height: '34px' }}>
+                <InputGroupAddon align="inline-start">
+                  <Search size={14} />
+                </InputGroupAddon>
+                <InputGroupInput
+                  type="text"
+                  placeholder="Filter messages..."
+                  value={chatSearch}
+                  onChange={(e) => setChatSearch(e.target.value)}
+                  style={{ fontSize: '0.78rem' }}
+                />
+              </InputGroup>
+            </div>
+          </div>
+
+          {/* Messages list */}
+          <div className="chat-messages-scroll-area">
+            {filteredMessages.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'hsl(var(--text-muted))' }}>
+                <span>💬</span>
+                <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.85rem' }}>No messages found in this channel.</p>
+              </div>
+            ) : (
+              filteredMessages.map(msg => (
+                <ChatMessageItem
+                  key={msg.id}
+                  message={msg}
+                  currentUser={user}
+                  onLike={handleLikeMessage}
+                />
+              ))
+            )}
+          </div>
+
+          {/* Message input form */}
+          <form onSubmit={handleSendMessage} className="chat-message-form">
+            <input
+              type="text"
+              placeholder={`Message #${activeChannelObj.label}...`}
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              className="chat-input-field"
+            />
+            <button
+              type="submit"
+              disabled={!newMessage.trim()}
+              className="chat-send-btn"
+            >
+              <span>Send</span>
+              <Send size={14} />
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+/* ── MAIN COMMUNITY PAGE COMPONENT ── */
 
 function CommunityPage({ user }) {
   const [activeSubTab, setActiveSubTab] = useState('pyq'); // 'pyq' | 'chats' | 'marketplace'
   const [papers, setPapers] = useState([]);
   const [pendingPapers, setPendingPapers] = useState([]);
+
+  // Search input state (immediate for input field) and debounced search state (for heavy filtering index)
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const debounceRef = useRef(null);
   const [filterExamType, setFilterExamType] = useState('');
   const [filterYear, setFilterYear] = useState('');
 
-  // Exam Type Base UI Dropdown State
-  const [examTypeOpen, setExamTypeOpen] = useState(false);
-  const examTypeRef = useRef(null);
-  const examTypeBtnRef = useRef(null);
-  const [examTypeCoords, setExamTypeCoords] = useState({ top: 0, left: 0 });
-
-  const toggleExamTypeDropdown = () => {
-    if (!examTypeOpen && examTypeBtnRef.current) {
-      const rect = examTypeBtnRef.current.getBoundingClientRect();
-      setExamTypeCoords({
-        top: rect.bottom + 6,
-        left: Math.max(10, rect.left)
-      });
-    }
-    setExamTypeOpen(prev => !prev);
-  };
-
-  // Year Base UI Dropdown State
-  const [yearOpen, setYearOpen] = useState(false);
-  const yearRef = useRef(null);
-  const yearBtnRef = useRef(null);
-  const [yearCoords, setYearCoords] = useState({ top: 0, left: 0 });
-
-  const toggleYearDropdown = () => {
-    if (!yearOpen && yearBtnRef.current) {
-      const rect = yearBtnRef.current.getBoundingClientRect();
-      setYearCoords({
-        top: rect.bottom + 6,
-        left: Math.max(10, rect.left)
-      });
-    }
-    setYearOpen(prev => !prev);
-  };
-
+  // 50ms search debounce handler
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        examTypeRef.current && !examTypeRef.current.contains(event.target) &&
-        examTypeBtnRef.current && !examTypeBtnRef.current.contains(event.target)
-      ) {
-        setExamTypeOpen(false);
-      }
-      if (
-        yearRef.current && !yearRef.current.contains(event.target) &&
-        yearBtnRef.current && !yearBtnRef.current.contains(event.target)
-      ) {
-        setYearOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -465,101 +1085,26 @@ function CommunityPage({ user }) {
 
   // Upload Modal State
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [courseCode, setCourseCode] = useState('');
-  const [courseTitle, setCourseTitle] = useState('');
-  const [uploadExamType, setUploadExamType] = useState('MTE');
-  const [uploadYear, setUploadYear] = useState('24-25');
-  const [uploadSemester, setUploadSemester] = useState('1');
-  const [uploadUrl, setUploadUrl] = useState('');
-  const [uploadMethod, setUploadMethod] = useState('file'); // 'file' | 'link'
   const [selectedFiles, setSelectedFiles] = useState([]);
-  const [uploadExamDate, setUploadExamDate] = useState('');
   const [uploadLoading, setUploadLoading] = useState(false);
-  const [detectingText, setDetectingText] = useState(false);
-
-
 
   const [selectedCourseCode, setSelectedCourseCode] = useState(null);
 
-  // Chunked loading / progressive rendering state (24 courses per chunk)
-  const [visibleChunkCount, setVisibleChunkCount] = useState(24);
+  // Chunked loading / progressive rendering state (20 courses per chunk)
+  const [visibleChunkCount, setVisibleChunkCount] = useState(20);
   const sentinelRef = useRef(null);
+  const uploadSuccessTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (uploadSuccessTimerRef.current) clearTimeout(uploadSuccessTimerRef.current);
+    };
+  }, []);
 
   // Reset chunk count whenever search query or filters change
   useEffect(() => {
-    setVisibleChunkCount(24);
-  }, [searchQuery, filterExamType, filterYear, activeSubTab]);
-
-  // Derived selected course group
-  const selectedCourseGroup = (() => {
-    if (!selectedCourseCode) return null;
-    const coursePapers = papers.filter(p => (p.courseCode || '').trim().toUpperCase() === selectedCourseCode);
-    if (coursePapers.length === 0) return null;
-    return {
-      courseCode: selectedCourseCode,
-      courseTitle: coursePapers[0].courseTitle || selectedCourseCode,
-      semester: coursePapers[0].semester,
-      papersList: coursePapers
-    };
-  })();
-
-  const handleAutoDetect = async (file) => {
-    setDetectingText(true);
-    setError('');
-    setSuccess('');
-    try {
-      const compressedBase64 = await compressImage(file);
-      
-      // 1. Try ultra-fast server AI Vision OCR first (<300ms)
-      try {
-        const vRes = await fetch('/api/ocr/vision', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: compressedBase64 })
-        });
-        if (vRes.ok) {
-          const vData = await vRes.json();
-          if (vData.success && vData.metadata) {
-            const m = vData.metadata;
-            if (m.courseCode) setCourseCode(m.courseCode);
-            if (m.courseTitle) setCourseTitle(m.courseTitle);
-            if (m.examType) setUploadExamType(m.examType);
-            if (m.year) setUploadYear(m.year);
-            if (m.semester) setUploadSemester(String(m.semester));
-            setSuccess('✨ Automatically detected paper details using AI Vision OCR!');
-            setDetectingText(false);
-            return;
-          }
-        }
-      } catch (vErr) {
-        console.warn('Vision OCR fallback to client engine:', vErr);
-      }
-
-      // 2. Local Engine Fallback
-      const Tesseract = await loadTesseract();
-      const worker = await Tesseract.createWorker('eng');
-      const ret = await worker.recognize(compressedBase64);
-      await worker.terminate();
-      
-      const text = ret.data.text;
-      const detected = parsePaperText(text, papers);
-      
-      let filledAny = false;
-      if (detected.courseCode) { setCourseCode(detected.courseCode); filledAny = true; }
-      if (detected.courseTitle) { setCourseTitle(detected.courseTitle); filledAny = true; }
-      if (detected.examType) { setUploadExamType(detected.examType); filledAny = true; }
-      if (detected.year) { setUploadYear(detected.year); filledAny = true; }
-      if (detected.semester) { setUploadSemester(detected.semester); filledAny = true; }
-      
-      if (filledAny) {
-        setSuccess('✨ Automatically detected paper details from scan!');
-      }
-    } catch (err) {
-      console.error('Auto detect error:', err);
-    } finally {
-      setDetectingText(false);
-    }
-  };
+    setVisibleChunkCount(20);
+  }, [debouncedQuery, filterExamType, filterYear, activeSubTab]);
 
   // Fetch ALL papers once — filtering is client-side (instant, no re-fetch per keystroke)
   const fetchPapers = useCallback(async () => {
@@ -569,12 +1114,16 @@ function CommunityPage({ user }) {
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
       const res = await fetch('/api/papers', { headers });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to fetch papers.');
+      if (!res.ok) {
+        setPapers([]);
+        return;
+      }
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : {};
       setPapers(data.papers || []);
     } catch (err) {
-      console.error(err);
-      setError(err.message);
+      console.error('Failed to fetch papers:', err);
+      setPapers([]);
     } finally {
       setLoading(false);
     }
@@ -595,60 +1144,96 @@ function CommunityPage({ user }) {
     }
   }, []);
 
-  // Client-side instant filtering — derived from all papers, no network call
-  const filteredPapers = useMemo(() => {
-    let list = papers;
-    const q = searchQuery.trim().toLowerCase();
-    if (q) {
-      list = list.filter(p =>
-        (p.courseCode || '').toLowerCase().includes(q) ||
-        (p.courseTitle || '').toLowerCase().includes(q) ||
-        (p.department || '').toLowerCase().includes(q)
-      );
-    }
-    if (filterExamType) list = list.filter(p => p.examType === filterExamType);
-    if (filterYear) list = list.filter(p => p.year === filterYear);
-    return list;
-  }, [papers, searchQuery, filterExamType, filterYear]);
-
-  // Derived course groups (memoized for high performance, declared after filteredPapers)
-  const courseGroups = useMemo(() => {
-    const grouped = filteredPapers.reduce((acc, paper) => {
+  // Pre-indexed Course Groups (built once whenever papers array changes)
+  const indexedCourseGroups = useMemo(() => {
+    const groupMap = new Map();
+    for (let i = 0; i < papers.length; i++) {
+      const paper = papers[i];
       const code = (paper.courseCode || '').trim().toUpperCase();
-      if (!code) return acc;
-      if (!acc[code]) {
-        acc[code] = {
+      if (!code) continue;
+
+      let group = groupMap.get(code);
+      if (!group) {
+        group = {
           courseCode: code,
           courseTitle: paper.courseTitle || code,
           department: paper.department,
           semester: paper.semester,
+          searchText: `${code} ${paper.courseTitle || ''} ${paper.department || ''}`.toLowerCase(),
           papersList: []
         };
+        groupMap.set(code, group);
       }
-      acc[code].papersList.push(paper);
-      return acc;
-    }, {});
-    return Object.values(grouped);
-  }, [filteredPapers]);
+      group.papersList.push(paper);
+    }
+    return Array.from(groupMap.values());
+  }, [papers]);
+
+  // High-performance search list indexing & filter calculation
+  const filteredCourseGroups = useMemo(() => {
+    let groups = indexedCourseGroups;
+    const q = debouncedQuery.trim().toLowerCase();
+
+    if (q) {
+      groups = groups.filter(group => group.searchText.includes(q));
+    }
+
+    if (filterExamType || filterYear) {
+      groups = groups.map(group => {
+        let matchingPapers = group.papersList;
+        if (filterExamType) {
+          matchingPapers = matchingPapers.filter(p => p.examType === filterExamType);
+        }
+        if (filterYear) {
+          matchingPapers = matchingPapers.filter(p => p.year === filterYear);
+        }
+        if (matchingPapers.length === 0) return null;
+        return {
+          ...group,
+          papersList: matchingPapers
+        };
+      }).filter(Boolean);
+    }
+
+    return groups;
+  }, [indexedCourseGroups, debouncedQuery, filterExamType, filterYear]);
+
+  // Total matching papers count across filtered groups
+  const totalFilteredPapersCount = useMemo(() => {
+    return filteredCourseGroups.reduce((sum, g) => sum + g.papersList.length, 0);
+  }, [filteredCourseGroups]);
 
   const visibleCourseGroups = useMemo(() => {
-    return courseGroups.slice(0, visibleChunkCount);
-  }, [courseGroups, visibleChunkCount]);
+    return filteredCourseGroups.slice(0, visibleChunkCount);
+  }, [filteredCourseGroups, visibleChunkCount]);
+
+  // Derived selected course group
+  const selectedCourseGroup = useMemo(() => {
+    if (!selectedCourseCode) return null;
+    const coursePapers = papers.filter(p => (p.courseCode || '').trim().toUpperCase() === selectedCourseCode);
+    if (coursePapers.length === 0) return null;
+    return {
+      courseCode: selectedCourseCode,
+      courseTitle: coursePapers[0].courseTitle || selectedCourseCode,
+      semester: coursePapers[0].semester,
+      papersList: coursePapers
+    };
+  }, [selectedCourseCode, papers]);
 
   // IntersectionObserver to auto-load next chunk when scrolling near end
   useEffect(() => {
     if (!sentinelRef.current) return;
     const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && visibleChunkCount < courseGroups.length) {
-        setVisibleChunkCount(prev => prev + 24);
+      if (entries[0].isIntersecting && visibleChunkCount < filteredCourseGroups.length) {
+        setVisibleChunkCount(prev => prev + 20);
       }
     }, { threshold: 0.1 });
 
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
-  }, [visibleChunkCount, courseGroups.length]);
+  }, [visibleChunkCount, filteredCourseGroups.length]);
 
-  // Only re-fetch from network when filters change (not search query)
+  // Network fetch on initial mount and when admin status changes
   useEffect(() => {
     fetchPapers();
     if (user && user.role === 'admin') fetchPendingPapers();
@@ -707,7 +1292,7 @@ function CommunityPage({ user }) {
       const Tesseract = await loadTesseract();
       const worker = await Tesseract.createWorker('eng');
 
-      // 2. Prepare Task for Images (if any images are selected, compile them into a single PDF)
+      // 2. Prepare Task for Images
       if (imageFiles.length > 0) {
         setSuccess(`🔍 Analyzing ${imageFiles.length} images...`);
         const imageDatas = [];
@@ -772,13 +1357,12 @@ function CommunityPage({ user }) {
         }
 
         const detected = parsePaperText(fullTextCombined, papers);
-        // Fallback metadata based on file name if OCR couldn't find details
         let courseCodeVal = detected.courseCode;
         if (!courseCodeVal) {
           const nameCodeMatch = file.name.match(/\b([A-Z]{3,4}\d{3,4})\b/i);
           courseCodeVal = nameCodeMatch ? nameCodeMatch[1].toUpperCase() : 'UNKNOWN';
         }
-        const courseTitleVal = detected.courseTitle || file.name.replace(/\.[^/.]+$/, ""); // strip extension
+        const courseTitleVal = detected.courseTitle || file.name.replace(/\.[^/.]+$/, "");
         const examTypeVal = detected.examType || 'MTE';
         const yearVal = detected.year || '2024-25';
         const semesterVal = detected.semester || '1';
@@ -799,7 +1383,6 @@ function CommunityPage({ user }) {
         });
       }
 
-      // Terminate worker
       await worker.terminate();
 
       // 4. Run all upload tasks
@@ -843,17 +1426,15 @@ function CommunityPage({ user }) {
         }
       }
 
-      // Clear files, close modal, and display success toast
       setSelectedFiles([]);
       setShowUploadModal(false);
       setSuccess(`Successfully processed ${successCount} paper(s)!`);
       
-      // Auto-clear success message after 3 seconds
-      setTimeout(() => {
+      if (uploadSuccessTimerRef.current) clearTimeout(uploadSuccessTimerRef.current);
+      uploadSuccessTimerRef.current = setTimeout(() => {
         setSuccess('');
       }, 3000);
 
-      // Refresh listings
       fetchPapers();
       if (user && user.role === 'admin') {
         fetchPendingPapers();
@@ -866,7 +1447,7 @@ function CommunityPage({ user }) {
     }
   };
 
-  const handleApprovePaper = async (id) => {
+  const handleApprovePaper = useCallback(async (id) => {
     setError('');
     setSuccess('');
     try {
@@ -884,9 +1465,9 @@ function CommunityPage({ user }) {
     } catch (err) {
       setError(err.message);
     }
-  };
+  }, [fetchPapers, fetchPendingPapers]);
 
-  const handleDeletePaper = async (id) => {
+  const handleDeletePaper = useCallback(async (id) => {
     if (!user || user.role !== 'admin') {
       setError('Unauthorized: Only administrators can delete papers.');
       return;
@@ -909,79 +1490,11 @@ function CommunityPage({ user }) {
     } catch (err) {
       setError(err.message);
     }
-  };
+  }, [user, fetchPapers, fetchPendingPapers]);
 
-  const handleZoomIn = () => {
-    setZoomScale(prev => Math.min(prev + 0.3, 5));
-  };
-
-  const handleZoomOut = () => {
-    setZoomScale(prev => {
-      const next = Math.max(prev - 0.3, 0.8);
-      if (next <= 1) setZoomOffset({ x: 0, y: 0 });
-      return next;
-    });
-  };
-
-  const handleZoomReset = () => {
-    setZoomScale(1);
-    setZoomOffset({ x: 0, y: 0 });
-  };
-
-  const handleMouseDown = (e) => {
-    if (zoomScale <= 1) return;
-    setIsDragging(true);
-    setDragStart({ x: e.clientX - zoomOffset.x, y: e.clientY - zoomOffset.y });
-  };
-
-  const handleMouseMove = (e) => {
-    if (!isDragging) return;
-    setZoomOffset({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y
-    });
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleTouchStart = (e) => {
-    if (zoomScale <= 1) return;
-    setIsDragging(true);
-    const touch = e.touches[0];
-    setDragStart({ x: touch.clientX - zoomOffset.x, y: touch.clientY - zoomOffset.y });
-  };
-
-  const handleTouchMove = (e) => {
-    if (!isDragging) return;
-    const touch = e.touches[0];
-    setZoomOffset({
-      x: touch.clientX - dragStart.x,
-      y: touch.clientY - dragStart.y
-    });
-  };
-
-  const handleTouchEnd = () => {
-    setIsDragging(false);
-  };
-
-  const handleDoubleClick = () => {
-    if (zoomScale > 1) {
-      handleZoomReset();
-    } else {
-      setZoomScale(2.2);
-    }
-  };
-
-  const handleWheel = (e) => {
-    const delta = e.deltaY * -0.005;
-    setZoomScale(prev => {
-      const next = Math.min(Math.max(prev + delta, 0.8), 5);
-      if (next <= 1) setZoomOffset({ x: 0, y: 0 });
-      return next;
-    });
-  };
+  const handleSelectCourse = useCallback((code) => {
+    setSelectedCourseCode(code);
+  }, []);
 
   return (
     <div className="community-container">
@@ -1028,8 +1541,6 @@ function CommunityPage({ user }) {
           {/* Banner Messages */}
           {error && <div className="aurora-error-banner" style={{ margin: '1rem 0' }}><span>⚠️</span> {error}</div>}
           {success && <div className="aurora-success-banner" style={{ margin: '1rem 0' }}><span>✅</span> {success}</div>}
-
-
 
           {selectedCourseGroup ? (
             /* Sub-page view for the selected course's papers */
@@ -1087,175 +1598,19 @@ function CommunityPage({ user }) {
                 </div>
                 
                 <div className="paper-files-list scroll-fade-y" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '60vh', overflowY: 'auto', padding: '0.5rem 0.25rem' }}>
-                  {selectedCourseGroup.papersList.map(paper => {
-                    // Premium dynamic badges
-                    const getBadgeProps = (type) => {
-                      const t = (type || '').toUpperCase();
-                      if (t.includes('MTE')) {
-                        return { bg: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.08))', border: '1px solid rgba(245, 158, 11, 0.25)', color: '#f59e0b' };
-                      }
-                      if (t.includes('TEE') || t.includes('FAT')) {
-                        return { bg: 'linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(109, 40, 217, 0.08))', border: '1px solid rgba(139, 92, 246, 0.25)', color: '#a78bfa' };
-                      }
-                      return { bg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(4, 120, 87, 0.08))', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#10b981' };
-                    };
-                    const badge = getBadgeProps(paper.examType);
-
-                    return (
-                      <div 
-                        key={paper._id} 
-                        className="paper-file-item" 
-                        style={{ 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
-                          alignItems: 'center', 
-                          gap: '1rem', 
-                          padding: '1.2rem 1.4rem', 
-                          background: 'hsla(var(--bg-card) / 0.55)', 
-                          backdropFilter: 'blur(12px)',
-                          border: '1px solid hsla(var(--border-glass))', 
-                          borderRadius: '16px', 
-                          boxShadow: '0 8px 32px -10px rgba(0,0,0,0.3)',
-                          transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)' 
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = 'translateY(-2px)';
-                          e.currentTarget.style.borderColor = 'hsla(var(--primary) / 0.35)';
-                          e.currentTarget.style.boxShadow = '0 12px 40px -10px rgba(0,0,0,0.45)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = 'none';
-                          e.currentTarget.style.borderColor = 'hsla(var(--border-glass))';
-                          e.currentTarget.style.boxShadow = '0 8px 32px -10px rgba(0,0,0,0.3)';
-                        }}
-                      >
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', flex: 1 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                            <span style={{ padding: '0.2rem 0.65rem', fontSize: '0.68rem', borderRadius: '6px', background: badge.bg, border: badge.border, color: badge.color, fontWeight: '700', letterSpacing: '0.02em' }}>
-                              {paper.examType}
-                            </span>
-                            {paper.status === 'pending' && (
-                              <span style={{ 
-                                padding: '0.2rem 0.65rem', 
-                                fontSize: '0.68rem', 
-                                borderRadius: '6px', 
-                                background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.08))', 
-                                border: '1px solid rgba(245, 158, 11, 0.35)', 
-                                color: '#f59e0b', 
-                                fontWeight: '700', 
-                                letterSpacing: '0.02em',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '0.3rem'
-                              }}>
-                                ⏳ In Process
-                              </span>
-                            )}
-                            <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', fontWeight: '600' }}>
-                              Year {paper.year}
-                            </span>
-                            {paper.month && (
-                              <span style={{ fontSize: '0.72rem', color: 'hsl(var(--secondary))', fontWeight: '700', background: 'hsla(var(--secondary) / 0.08)', border: '1px solid hsla(var(--secondary) / 0.25)', padding: '0.15rem 0.55rem', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                                🗓️ {paper.month}
-                              </span>
-                            )}
-                          </div>
-                          <span style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                            👤 Contributed by {paper.uploadedBy || 'Community'}
-                          </span>
-                        </div>
-                        
-                        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-                          {(() => {
-                            const urls = getPaperUrls(paper.url);
-                            return (
-                              <a
-                                href={urls[0] || '#'}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="paper-btn download"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  // Open any subsequent pages in new tabs
-                                  for (let i = 1; i < urls.length; i++) {
-                                    window.open(urls[i], '_blank');
-                                  }
-                                }}
-                                style={{
-                                  margin: 0,
-                                  padding: '0.5rem 1.15rem',
-                                  fontSize: '0.8rem',
-                                  borderRadius: '10px',
-                                  fontWeight: '700',
-                                  background: 'linear-gradient(135deg, hsl(var(--primary)), #4f46e5)',
-                                  border: 'none',
-                                  color: '#fff',
-                                  boxShadow: '0 4px 12px hsla(var(--primary) / 0.25)',
-                                  textDecoration: 'none',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '0.4rem',
-                                  transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.transform = 'translateY(-1px)';
-                                  e.currentTarget.style.boxShadow = '0 6px 16px hsla(var(--primary) / 0.4)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.transform = 'none';
-                                  e.currentTarget.style.boxShadow = '0 4px 12px hsla(var(--primary) / 0.25)';
-                                }}
-                              >
-                                📖 Open Paper {urls.length > 1 ? `(${urls.length} Pages)` : ''}
-                              </a>
-                            );
-                          })()}
-                          {user && user.role === 'admin' && (
-                            <button
-                              className="paper-btn delete"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeletePaper(paper._id);
-                              }}
-                              title="Delete Paper"
-                              style={{
-                                position: 'static',
-                                padding: '0.5rem 1.15rem',
-                                fontSize: '0.8rem',
-                                borderRadius: '10px',
-                                background: 'rgba(239, 68, 68, 0.1)',
-                                border: '1px solid rgba(239, 68, 68, 0.25)',
-                                color: '#ef4444',
-                                fontWeight: '700',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.3rem',
-                                transition: 'all 0.2s'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.background = '#ef4444';
-                                e.currentTarget.style.color = '#ffffff';
-                                e.currentTarget.style.borderColor = '#ef4444';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
-                                e.currentTarget.style.color = '#ef4444';
-                                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.25)';
-                              }}
-                            >
-                              🗑️ Delete
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {selectedCourseGroup.papersList.map(paper => (
+                    <PaperFileItem
+                      key={paper._id}
+                      paper={paper}
+                      user={user}
+                      onDelete={handleDeletePaper}
+                    />
+                  ))}
                 </div>
               </div>
             </div>
           ) : (
-            /* Otherwise show filters, moderation queue, and courses grid */
+            /* Otherwise show search, filter dropdowns, moderation queue, and course grid */
             <>
               {/* Search and Filters Bento Grid */}
               <div className="pyq-filters-container">
@@ -1279,232 +1634,23 @@ function CommunityPage({ user }) {
                     </InputGroupAddon>
                   )}
                   <InputGroupAddon align="inline-end">
-                    {filteredPapers.length} result{filteredPapers.length !== 1 ? 's' : ''}
+                    {totalFilteredPapersCount} result{totalFilteredPapersCount !== 1 ? 's' : ''}
                   </InputGroupAddon>
                 </InputGroup>
                 
                 <div className="pyq-filter-dropdowns" style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
-                  {/* Exam Type Base UI Dropdown */}
-                  <div style={{ position: 'relative', flex: 1 }}>
-                    <button
-                      ref={examTypeBtnRef}
-                      onClick={toggleExamTypeDropdown}
-                      style={{
-                        width: '100%',
-                        padding: '0.65rem 0.9rem',
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        borderRadius: '12px',
-                        color: '#ffffff',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '0.5rem',
-                        transition: 'all 0.2s ease',
-                        backdropFilter: 'blur(8px)'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
-                      }}
-                    >
-                      <span>{filterExamType ? filterExamType : 'All Exam Types'}</span>
-                      <span style={{ fontSize: '0.65rem', opacity: 0.7, transform: examTypeOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>▼</span>
-                    </button>
-
-                    {examTypeOpen && createPortal(
-                      <div
-                        ref={examTypeRef}
-                        className="base-nav-menu-popover"
-                        style={{
-                          position: 'fixed',
-                          top: `${examTypeCoords.top}px`,
-                          left: `${examTypeCoords.left}px`,
-                          width: '160px',
-                          maxHeight: '260px',
-                          overflowY: 'auto',
-                          background: '#121215',
-                          border: '1px solid rgba(255, 255, 255, 0.18)',
-                          borderRadius: '14px',
-                          padding: '0.45rem',
-                          boxShadow: '0 16px 40px rgba(0, 0, 0, 0.95)',
-                          backdropFilter: 'blur(20px)',
-                          zIndex: 9999999,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '0.2rem'
-                        }}
-                      >
-                        <button
-                          onClick={() => { setFilterExamType(''); setExamTypeOpen(false); }}
-                          style={{
-                            width: '100%',
-                            textAlign: 'left',
-                            padding: '0.38rem 0.65rem',
-                            fontSize: '0.78rem',
-                            fontWeight: filterExamType === '' ? 700 : 500,
-                            color: filterExamType === '' ? '#38bdf8' : '#e2e8f0',
-                            background: filterExamType === '' ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
-                            border: 'none',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between'
-                          }}
-                        >
-                          <span>All Exam Types</span>
-                          {filterExamType === '' && <span style={{ color: '#38bdf8' }}>✓</span>}
-                        </button>
-                        {EXAM_TYPES.map(type => {
-                          const isSelected = filterExamType === type;
-                          return (
-                            <button
-                              key={type}
-                              onClick={() => { setFilterExamType(type); setExamTypeOpen(false); }}
-                              style={{
-                                width: '100%',
-                                textAlign: 'left',
-                                padding: '0.38rem 0.65rem',
-                                fontSize: '0.78rem',
-                                fontWeight: isSelected ? 700 : 500,
-                                color: isSelected ? '#38bdf8' : '#e2e8f0',
-                                background: isSelected ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
-                                border: 'none',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between'
-                              }}
-                            >
-                              <span>{type}</span>
-                              {isSelected && <span style={{ color: '#38bdf8' }}>✓</span>}
-                            </button>
-                          );
-                        })}
-                      </div>,
-                      document.body
-                    )}
-                  </div>
-
-                  {/* Academic Year Base UI Dropdown */}
-                  <div style={{ position: 'relative', flex: 1 }}>
-                    <button
-                      ref={yearBtnRef}
-                      onClick={toggleYearDropdown}
-                      style={{
-                        width: '100%',
-                        padding: '0.65rem 0.9rem',
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        borderRadius: '12px',
-                        color: '#ffffff',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '0.5rem',
-                        transition: 'all 0.2s ease',
-                        backdropFilter: 'blur(8px)'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
-                      }}
-                    >
-                      <span>{filterYear ? filterYear : 'All Years'}</span>
-                      <span style={{ fontSize: '0.65rem', opacity: 0.7, transform: yearOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>▼</span>
-                    </button>
-
-                    {yearOpen && createPortal(
-                      <div
-                        ref={yearRef}
-                        className="base-nav-menu-popover"
-                        style={{
-                          position: 'fixed',
-                          top: `${yearCoords.top}px`,
-                          left: `${yearCoords.left}px`,
-                          width: '160px',
-                          maxHeight: '260px',
-                          overflowY: 'auto',
-                          background: '#121215',
-                          border: '1px solid rgba(255, 255, 255, 0.18)',
-                          borderRadius: '14px',
-                          padding: '0.45rem',
-                          boxShadow: '0 16px 40px rgba(0, 0, 0, 0.95)',
-                          backdropFilter: 'blur(20px)',
-                          zIndex: 9999999,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '0.2rem'
-                        }}
-                      >
-                        <button
-                          onClick={() => { setFilterYear(''); setYearOpen(false); }}
-                          style={{
-                            width: '100%',
-                            textAlign: 'left',
-                            padding: '0.38rem 0.65rem',
-                            fontSize: '0.78rem',
-                            fontWeight: filterYear === '' ? 700 : 500,
-                            color: filterYear === '' ? '#38bdf8' : '#e2e8f0',
-                            background: filterYear === '' ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
-                            border: 'none',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between'
-                          }}
-                        >
-                          <span>All Years</span>
-                          {filterYear === '' && <span style={{ color: '#38bdf8' }}>✓</span>}
-                        </button>
-                        {ACADEMIC_YEARS.map(year => {
-                          const isSelected = filterYear === year;
-                          return (
-                            <button
-                              key={year}
-                              onClick={() => { setFilterYear(year); setYearOpen(false); }}
-                              style={{
-                                width: '100%',
-                                textAlign: 'left',
-                                padding: '0.38rem 0.65rem',
-                                fontSize: '0.78rem',
-                                fontWeight: isSelected ? 700 : 500,
-                                color: isSelected ? '#38bdf8' : '#e2e8f0',
-                                background: isSelected ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
-                                border: 'none',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between'
-                              }}
-                            >
-                              <span>{year}</span>
-                              {isSelected && <span style={{ color: '#38bdf8' }}>✓</span>}
-                            </button>
-                          );
-                        })}
-                      </div>,
-                      document.body
-                    )}
-                  </div>
+                  <FilterDropdown
+                    value={filterExamType}
+                    options={EXAM_TYPES}
+                    onChange={setFilterExamType}
+                    allLabel="All Exam Types"
+                  />
+                  <FilterDropdown
+                    value={filterYear}
+                    options={ACADEMIC_YEARS}
+                    onChange={setFilterYear}
+                    allLabel="All Years"
+                  />
                 </div>
               </div>
 
@@ -1514,57 +1660,12 @@ function CommunityPage({ user }) {
                   <h3>🛡️ Pending Paper Submissions ({pendingPapers.length})</h3>
                   <div className="moderation-grid">
                     {pendingPapers.map(paper => (
-                      <div key={paper._id} className="moderation-card">
-                        <div className="moderation-card-header">
-                          <span className="mod-badge code">{paper.courseCode}</span>
-                          <span className="mod-badge dept">{paper.department}</span>
-                        </div>
-                        <h4>{paper.courseTitle}</h4>
-                        <p className="mod-meta">
-                          Type: <strong>{paper.examType}</strong> | Year: <strong>{paper.year}</strong> | Sem: <strong>{paper.semester}</strong>
-                        </p>
-                        <p className="mod-uploader">
-                          Uploaded by: {paper.uploadedBy}
-                          {paper.uploaderIp && (
-                            <span style={{ display: 'block', color: 'hsl(var(--danger))', fontSize: '0.75rem', marginTop: '0.15rem', fontWeight: 600 }}>
-                              📍 IP: {paper.uploaderIp}
-                            </span>
-                          )}
-                          {paper.month && (
-                            <span style={{ display: 'block', color: 'hsl(var(--secondary))', fontSize: '0.75rem', marginTop: '0.15rem', fontWeight: 600 }}>
-                              🗓️ Month: {paper.month}
-                            </span>
-                          )}
-                        </p>
-                        <div className="moderation-actions">
-                          {(() => {
-                            const urls = getPaperUrls(paper.url);
-                            return (
-                              <a
-                                href={urls[0] || '#'}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="mod-action-btn view"
-                                onClick={(e) => {
-                                  // Open any subsequent pages in new tabs
-                                  for (let i = 1; i < urls.length; i++) {
-                                    window.open(urls[i], '_blank');
-                                  }
-                                }}
-                                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                              >
-                                🔍 View Doc {urls.length > 1 ? `(${urls.length})` : ''}
-                              </a>
-                            );
-                          })()}
-                          <button onClick={() => handleApprovePaper(paper._id)} className="mod-action-btn approve">
-                            ✅ Approve
-                          </button>
-                          <button onClick={() => handleDeletePaper(paper._id)} className="mod-action-btn reject">
-                            ❌ Reject
-                          </button>
-                        </div>
-                      </div>
+                      <ModerationCard
+                        key={paper._id}
+                        paper={paper}
+                        onApprove={handleApprovePaper}
+                        onDelete={handleDeletePaper}
+                      />
                     ))}
                   </div>
                 </div>
@@ -1572,13 +1673,13 @@ function CommunityPage({ user }) {
 
               {/* Public Papers List */}
               <div className="pyq-list-section scroll-fade-b">
-                <h3>Available Question Papers ({filteredPapers.length})</h3>
+                <h3>Available Question Papers ({totalFilteredPapersCount})</h3>
                 {loading ? (
                   <div className="pyq-loading-state">
                     <div className="aurora-spinner" />
                     <p>Loading papers...</p>
                   </div>
-                ) : courseGroups.length === 0 ? (
+                ) : filteredCourseGroups.length === 0 ? (
                   <div className="pyq-empty-state">
                     <span>📂</span>
                     <p>{searchQuery ? `No papers match "${searchQuery}".` : 'No papers found matching the selected criteria.'}</p>
@@ -1588,45 +1689,21 @@ function CommunityPage({ user }) {
                   <>
                     <div className="pyq-papers-grid">
                       {visibleCourseGroups.map(group => (
-                        <div
+                        <CourseGroupCard
                           key={group.courseCode}
-                          className="pyq-paper-card"
-                          onClick={() => setSelectedCourseCode(group.courseCode)}
-                          style={{ cursor: 'pointer', gap: '0.8rem', display: 'flex', flexDirection: 'column' }}
-                        >
-                          <div className="paper-card-header">
-                            <span className="paper-sem-badge" style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '600', border: '1px solid hsla(var(--border-glass))', color: 'hsl(var(--text-secondary))' }}>
-                              Sem {group.semester}
-                            </span>
-                            <span className="paper-count-badge" style={{ background: 'hsla(var(--primary) / 0.12)', color: 'hsl(var(--primary))', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', border: '1px solid hsla(var(--primary) / 0.25)', fontFamily: 'var(--font-accent)' }}>
-                              {group.papersList.length} {group.papersList.length === 1 ? 'Paper' : 'Papers'}
-                            </span>
-                          </div>
-                          
-                          <div className="paper-card-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flexGrow: 1 }}>
-                            <h4 className="paper-code">
-                              {group.courseCode}
-                            </h4>
-                            <p className="paper-title" title={group.courseTitle} style={{ margin: '0.25rem 0 0.5rem 0', height: '2.8rem' }}>
-                              {group.courseTitle}
-                            </p>
-                          </div>
-                          
-                          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', fontSize: '0.8rem', fontWeight: '700', color: 'hsl(var(--primary))', gap: '0.25rem', marginTop: 'auto' }}>
-                            <span>View Papers</span>
-                            <span style={{ transition: 'transform 0.2s' }}>→</span>
-                          </div>
-                        </div>
+                          group={group}
+                          onSelect={handleSelectCourse}
+                        />
                       ))}
                     </div>
 
                     {/* Infinite Scroll Sentinel & Chunk Load Trigger */}
-                    {visibleChunkCount < courseGroups.length && (
+                    {visibleChunkCount < filteredCourseGroups.length && (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', marginTop: '2rem', marginBottom: '1.5rem' }}>
                         <div ref={sentinelRef} style={{ height: '20px', width: '100%' }} />
                         <button
                           className="pyq-load-more-btn"
-                          onClick={() => setVisibleChunkCount(prev => prev + 24)}
+                          onClick={() => setVisibleChunkCount(prev => prev + 20)}
                           style={{
                             padding: '0.65rem 1.6rem',
                             borderRadius: '12px',
@@ -1643,7 +1720,7 @@ function CommunityPage({ user }) {
                             boxShadow: '0 4px 16px hsla(var(--primary) / 0.12)'
                           }}
                         >
-                          <span>Show More Courses ({courseGroups.length - visibleChunkCount} remaining)</span>
+                          <span>Show More Courses ({filteredCourseGroups.length - visibleChunkCount} remaining)</span>
                           <span>↓</span>
                         </button>
                       </div>
@@ -1657,14 +1734,7 @@ function CommunityPage({ user }) {
       )}
 
       {activeSubTab === 'chats' && (
-        <div className="community-locked-section animate-fade-in">
-          <div className="locked-card">
-            <span className="locked-icon">🔒</span>
-            <h2>Student Chats & Forums</h2>
-            <p>Connect with peers, create study circles, and discuss syllabus updates. Coming soon in the next major portal release.</p>
-            <div className="locked-tag">BETA STAGE</div>
-          </div>
-        </div>
+        <StudentChatSection user={user} />
       )}
 
       {activeSubTab === 'marketplace' && (
@@ -1717,8 +1787,6 @@ function CommunityPage({ user }) {
             </div>
             
             <form onSubmit={handleUploadSubmit} className="aurora-form" style={{ padding: '2rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem', maxWidth: '600px', margin: '0 auto', width: '100%', position: 'relative' }}>
-              
-              {/* Scan and Upload Loader overlay */}
               {uploadLoading && (
                 <div style={{ position: 'absolute', inset: 0, background: 'rgba(11, 15, 25, 0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', zIndex: 100, borderRadius: '8px' }}>
                   <span className="aurora-spinner" style={{ width: '40px', height: '40px', borderTopColor: 'hsl(var(--primary))' }} />
@@ -1761,10 +1829,6 @@ function CommunityPage({ user }) {
           </div>
         </div>
       )}
-
-
-
-
     </div>
   );
 }

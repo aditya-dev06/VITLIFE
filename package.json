@@ -11,9 +11,11 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "node server/server.js",
+    "pipeline:fetch": "node scripts/run_email_pipeline.js",
     "postinstall": "node scripts/postinstall.js"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@vercel/analytics": "^1.4.1",
     "@vercel/speed-insights": "^2.0.0",
     "cloudinary": "^2.5.1",
@@ -23,7 +25,9 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "gsap": "^3.15.0",
+    "imap-simple": "^5.1.0",
     "lucide-react": "^1.25.0",
+    "mailparser": "^3.9.14",
     "mongodb": "^7.3.0",
     "motion": "^12.40.0",
     "multer": "^2.2.0",

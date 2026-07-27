@@ -86,28 +86,49 @@ const Opportunities = ({ initialOpportunities = [], lastUpdated }) => {
 
       {/* Grid Controls */}
       <div className="opp-controls">
-        <div className="opp-tabs">
-          <button className={`opp-tab ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>
+        <div className="opp-tabs" role="tablist" aria-label="Filter opportunities by category">
+          <button 
+            role="tab"
+            aria-selected={activeTab === 'all'}
+            className={`opp-tab ${activeTab === 'all' ? 'active' : ''}`} 
+            onClick={() => setActiveTab('all')}
+          >
             All
           </button>
-          <button className={`opp-tab ${activeTab === 'hackathons' ? 'active' : ''}`} onClick={() => setActiveTab('hackathons')}>
+          <button 
+            role="tab"
+            aria-selected={activeTab === 'hackathons'}
+            className={`opp-tab ${activeTab === 'hackathons' ? 'active' : ''}`} 
+            onClick={() => setActiveTab('hackathons')}
+          >
             Hackathons
           </button>
-          <button className={`opp-tab ${activeTab === 'internships' ? 'active' : ''}`} onClick={() => setActiveTab('internships')}>
+          <button 
+            role="tab"
+            aria-selected={activeTab === 'internships'}
+            className={`opp-tab ${activeTab === 'internships' ? 'active' : ''}`} 
+            onClick={() => setActiveTab('internships')}
+          >
             Internships
           </button>
-          <button className={`opp-tab ${activeTab === 'courses' ? 'active' : ''}`} onClick={() => setActiveTab('courses')}>
+          <button 
+            role="tab"
+            aria-selected={activeTab === 'courses'}
+            className={`opp-tab ${activeTab === 'courses' ? 'active' : ''}`} 
+            onClick={() => setActiveTab('courses')}
+          >
             Courses & Certs
           </button>
         </div>
 
         <div className="search-box">
-          <span style={{ marginRight: '0.5rem' }}>🔍</span>
+          <span style={{ marginRight: '0.5rem' }} aria-hidden="true">🔍</span>
           <input 
             type="text" 
             placeholder="Search opportunities (e.g., Python, remote, hackathon)..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search opportunities by keyword, skill, or organization"
           />
         </div>
       </div>

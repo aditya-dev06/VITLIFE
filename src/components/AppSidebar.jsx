@@ -1,4 +1,5 @@
 import { useState, useEffect, memo } from 'react';
+import { motion } from 'motion/react';
 import {
   LayoutDashboard,
   Target,
@@ -6,6 +7,7 @@ import {
   CalendarDays,
   BookOpen,
   PartyPopper,
+  Building2,
   MessageSquare,
   Info,
   ChevronLeft,
@@ -31,6 +33,7 @@ const GithubIcon = ({ size = 18, className = '' }) => (
 
 const NAV_ITEMS = [
   { id: 'dashboard',     label: 'Dashboard',        icon: LayoutDashboard, alwaysVisible: true },
+  { id: 'faculty',       label: 'Faculty Cabins',   icon: Building2,       alwaysVisible: true },
   { id: 'opportunities', label: 'Opportunities Hub', icon: Target,          alwaysVisible: true },
   { id: 'community',     label: 'Student Community', icon: Users,           alwaysVisible: true },
   { id: 'timetable',     label: 'Schedule',          icon: CalendarDays,    requiresAuth: true  },
@@ -93,10 +96,10 @@ function AppSidebar({
   };
 
   const syncIcon = () => {
-    if (user?.isGuest) return <WifiOff size={12} />;
-    if (profileSyncStatus === 'synced') return <Wifi size={12} />;
-    if (profileSyncStatus === 'syncing') return <Loader2 size={12} className="spin" />;
-    return <WifiOff size={12} />;
+    if (user?.isGuest) return <WifiOff size={14} />;
+    if (profileSyncStatus === 'synced') return <Wifi size={14} />;
+    if (profileSyncStatus === 'syncing') return <Loader2 size={14} className="spin" />;
+    return <WifiOff size={14} />;
   };
 
   const syncLabel = () => {
@@ -136,14 +139,12 @@ function AppSidebar({
         <div className="sidebar-header">
           <div className="sidebar-brand">
             <div className="sidebar-brand-logo-wrap">
-              {isOpen && (
-                <div className="sidebar-brand-icon">
-                  <span className="sidebar-brand-dot"></span>
-                </div>
-              )}
+              <div className="sidebar-brand-icon">
+                <span className="sidebar-brand-dot"></span>
+              </div>
               <span className="sidebar-brand-vit">VIT</span>
             </div>
-            {isOpen && (
+            <div className="sidebar-brand-typewriter-wrapper">
               <TypewriterText
                 words={['LIFE', 'BHOPAL', 'CAMPUS']}
                 typingSpeed={110}
@@ -151,7 +152,7 @@ function AppSidebar({
                 newWordDelay={2200}
                 className="sidebar-brand-typewriter"
               />
-            )}
+            </div>
           </div>
           {!isMobile && (
             <button
@@ -171,57 +172,57 @@ function AppSidebar({
               <div className="sidebar-avatar">
                 {user.name ? user.name.substring(0, 2).toUpperCase() : 'DS'}
               </div>
-              {isOpen && (
-                <div className="sidebar-user-info">
-                  <span className="sidebar-user-name" title={user.name || 'Student'}>
-                    {user.name || 'Student'}
-                  </span>
-                  <span className="sidebar-user-role">{getSubInfo()}</span>
-                </div>
-              )}
+              <div className="sidebar-user-info">
+                <span className="sidebar-user-name" title={user.name || 'Student'}>
+                  {user.name || 'Student'}
+                </span>
+                <span className="sidebar-user-role">{getSubInfo()}</span>
+              </div>
             </div>
 
-            {isOpen && (
-              <div className="sidebar-user-actions">
-                {user.isGuest ? (
-                  <button
-                    className="sidebar-user-btn sidebar-user-btn--signup"
-                    onClick={onLogout}
-                    title="Create Account / Sign In"
-                  >
-                    Sign Up
-                  </button>
-                ) : (
-                  <>
-                    {onEditProfile && (
-                      <button
-                        className="sidebar-user-btn"
-                        onClick={onEditProfile}
-                        title="Edit Profile"
-                      >
-                        <Settings size={14} />
-                      </button>
-                    )}
-                  </>
-                )}
+            <div className="sidebar-user-actions">
+              {user.isGuest ? (
                 <button
-                  className="sidebar-user-btn"
-                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                  title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+                  className="sidebar-user-btn sidebar-user-btn--signup"
+                  onClick={onLogout}
+                  title="Create Account / Sign In"
+                  aria-label="Create Account or Sign In"
                 >
-                  {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+                  Sign Up
                 </button>
-                {!user.isGuest && (
-                  <button
-                    className="sidebar-user-btn sidebar-user-btn--logout"
-                    onClick={onLogout}
-                    title="Sign Out"
-                  >
-                    <LogOut size={14} />
-                  </button>
-                )}
-              </div>
-            )}
+              ) : (
+                <>
+                  {onEditProfile && (
+                    <button
+                      className="sidebar-user-btn"
+                      onClick={onEditProfile}
+                      title="Edit Profile"
+                      aria-label="Edit Profile"
+                    >
+                      <Settings size={14} />
+                    </button>
+                  )}
+                </>
+              )}
+              <button
+                className="sidebar-user-btn"
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+                aria-label={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+              >
+                {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+              </button>
+              {!user.isGuest && (
+                <button
+                  className="sidebar-user-btn sidebar-user-btn--logout"
+                  onClick={onLogout}
+                  title="Sign Out"
+                  aria-label="Sign Out"
+                >
+                  <LogOut size={14} />
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -241,11 +242,24 @@ function AppSidebar({
                   <button
                     className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
                     onClick={() => handleTabClick(id)}
-                    title={!isOpen ? label : undefined}
+                    title={collapsed ? label : undefined}
+                    aria-current={isActive ? 'page' : undefined}
                   >
+                    {isActive && (
+                      <motion.div
+                        layoutId="sidebar-active-indicator"
+                        className="sidebar-active-indicator"
+                        transition={{
+                          type: 'spring',
+                          stiffness: 400,
+                          damping: 32,
+                          mass: 0.8
+                        }}
+                      />
+                    )}
                     <Icon size={18} className="sidebar-nav-icon" />
-                    {isOpen && <span className="sidebar-nav-label">{label}</span>}
-                    {isOpen && isActive && <span className="sidebar-nav-pip" />}
+                    <span className="sidebar-nav-label">{label}</span>
+                    <span className="sidebar-nav-pip" />
                   </button>
                 </li>
               );
@@ -263,30 +277,30 @@ function AppSidebar({
               <button
                 className="sidebar-nav-item"
                 onClick={onFeedback}
-                title={!isOpen ? 'Feedback' : undefined}
+                title={collapsed ? 'Feedback' : undefined}
               >
                 <MessageSquare size={18} className="sidebar-nav-icon" />
-                {isOpen && <span className="sidebar-nav-label">Give Feedback</span>}
+                <span className="sidebar-nav-label">Give Feedback</span>
               </button>
             </li>
             <li>
               <button
                 className="sidebar-nav-item"
                 onClick={onAboutUs}
-                title={!isOpen ? 'About Us' : undefined}
+                title={collapsed ? 'About Us' : undefined}
               >
                 <Info size={18} className="sidebar-nav-icon" />
-                {isOpen && <span className="sidebar-nav-label">About Us</span>}
+                <span className="sidebar-nav-label">About Us</span>
               </button>
             </li>
             <li>
               <button
                 className="sidebar-nav-item"
                 onClick={() => window.open('https://github.com/aditya-dev06', '_blank', 'noopener,noreferrer')}
-                title={!isOpen ? 'GitHub' : undefined}
+                title={collapsed ? 'GitHub' : undefined}
               >
                 <GithubIcon size={18} className="sidebar-nav-icon" />
-                {isOpen && <span className="sidebar-nav-label">GitHub</span>}
+                <span className="sidebar-nav-label">GitHub</span>
               </button>
             </li>
             {onEditProfile && user && !user.isGuest && (
@@ -294,10 +308,10 @@ function AppSidebar({
                 <button
                   className="sidebar-nav-item"
                   onClick={onEditProfile}
-                  title={!isOpen ? 'Edit Profile' : undefined}
+                  title={collapsed ? 'Edit Profile' : undefined}
                 >
                   <Settings size={18} className="sidebar-nav-icon" />
-                  {isOpen && <span className="sidebar-nav-label">Edit Profile</span>}
+                  <span className="sidebar-nav-label">Edit Profile</span>
                 </button>
               </li>
             )}
@@ -305,18 +319,16 @@ function AppSidebar({
               <button
                 className="sidebar-nav-item"
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                title={!isOpen ? `Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode` : undefined}
+                title={collapsed ? `Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode` : undefined}
               >
                 {theme === 'dark' ? (
                   <Sun size={18} className="sidebar-nav-icon" />
                 ) : (
                   <Moon size={18} className="sidebar-nav-icon" />
                 )}
-                {isOpen && (
-                  <span className="sidebar-nav-label">
-                    {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-                  </span>
-                )}
+                <span className="sidebar-nav-label">
+                  {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                </span>
               </button>
             </li>
             {installPrompt && (
@@ -324,10 +336,10 @@ function AppSidebar({
                 <button
                   className="sidebar-nav-item sidebar-nav-item--install"
                   onClick={onInstallApp}
-                  title={!isOpen ? 'Install App' : undefined}
+                  title={collapsed ? 'Install App' : undefined}
                 >
                   <Download size={18} className="sidebar-nav-icon" />
-                  {isOpen && <span className="sidebar-nav-label">Install App</span>}
+                  <span className="sidebar-nav-label">Install App</span>
                 </button>
               </li>
             )}
@@ -338,16 +350,16 @@ function AppSidebar({
         <div className="sidebar-footer">
           <div className="sidebar-sync" title={syncLabel()}>
             {syncIcon()}
-            {isOpen && <span className="sidebar-sync-label">{syncLabel()}</span>}
+            <span className="sidebar-sync-label">{syncLabel()}</span>
           </div>
           {user && !user.isGuest && (
             <button
               className="sidebar-logout-btn"
               onClick={onLogout}
-              title={!isOpen ? 'Sign out' : undefined}
+              title={collapsed ? 'Sign out' : undefined}
             >
               <LogOut size={16} />
-              {isOpen && <span>Sign out</span>}
+              <span className="sidebar-logout-label">Sign out</span>
             </button>
           )}
         </div>
@@ -357,3 +369,4 @@ function AppSidebar({
 }
 
 export default memo(AppSidebar);
+

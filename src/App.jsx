@@ -1,13 +1,10 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useProfileSync } from './hooks/useTimetableSync';
-import { Analytics } from '@vercel/analytics/react';
-import { SpeedInsights } from '@vercel/speed-insights/react';
 import TypewriterText from './components/TypewriterText';
 import Dock from './components/Dock';
 import { motion, AnimatePresence } from 'motion/react';
 
 const Dashboard = lazy(() => import('./components/Dashboard'));
-// const Roadmap = lazy(() => import('./components/Roadmap'));
 const Opportunities = lazy(() => import('./components/Opportunities'));
 const CampusLife = lazy(() => import('./components/CampusLife'));
 const TimetablePage = lazy(() => import('./components/TimetablePage'));
@@ -15,10 +12,12 @@ const VITBhopalGuide = lazy(() => import('./components/VITBhopalGuide'));
 const Auth = lazy(() => import('./components/Auth'));
 const TermsAndConditions = lazy(() => import('./components/TermsAndConditions'));
 const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
-import CommunityPage from './components/CommunityPage';
-import FeedbackModal from './components/FeedbackModal';
-import ConsentBanner from './components/ConsentBanner';
+const CommunityPage = lazy(() => import('./components/CommunityPage'));
+const FacultyDirectory = lazy(() => import('./components/FacultyDirectory'));
+const FeedbackModal = lazy(() => import('./components/FeedbackModal'));
+const EditProfileModal = lazy(() => import('./components/EditProfileModal'));
 import AppSidebar from './components/AppSidebar';
+import FullPageLoader from './components/FullPageLoader';
 import { useTheme } from './components/theme-provider';
 import { cachedFetch } from './utils/apiClient';
 
@@ -70,17 +69,24 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [token, setToken] = useState(localStorage.getItem('ds_ai_token'));
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      const cached = localStorage.getItem('ds_ai_user') || localStorage.getItem('ds_guest_user');
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
+  });
   // Offline-first profile sync
   const { syncStatus: profileSyncStatus, saveProfileUpdate } = useProfileSync(token);
   const [showEditProfile, setShowEditProfile] = useState(false);
-  const [xpPoints, setXpPoints] = useState(0);
+  const [xpPoints, setXpPoints] = useState(() => user?.xpPoints || 0);
   const [skills, setSkills] = useState([]);
   const [opportunities, setOpportunities] = useState([]);
   const [lastUpdated, setLastUpdated] = useState('');
   const [clubs, setClubs] = useState([]);
   const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !user && !!token);
   const [scrolled, setScrolled] = useState(false);
   const [navHidden, setNavHidden] = useState(false);
   const headerRef = useRef(null);
@@ -137,8 +143,10 @@ function App() {
   };
 
   const handleToggleEventsLock = async () => {
+    const nextLocked = !eventsLocked;
+    // Optimistic UI update
+    setEventsLocked(nextLocked);
     try {
-      const nextLocked = !eventsLocked;
       const res = await fetch('/api/settings/events-locked', {
         method: 'POST',
         headers: {
@@ -148,13 +156,16 @@ function App() {
         body: JSON.stringify({ locked: nextLocked })
       });
       const data = await res.json();
-      if (res.ok) {
-        setEventsLocked(nextLocked);
-      } else {
+      if (!res.ok) {
+        // Revert on failure
+        setEventsLocked(!nextLocked);
         alert(data.error || 'Failed to update lock status');
       }
     } catch (err) {
       console.error('Failed to update events lock:', err);
+      // Revert on error
+      setEventsLocked(!nextLocked);
+      alert('Network error updating lock status.');
     }
   };
 
@@ -182,9 +193,10 @@ function App() {
 
   useEffect(() => {
     let ticking = false;
+    let rafId = null;
     const handleScroll = () => {
       if (!ticking) {
-        window.requestAnimationFrame(() => {
+        rafId = window.requestAnimationFrame(() => {
           const currentY = window.scrollY;
           const isScrolled = currentY > 20;
           setScrolled(prev => prev !== isScrolled ? isScrolled : prev);
@@ -207,12 +219,16 @@ function App() {
             headerRef.current.style.setProperty('--scroll-progress', progress);
           }
           ticking = false;
+          rafId = null;
         });
         ticking = true;
       }
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (rafId) window.cancelAnimationFrame(rafId);
+    };
   }, []);
 
   const touchStartX = useRef(0);
@@ -568,6 +584,8 @@ function App() {
 
   const renderActiveComponent = () => {
     switch (activeTab) {
+      case 'faculty':
+        return <FacultyDirectory />;
       case 'opportunities':
         return (
           <Opportunities 
@@ -652,22 +670,14 @@ function App() {
   // Handle client-side routing for legal compliance documents
   if (window.location.pathname === '/terms') {
     return (
-      <Suspense fallback={
-        <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', backgroundColor: 'hsl(var(--bg-deep))' }}>
-          <h2>Loading Terms & Conditions...</h2>
-        </div>
-      }>
+      <Suspense fallback={<FullPageLoader text="Loading Terms & Conditions..." />}>
         <TermsAndConditions />
       </Suspense>
     );
   }
   if (window.location.pathname === '/privacy') {
     return (
-      <Suspense fallback={
-        <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', backgroundColor: 'hsl(var(--bg-deep))' }}>
-          <h2>Loading Privacy Policy...</h2>
-        </div>
-      }>
+      <Suspense fallback={<FullPageLoader text="Loading Privacy Policy..." />}>
         <PrivacyPolicy />
       </Suspense>
     );
@@ -675,21 +685,13 @@ function App() {
 
   // If loading user profile, show brief loading screen
   if (token && loading && !user) {
-    return (
-      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', backgroundColor: 'hsl(var(--bg-deep))' }}>
-        <h2>Syncing secure connection...</h2>
-      </div>
-    );
+    return <FullPageLoader text="VIT LIFE • Initializing Campus Hub..." />;
   }
 
   // Render Login/Signup if not authenticated (guests bypass this with user.isGuest)
   if (!token && !user?.isGuest) {
     return (
-      <Suspense fallback={
-        <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', backgroundColor: 'hsl(var(--bg-deep))' }}>
-          <h2>Loading Secure Authentication...</h2>
-        </div>
-      }>
+      <Suspense fallback={<FullPageLoader text="VIT LIFE • Initializing Campus Hub..." />}>
         <Auth onLoginSuccess={handleLoginSuccess} theme={theme} setTheme={setTheme} onShowFeedback={() => setShowFeedback(true)} />
       </Suspense>
     );
@@ -745,6 +747,7 @@ function App() {
                   className="top-bar-mobile-theme-btn pwa-install-btn-mobile"
                   onClick={handleInstallApp}
                   title="Install App"
+                  aria-label="Install VIT Life Progressive Web App"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -757,7 +760,7 @@ function App() {
                     padding: '0 0.75rem'
                   }}
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                     <polyline points="7 10 12 15 17 10" />
                     <line x1="12" y1="15" x2="12" y2="3" />
@@ -769,10 +772,11 @@ function App() {
                 className="top-bar-mobile-theme-btn"
                 onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
                 title="Toggle Light/Dark Theme"
+                aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
                 style={{ display: 'flex' }}
               >
                 {theme === 'dark' ? (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="18" height="18" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="18" height="18" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <circle cx="12" cy="12" r="5" />
                     <line x1="12" y1="1" x2="12" y2="3" />
                     <line x1="12" y1="21" x2="12" y2="23" />
@@ -784,7 +788,7 @@ function App() {
                     <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
                   </svg>
                 ) : (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="18" height="18" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="18" height="18" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
                   </svg>
                 )}
@@ -794,8 +798,9 @@ function App() {
                 className="top-bar-mobile-profile-btn"
                 onClick={() => setShowMobileProfileSheet(true)}
                 title="Profile & Settings"
+                aria-label="Open Profile and Account Settings"
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="18" height="18">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="18" height="18" aria-hidden="true">
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                   <circle cx="12" cy="7" r="4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
@@ -803,16 +808,16 @@ function App() {
             </div>
           </div>
 
-          <nav className="top-bar-nav">
-            <button className="top-bar-link" onClick={() => handleTabClick('dashboard')}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <nav className="top-bar-nav" aria-label="Main Navigation">
+            <button className="top-bar-link" onClick={() => handleTabClick('dashboard')} aria-label="Go to Dashboard Home">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
                 <polyline points="9 22 9 12 15 12 15 22"/>
               </svg>
               Home
             </button>
-            <button className="top-bar-link" onClick={() => setShowAboutUs(true)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <button className="top-bar-link" onClick={() => setShowAboutUs(true)} aria-label="About VIT Life">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="10"/>
                 <line x1="12" y1="8" x2="12" y2="12"/>
                 <line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -824,8 +829,9 @@ function App() {
               target="_blank" 
               rel="noopener noreferrer" 
               className="top-bar-link"
+              aria-label="Visit GitHub repository"
             >
-              <svg height="14" width="14" viewBox="0 0 16 16" fill="currentColor">
+              <svg height="14" width="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                 <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
               </svg>
               GitHub
@@ -833,11 +839,7 @@ function App() {
           </nav>
         </header>
 
-        <Suspense fallback={
-          <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', minHeight: '50vh' }}>
-            <h3>Loading...</h3>
-          </div>
-        }>
+        <Suspense fallback={<FullPageLoader text="VIT LIFE • Loading section..." />}>
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -853,28 +855,35 @@ function App() {
         </Suspense>
       </main>
       {showEditProfile && (
-        <EditProfileModal
-          user={user}
-          token={token}
-          handleLogout={handleLogout}
-          onClose={() => setShowEditProfile(false)}
-          onSave={handleUpdateProfile}
-        />
+        <Suspense fallback={null}>
+          <EditProfileModal
+            user={user}
+            token={token}
+            handleLogout={handleLogout}
+            onClose={() => setShowEditProfile(false)}
+            onSave={handleUpdateProfile}
+          />
+        </Suspense>
       )}
       {showAboutUs && (
         <div className="modal-overlay" onClick={() => setShowAboutUs(false)} style={{ zIndex: 1000 }}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+          <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="about-us-heading" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              <h2 id="about-us-heading" style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                 ℹ️ About VIT Life
               </h2>
-              <button onClick={() => setShowAboutUs(false)} style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'hsl(var(--text-secondary))',
-                cursor: 'pointer',
-                fontSize: '1.25rem'
-              }}>
+              <button 
+                onClick={() => setShowAboutUs(false)} 
+                aria-label="Close About Us dialog"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'hsl(var(--text-secondary))',
+                  cursor: 'pointer',
+                  fontSize: '1.25rem',
+                  padding: '4px'
+                }}
+              >
                 ✕
               </button>
             </div>
@@ -902,10 +911,12 @@ function App() {
         </div>
       )}
       {showFeedback && (
-        <FeedbackModal
-          user={user}
-          onClose={() => setShowFeedback(false)}
-        />
+        <Suspense fallback={null}>
+          <FeedbackModal
+            user={user}
+            onClose={() => setShowFeedback(false)}
+          />
+        </Suspense>
       )}
       {/* Mobile Bottom Navigation (Dock) */}
       {(() => {
@@ -1061,13 +1072,14 @@ function App() {
       {/* Mobile Profile Settings Bottom Sheet */}
       {showMobileProfileSheet && (
         <div className="modal-overlay" onClick={() => setShowMobileProfileSheet(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
+          <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="mobile-profile-heading" onClick={e => e.stopPropagation()} style={{ borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'hsl(var(--text-primary))' }}>
+              <h2 id="mobile-profile-heading" style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'hsl(var(--text-primary))' }}>
                 👤 Account & Settings
               </h2>
               <button 
                 onClick={() => setShowMobileProfileSheet(false)} 
+                aria-label="Close Account & Settings"
                 style={{
                   background: 'transparent',
                   border: 'none',
@@ -1243,327 +1255,6 @@ function App() {
           </div>
         </div>
       )}
-      <Analytics />
-      <SpeedInsights />
-    </div>
-  );
-}
-
-function EditProfileModal({ user, token, handleLogout, onClose, onSave }) {
-  const [name, setName] = useState(user?.name || '');
-  const [semester, setSemester] = useState(user?.semester || 1);
-  const [loading, setLoading] = useState(false);
-  const [sessions, setSessions] = useState([]);
-  const [sessionsLoading, setSessionsLoading] = useState(false);
-  const [sessionsError, setSessionsError] = useState('');
-
-  const fetchSessions = useCallback(async () => {
-    await Promise.resolve();
-    try {
-      setSessionsLoading(true);
-      setSessionsError('');
-      const res = await fetch('/api/user/sessions', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSessions(data.sessions || []);
-      } else {
-        const errData = await res.json();
-        setSessionsError(errData.error || 'Failed to load sessions.');
-      }
-    } catch {
-      setSessionsError('Failed to fetch active sessions.');
-    } finally {
-      setSessionsLoading(false);
-    }
-  }, [token]);
-
-  // Fetch active sessions if not guest
-  useEffect(() => {
-    if (token && !user?.isGuest) {
-      Promise.resolve().then(() => {
-        fetchSessions();
-      });
-    }
-  }, [token, user, fetchSessions]);
-
-  const handleRevokeSession = async (sessionId, isCurrent) => {
-    if (isCurrent) {
-      if (!confirm('Logging out from the current device. Proceed?')) return;
-      handleLogout();
-      onClose();
-      return;
-    }
-    
-    if (!confirm('Are you sure you want to revoke this session?')) return;
-
-    try {
-      const res = await fetch(`/api/user/sessions/${sessionId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setSessions(prev => prev.filter(s => s.id !== sessionId));
-      } else {
-        const errData = await res.json();
-        alert('Failed to revoke session: ' + errData.error);
-      }
-    } catch (err) {
-      alert('Error revoking session: ' + err.message);
-    }
-  };
-
-  const handleRevokeOthers = async () => {
-    if (!confirm('Are you sure you want to log out all other devices?')) return;
-    try {
-      const res = await fetch('/api/user/sessions/revoke-others', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setSessions(prev => prev.filter(s => s.isCurrent));
-      } else {
-        const errData = await res.json();
-        alert('Failed to revoke other sessions: ' + errData.error);
-      }
-    } catch (err) {
-      alert('Error revoking other sessions: ' + err.message);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!name.trim()) { alert('Name cannot be empty.'); return; }
-    setLoading(true);
-    await onSave(name.trim(), parseInt(semester, 10) || 1);
-    setLoading(false);
-  };
-
-  const getDeviceIconAndName = (userAgent) => {
-    const ua = userAgent.toLowerCase();
-    let os = 'Unknown Device';
-    let icon = '💻';
-    
-    if (ua.includes('windows')) {
-      os = 'Windows';
-      icon = '🪟';
-    } else if (ua.includes('macintosh') || ua.includes('mac os')) {
-      os = 'macOS';
-      icon = '🍎';
-    } else if (ua.includes('android')) {
-      os = 'Android';
-      icon = '🤖';
-    } else if (ua.includes('iphone') || ua.includes('ipad')) {
-      os = 'iOS';
-      icon = '📱';
-    } else if (ua.includes('linux')) {
-      os = 'Linux';
-      icon = '🐧';
-    }
-    
-    let browser = '';
-    if (ua.includes('chrome') || ua.includes('chromium')) {
-      browser = 'Chrome';
-    } else if (ua.includes('safari') && !ua.includes('chrome')) {
-      browser = 'Safari';
-    } else if (ua.includes('firefox')) {
-      browser = 'Firefox';
-    } else if (ua.includes('edge') || ua.includes('edg')) {
-      browser = 'Edge';
-    } else if (ua.includes('opr') || ua.includes('opera')) {
-      browser = 'Opera';
-    }
-    
-    return { os, browser, icon };
-  };
-
-  const formatDate = (dateStr) => {
-    if (!dateStr) return 'N/A';
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    } catch {
-      return 'N/A';
-    }
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 9999 }}>
-      <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'hsl(var(--text-primary))', margin: 0 }}>
-            ✏️ Edit Profile
-          </h2>
-          <button onClick={onClose} style={{
-            background: 'none', border: 'none', color: 'hsl(var(--text-muted))',
-            fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1
-          }}>✕</button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="modal-form" style={{ marginBottom: token && !user?.isGuest ? '2rem' : 0 }}>
-          <div className="form-group">
-            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'hsl(var(--text-secondary))', marginBottom: '0.4rem', display: 'block' }}>Name</label>
-            <input 
-              type="text" 
-              value={name} 
-              onChange={e => setName(e.target.value)} 
-              placeholder="Your name" 
-              required 
-            />
-          </div>
-
-          <div className="form-group">
-            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'hsl(var(--text-secondary))', marginBottom: '0.4rem', display: 'block' }}>Semester</label>
-            <select 
-              value={semester} 
-              onChange={e => setSemester(e.target.value)} 
-              required
-              style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                borderRadius: '8px',
-                color: '#ffffff',
-                padding: '0.65rem 0.85rem',
-                fontSize: '0.9rem',
-                fontWeight: 600,
-                outline: 'none',
-                cursor: 'pointer',
-                width: '100%'
-              }}
-            >
-              {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
-                <option key={sem} value={sem} style={{ background: '#121215', color: '#ffffff' }}>
-                  Semester {sem}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="modal-actions" style={{ marginTop: '1.5rem' }}>
-            <button type="submit" className="btn-submit" disabled={loading} style={{ padding: '0.6rem 1.2rem', fontWeight: 600 }}>
-              {loading ? 'Saving...' : 'Save Changes'}
-            </button>
-            <button type="button" className="btn-cancel" onClick={onClose} disabled={loading} style={{ padding: '0.6rem 1.2rem' }}>
-              Cancel
-            </button>
-          </div>
-        </form>
-
-        {token && !user?.isGuest && (
-          <div style={{ borderTop: '1px solid hsl(var(--border) / 0.5)', paddingTop: '1.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'hsl(var(--text-primary))', margin: 0 }}>
-                🔒 Active Login Sessions
-              </h3>
-              {sessions.length > 1 && (
-                <button 
-                  onClick={handleRevokeOthers}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'hsl(var(--destructive))',
-                    fontSize: '0.8rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    transition: 'background 0.2s',
-                  }}
-                  onMouseOver={(e) => e.target.style.background = 'hsl(var(--destructive) / 0.1)'}
-                  onMouseOut={(e) => e.target.style.background = 'none'}
-                >
-                  Log Out Other Devices
-                </button>
-              )}
-            </div>
-
-            {sessionsLoading ? (
-              <div style={{ textAlign: 'center', color: 'hsl(var(--text-muted))', padding: '1rem', fontSize: '0.9rem' }}>
-                Loading active sessions...
-              </div>
-            ) : sessionsError ? (
-              <div style={{ color: 'hsl(var(--destructive))', fontSize: '0.85rem', padding: '0.5rem 0' }}>
-                ⚠️ {sessionsError}
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '250px', overflowY: 'auto', paddingRight: '4px' }}>
-                {sessions.map(s => {
-                  const { os, browser, icon } = getDeviceIconAndName(s.userAgent);
-                  return (
-                    <div 
-                      key={s.id} 
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '0.75rem',
-                        borderRadius: '8px',
-                        background: 'hsl(var(--card))',
-                        border: s.isCurrent ? '1px solid hsl(var(--success) / 0.4)' : '1px solid hsl(var(--border) / 0.3)',
-                        boxShadow: s.isCurrent ? '0 0 12px hsl(var(--success) / 0.05)' : 'none',
-                        transition: 'transform 0.2s, border-color 0.2s',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>{icon}</span>
-                        <div>
-                          <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'hsl(var(--text-primary))', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            {os} {browser && <span style={{ color: 'hsl(var(--text-muted))', fontWeight: 400 }}>({browser})</span>}
-                            {s.isCurrent && (
-                              <span style={{
-                                fontSize: '0.7rem',
-                                padding: '1px 6px',
-                                borderRadius: '100px',
-                                background: 'hsl(var(--success) / 0.15)',
-                                color: 'hsl(var(--success))',
-                                fontWeight: 600,
-                              }}>
-                                Current Device
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', marginTop: '0.15rem' }}>
-                            IP: {s.ipAddress} • Active: {formatDate(s.lastActiveAt)}
-                          </div>
-                        </div>
-                      </div>
-
-                      {!s.isCurrent && (
-                        <button
-                          onClick={() => handleRevokeSession(s.id, s.isCurrent)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'hsl(var(--text-muted))',
-                            cursor: 'pointer',
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                            fontSize: '0.8rem',
-                            fontWeight: 500,
-                            transition: 'color 0.2s, background-color 0.2s',
-                          }}
-                          onMouseOver={(e) => {
-                            e.target.style.color = 'hsl(var(--destructive))';
-                            e.target.style.background = 'hsl(var(--destructive) / 0.1)';
-                          }}
-                          onMouseOut={(e) => {
-                            e.target.style.color = 'hsl(var(--text-muted))';
-                            e.target.style.background = 'none';
-                          }}
-                        >
-                          Revoke
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-      <ConsentBanner />
     </div>
   );
 }

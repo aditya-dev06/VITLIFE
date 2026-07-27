@@ -416,7 +416,23 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
         this.onContextMenu = this.onContextMenu.bind(this);
 
         this.onWindowResize = this.onWindowResize.bind(this);
-        window.addEventListener('resize', this.onWindowResize);
+
+        let resizeRafId = null;
+        this.handleResize = () => {
+          if (this.disposed) return;
+          if (resizeRafId) cancelAnimationFrame(resizeRafId);
+          resizeRafId = requestAnimationFrame(() => {
+            resizeRafId = null;
+            this.onWindowResize();
+          });
+        };
+
+        if (typeof ResizeObserver !== 'undefined' && container) {
+          this.resizeObserver = new ResizeObserver(this.handleResize);
+          this.resizeObserver.observe(container);
+        } else {
+          window.addEventListener('resize', this.handleResize);
+        }
 
         this.paused = false;
         this.isIntersecting = true;
@@ -429,6 +445,7 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
       }
 
       onWindowResize() {
+        if (this.disposed || !this.container) return;
         const width = this.container.offsetWidth;
         const height = this.container.offsetHeight;
 
@@ -437,10 +454,12 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
           return;
         }
 
-        this.renderer.setSize(width, height);
-        this.camera.aspect = width / height;
-        this.camera.updateProjectionMatrix();
-        this.composer.setSize(width, height);
+        if (this.renderer) this.renderer.setSize(width, height);
+        if (this.camera) {
+          this.camera.aspect = width / height;
+          this.camera.updateProjectionMatrix();
+        }
+        if (this.composer) this.composer.setSize(width, height);
         this.hasValidSize = true;
       }
 
@@ -476,20 +495,30 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
       loadAssets() {
         const assets = this.assets;
         return new Promise(resolve => {
-          const manager = new THREE.LoadingManager(resolve);
+          if (this.disposed) return resolve();
+          const manager = new THREE.LoadingManager(() => {
+            if (!this.disposed) resolve();
+          });
 
           const searchImage = new Image();
           const areaImage = new Image();
           assets.smaa = {};
-          searchImage.addEventListener('load', function () {
+
+          const onSearchLoad = function () {
+            searchImage.removeEventListener('load', onSearchLoad);
             assets.smaa.search = this;
             manager.itemEnd('smaa-search');
-          });
+          };
 
-          areaImage.addEventListener('load', function () {
+          const onAreaLoad = function () {
+            areaImage.removeEventListener('load', onAreaLoad);
             assets.smaa.area = this;
             manager.itemEnd('smaa-area');
-          });
+          };
+
+          searchImage.addEventListener('load', onSearchLoad);
+          areaImage.addEventListener('load', onAreaLoad);
+
           manager.itemStart('smaa-search');
           manager.itemStart('smaa-area');
 
@@ -571,7 +600,7 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
           updateCamera = true;
         }
 
-        if (this.options.distortion.getJS) {
+        if (this.options.distortion && this.options.distortion.getJS) {
           const distortion = this.options.distortion.getJS(0.025, time);
 
           this.camera.lookAt(
@@ -589,10 +618,13 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
       }
 
       render(delta) {
-        this.composer.render(delta);
+        if (this.composer) {
+          this.composer.render(delta);
+        }
       }
 
       dispose() {
+        if (this.disposed) return;
         this.disposed = true;
 
         // 0. Cancel any pending animation frames
@@ -602,9 +634,36 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
           } catch (e) {
             console.warn("Failed to cancel animation frame:", e);
           }
+          this.rafId = null;
         }
 
-        // 1. Dispose of Composer & Passes first
+        // 1. Disconnect observers and listeners
+        if (this.resizeObserver) {
+          try {
+            this.resizeObserver.disconnect();
+          } catch (e) {
+            console.warn("Failed to disconnect resizeObserver:", e);
+          }
+          this.resizeObserver = null;
+        }
+        if (this.handleResize) {
+          window.removeEventListener('resize', this.handleResize);
+        }
+        window.removeEventListener('resize', this.onWindowResize);
+        document.removeEventListener('visibilitychange', this.onVisibilityChange);
+
+        if (this.container) {
+          this.container.removeEventListener('mousedown', this.onMouseDown);
+          this.container.removeEventListener('mouseup', this.onMouseUp);
+          this.container.removeEventListener('mouseout', this.onMouseUp);
+
+          this.container.removeEventListener('touchstart', this.onTouchStart);
+          this.container.removeEventListener('touchend', this.onTouchEnd);
+          this.container.removeEventListener('touchcancel', this.onTouchEnd);
+          this.container.removeEventListener('contextmenu', this.onContextMenu);
+        }
+
+        // 2. Dispose of Composer & Passes first
         if (this.composer) {
           if (this.composer.passes) {
             this.composer.passes.forEach(pass => {
@@ -624,7 +683,7 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
           }
         }
 
-        // 2. Dispose of individual effects
+        // 3. Dispose of individual effects
         if (this.bloomEffect && typeof this.bloomEffect.dispose === 'function') {
           try {
             this.bloomEffect.dispose();
@@ -640,7 +699,7 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
           }
         }
 
-        // 3. Dispose of all Scene Geometries, Materials, and Textures
+        // 4. Dispose of all Scene Geometries, Materials, and Textures
         if (this.scene) {
           this.scene.traverse(obj => {
             if (obj.geometry) {
@@ -651,23 +710,10 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
               }
             }
             if (obj.material) {
-              if (Array.isArray(obj.material)) {
-                obj.material.forEach(mat => {
-                  try {
-                    if (mat.map) mat.map.dispose();
-                    if (mat.lightMap) mat.lightMap.dispose();
-                    if (mat.bumpMap) mat.bumpMap.dispose();
-                    if (mat.normalMap) mat.normalMap.dispose();
-                    if (mat.specularMap) mat.specularMap.dispose();
-                    if (mat.envMap) mat.envMap.dispose();
-                    mat.dispose();
-                  } catch (e) {
-                    console.warn("Failed to dispose material array element:", e);
-                  }
-                });
-              } else {
+              const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+              materials.forEach(mat => {
+                if (!mat) return;
                 try {
-                  const mat = obj.material;
                   if (mat.map) mat.map.dispose();
                   if (mat.lightMap) mat.lightMap.dispose();
                   if (mat.bumpMap) mat.bumpMap.dispose();
@@ -676,9 +722,9 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
                   if (mat.envMap) mat.envMap.dispose();
                   mat.dispose();
                 } catch (e) {
-                  console.warn("Failed to dispose material:", e);
+                  console.warn("Failed to dispose material element:", e);
                 }
-              }
+              });
             }
           });
           try {
@@ -688,7 +734,7 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
           }
         }
 
-        // 4. Finally, force WebGL context loss and dispose of WebGLRenderer
+        // 5. Force WebGL context loss and dispose of WebGLRenderer
         if (this.renderer) {
           try {
             const gl = this.renderer.getContext();
@@ -711,19 +757,12 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
           }
         }
 
-        // 5. Unregister all Event Listeners
-        document.removeEventListener('visibilitychange', this.onVisibilityChange);
-        window.removeEventListener('resize', this.onWindowResize);
-        if (this.container) {
-          this.container.removeEventListener('mousedown', this.onMouseDown);
-          this.container.removeEventListener('mouseup', this.onMouseUp);
-          this.container.removeEventListener('mouseout', this.onMouseUp);
-
-          this.container.removeEventListener('touchstart', this.onTouchStart);
-          this.container.removeEventListener('touchend', this.onTouchEnd);
-          this.container.removeEventListener('touchcancel', this.onTouchEnd);
-          this.container.removeEventListener('contextmenu', this.onContextMenu);
-        }
+        this.renderer = null;
+        this.composer = null;
+        this.scene = null;
+        this.camera = null;
+        this.clock = null;
+        this.assets = null;
       }
 
       onVisibilityChange() {
@@ -754,7 +793,9 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
           this.hasValidSize = false;
           return;
         }
-        this.composer.setSize(width, height, updateStyles);
+        if (this.composer) {
+          this.composer.setSize(width, height, updateStyles);
+        }
         this.hasValidSize = true;
       }
 
@@ -762,8 +803,8 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
         if (this.disposed || this.paused || document.hidden) return;
 
         if (!this.hasValidSize) {
-          const w = this.container.offsetWidth;
-          const h = this.container.offsetHeight;
+          const w = this.container ? this.container.offsetWidth : 0;
+          const h = this.container ? this.container.offsetHeight : 0;
           if (w > 0 && h > 0) {
             this.renderer.setSize(w, h, false);
             this.camera.aspect = w / h;
@@ -778,19 +819,21 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
 
         if (resizeRendererToDisplaySize(this.renderer, this.setSize)) {
           const canvas = this.renderer.domElement;
-          if (this.hasValidSize) {
+          if (this.hasValidSize && canvas) {
             this.camera.aspect = canvas.clientWidth / canvas.clientHeight;
             this.camera.updateProjectionMatrix();
           }
         }
 
-        if (this.hasValidSize) {
-          const delta = this.clock.getDelta();
+        if (this.hasValidSize && this.clock) {
+          const delta = Math.min(this.clock.getDelta(), 0.1);
           this.render(delta);
           this.update(delta);
         }
 
-        this.rafId = requestAnimationFrame(this.tick);
+        if (!this.disposed && !this.paused && !document.hidden) {
+          this.rafId = requestAnimationFrame(this.tick);
+        }
       }
     }
 
@@ -853,6 +896,7 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
         let geometry = new THREE.TubeGeometry(curve, 40, 1, 8, false);
 
         let instanced = new THREE.InstancedBufferGeometry().copy(geometry);
+        geometry.dispose();
         instanced.instanceCount = options.lightPairsPerRoadWay * 2;
 
         let laneWidth = options.roadWidth / options.lanesPerRoad;
@@ -1006,6 +1050,7 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
         const options = this.options;
         const geometry = new THREE.PlaneGeometry(1, 1);
         let instanced = new THREE.InstancedBufferGeometry().copy(geometry);
+        geometry.dispose();
         let totalSticks = options.totalSideLightSticks;
         instanced.instanceCount = totalSticks;
 
@@ -1265,6 +1310,7 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
     `;
 
     function resizeRendererToDisplaySize(renderer, setSize) {
+      if (!renderer || !renderer.domElement) return false;
       const canvas = renderer.domElement;
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
@@ -1279,16 +1325,24 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
     const container = hyperspeed.current;
     if (!container || window.innerWidth < 768) return;
 
+    const distKey = typeof effectOptions.distortion === 'string'
+      ? effectOptions.distortion
+      : 'turbulentDistortion';
+
     const options = {
       ...DEFAULT_EFFECT_OPTIONS,
       ...effectOptions,
-      colors: { ...DEFAULT_EFFECT_OPTIONS.colors, ...effectOptions.colors }
+      colors: { ...DEFAULT_EFFECT_OPTIONS.colors, ...effectOptions.colors },
+      distortion: distortions[distKey] || distortions.turbulentDistortion
     };
-    options.distortion = distortions[options.distortion];
 
     const myApp = new App(container, options);
     appRef.current = myApp;
-    myApp.loadAssets().then(myApp.init);
+    myApp.loadAssets().then(() => {
+      if (appRef.current === myApp) {
+        myApp.init();
+      }
+    });
 
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -1312,7 +1366,17 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
         appRef.current = null;
       }
     };
-  }, [effectOptions]);
+  }, [
+    typeof effectOptions === 'object' && effectOptions !== null
+      ? JSON.stringify({
+          distortion: effectOptions.distortion,
+          fov: effectOptions.fov,
+          fovSpeedUp: effectOptions.fovSpeedUp,
+          speedUp: effectOptions.speedUp,
+          colors: effectOptions.colors
+        })
+      : ''
+  ]);
 
   return <div id="lights" ref={hyperspeed}></div>;
 };

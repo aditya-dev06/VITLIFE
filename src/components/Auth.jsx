@@ -1,7 +1,138 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import gsap from 'gsap';
 import TypewriterText from './TypewriterText';
+
+/* ═══════════════════════════════════════════════════════════════
+   MODULE-LEVEL CONSTANTS & COMPILED REGEXES (Local Validation Speed)
+   ═══════════════════════════════════════════════════════════════ */
+const COURSES_LIST = [
+  { code: 'DSA', name: 'Data Structures & Algorithms' },
+  { code: 'DBMS', name: 'Database Management Systems' },
+  { code: 'OOP', name: 'Object-Oriented Programming' },
+  { code: 'Numerical Methods', name: 'Numerical Methods & Computational Math' }
+];
+
+const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+const VIT_EMAIL_REGEX = /^[a-zA-Z.-]+\.[a-zA-Z0-9]+@vitbhopal\.ac\.in$/;
+const GENERAL_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const REG_NUM_PARSE_REGEX = /^([a-zA-Z.-]+)\.([a-zA-Z0-9]+)@vitbhopal\.ac\.in$/;
+const PROG_CODE_REGEX = /^\d{2}([A-Z]{3})/;
+
+const BRANCH_MAP = {
+  'CE': 'Computer Science & Engineering',
+  'DS': 'Computer Science & Engineering (Data Science)',
+  'AI': 'Computer Science & Engineering (AI & ML)',
+  'CY': 'Computer Science & Engineering (Cyber Security)',
+  'IM': 'Computer Science & Engineering (Computational & Data Science)',
+  'IP': 'Computer Science & Engineering (Computational & Data Science)',
+  'EC': 'Electronics & Communication Engineering',
+  'EE': 'Electrical & Electronics Engineering',
+  'ME': 'Mechanical Engineering'
+};
+
+const IS_DEV = Boolean(import.meta.env?.DEV || import.meta.env?.MODE === 'development');
+
+/* ═══════════════════════════════════════════════════════════════
+   JWT TOKEN VALIDATION (Clean Token Handling)
+   ═══════════════════════════════════════════════════════════════ */
+const isValidJWT = (token) => {
+  if (typeof token !== 'string' || !token) return false;
+  const parts = token.split('.');
+  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return false;
+  try {
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, '=');
+    const jsonPayload = decodeURIComponent(
+      atob(padded)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const payload = JSON.parse(jsonPayload);
+    
+    const nowInSec = Math.floor(Date.now() / 1000);
+    // Expiration check with 5-second clock skew tolerance
+    if (typeof payload.exp === 'number' && payload.exp <= nowInSec - 5) {
+      return false;
+    }
+    // Not Before check with 5-second tolerance
+    if (typeof payload.nbf === 'number' && payload.nbf > nowInSec + 5) {
+      return false;
+    }
+    return typeof payload === 'object' && payload !== null;
+  } catch {
+    return false;
+  }
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   CACHED GOOGLE AUTH CONFIG (Instant Loading)
+   ═══════════════════════════════════════════════════════════════ */
+let googleConfigPromise = null;
+const fetchGoogleConfig = () => {
+  if (!googleConfigPromise) {
+    googleConfigPromise = fetch('/api/auth/config')
+      .then(res => res.json())
+      .catch(err => {
+        console.error('Failed to fetch Google Auth configuration:', err);
+        googleConfigPromise = null;
+        return { googleClientId: '' };
+      });
+  }
+  return googleConfigPromise;
+};
+
+// Eagerly pre-fetch Google config at module load time for instant loading
+fetchGoogleConfig();
+
+/* ═══════════════════════════════════════════════════════════════
+   BUSINESS LOGIC & VALIDATION
+   ═══════════════════════════════════════════════════════════════ */
+const isStrongPassword = (password) => {
+  if (typeof password !== 'string') return false;
+  return STRONG_PASSWORD_REGEX.test(password);
+};
+
+const getRegNumberAndProgram = (emailStr) => {
+  if (!emailStr || typeof emailStr !== 'string') return null;
+  const cleanEmail = emailStr.trim().toLowerCase();
+  const match = cleanEmail.match(REG_NUM_PARSE_REGEX);
+  if (match) {
+    const regNum = match[2].toUpperCase();
+    const progMatch = regNum.match(PROG_CODE_REGEX);
+    let program = 'VIT Bhopal Student';
+    let isBim = false;
+    let isIntegrated = false;
+    if (progMatch) {
+      const code = progMatch[1];
+      if (code === 'MCA') {
+        program = 'Master of Computer Applications';
+      } else if (code === 'BBA') {
+        program = 'Bachelor of Business Administration';
+      } else {
+        const typeChar = code.charAt(0);
+        const branchPart = code.slice(1);
+        const branchName = BRANCH_MAP[branchPart] || `Computer Science & Engineering (${branchPart})`;
+        
+        if (typeChar === 'B') {
+          program = `B.Tech ${branchName}`;
+        } else if (typeChar === 'M') {
+          program = `Integrated M.Tech ${branchName}`;
+          isIntegrated = true;
+        } else {
+          program = `B.Tech/M.Tech (${code}) Student`;
+        }
+        
+        if (branchPart === 'IM' || code === 'BIM' || code === 'MIM') {
+          isBim = true;
+        }
+      }
+    }
+    return { regNum, program, isBim, isIntegrated };
+  }
+  return null;
+};
 
 /* ═══════════════════════════════════════════════════════════════
    AURORA BACKGROUND — Animated gradient mesh blobs (pure CSS)
@@ -18,7 +149,6 @@ const AuroraBackground = () => (
 
 /* ═══════════════════════════════════════════════════════════════
    PARTICLE CONSTELLATION — Canvas2D interactive particle system
-   Lightweight replacement for Three.js (~3KB vs ~525KB)
    ═══════════════════════════════════════════════════════════════ */
 const ParticleField = ({ theme }) => {
   const canvasRef = useRef(null);
@@ -153,9 +283,9 @@ const ParticleField = ({ theme }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   FLOATING INPUT — Premium animated label input field
+   FLOATING INPUT — Premium input with autocomplete & security
    ═══════════════════════════════════════════════════════════════ */
-const FloatingInput = ({ label, type = 'text', value, onChange, required, id, children, ...rest }) => {
+const FloatingInput = ({ label, type = 'text', value, onChange, required, id, autoComplete, children, ...rest }) => {
   const [focused, setFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const active = focused || (value && value.length > 0);
@@ -172,6 +302,7 @@ const FloatingInput = ({ label, type = 'text', value, onChange, required, id, ch
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         required={required}
+        autoComplete={autoComplete}
         className="floating-input"
         placeholder=" "
         {...rest}
@@ -183,11 +314,10 @@ const FloatingInput = ({ label, type = 'text', value, onChange, required, id, ch
           type="button"
           className="aurora-password-toggle"
           onClick={() => setShowPassword(!showPassword)}
-          tabIndex="-1"
+          tabIndex={0}
           aria-label={showPassword ? 'Hide password' : 'Show password'}
         >
           {showPassword ? (
-            /* Eye closed */
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
               <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
@@ -195,7 +325,6 @@ const FloatingInput = ({ label, type = 'text', value, onChange, required, id, ch
               <line x1="2" y1="2" x2="22" y2="22" />
             </svg>
           ) : (
-            /* Eye open */
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z" />
               <circle cx="12" cy="12" r="3" />
@@ -207,77 +336,6 @@ const FloatingInput = ({ label, type = 'text', value, onChange, required, id, ch
     </div>
   );
 };
-
-
-/* ═══════════════════════════════════════════════════════════════
-   BUSINESS LOGIC — Course data, validation, email parsing
-   (Preserved exactly from original implementation)
-   ═══════════════════════════════════════════════════════════════ */
-const COURSES_LIST = [
-  { code: 'DSA', name: 'Data Structures & Algorithms' },
-  { code: 'DBMS', name: 'Database Management Systems' },
-  { code: 'OOP', name: 'Object-Oriented Programming' },
-  { code: 'Numerical Methods', name: 'Numerical Methods & Computational Math' }
-];
-
-const isStrongPassword = (password) => {
-  if (typeof password !== 'string') return false;
-  // Enforce strong password requirements: min 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special character
-  const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-  return regex.test(password);
-};
-
-const getRegNumberAndProgram = (emailStr) => {
-  const cleanEmail = emailStr.trim().toLowerCase();
-  const regex = /^([a-zA-Z.-]+)\.([a-zA-Z0-9]+)@vitbhopal\.ac\.in$/;
-  const match = cleanEmail.match(regex);
-  if (match) {
-    const regNum = match[2].toUpperCase();
-    const progMatch = regNum.match(/^\d{2}([A-Z]{3})/);
-    let program = 'VIT Bhopal Student';
-    let isBim = false;
-    let isIntegrated = false;
-    if (progMatch) {
-      const code = progMatch[1];
-      if (code === 'MCA') {
-        program = 'Master of Computer Applications';
-      } else if (code === 'BBA') {
-        program = 'Bachelor of Business Administration';
-      } else {
-        const typeChar = code.charAt(0);
-        const branchPart = code.slice(1);
-        const branchMap = {
-          'CE': 'Computer Science & Engineering',
-          'DS': 'Computer Science & Engineering (Data Science)',
-          'AI': 'Computer Science & Engineering (AI & ML)',
-          'CY': 'Computer Science & Engineering (Cyber Security)',
-          'IM': 'Computer Science & Engineering (Computational & Data Science)',
-          'IP': 'Computer Science & Engineering (Computational & Data Science)',
-          'EC': 'Electronics & Communication Engineering',
-          'EE': 'Electrical & Electronics Engineering',
-          'ME': 'Mechanical Engineering'
-        };
-        const branchName = branchMap[branchPart] || `Computer Science & Engineering (${branchPart})`;
-        
-        if (typeChar === 'B') {
-          program = `B.Tech ${branchName}`;
-        } else if (typeChar === 'M') {
-          program = `Integrated M.Tech ${branchName}`;
-          isIntegrated = true;
-        } else {
-          program = `B.Tech/M.Tech (${code}) Student`;
-        }
-        
-        if (branchPart === 'IM' || code === 'BIM' || code === 'MIM') {
-          isBim = true;
-        }
-      }
-    }
-    return { regNum, program, isBim, isIntegrated };
-  }
-  return null;
-};
-
 
 /* ═══════════════════════════════════════════════════════════════
    AUTH COMPONENT — Aurora Gateway Login Page
@@ -311,6 +369,22 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
   const pageRef = useRef(null);
   const cardRef = useRef(null);
   const tiltRef = useRef({ cx: 0, cy: 0, tx: 0, ty: 0 });
+  const googleInitializedRef = useRef(false);
+
+  // ── Secure Field Cleaning Helper ──
+  const clearSensitiveFields = useCallback(() => {
+    setPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setCode('');
+  }, []);
+
+  // Clear credentials when component unmounts for security
+  useEffect(() => {
+    return () => {
+      clearSensitiveFields();
+    };
+  }, [clearSensitiveFields]);
 
   // ── Session persistence ──
   useEffect(() => {
@@ -367,7 +441,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
     return () => ctx.revert();
   }, []);
 
-  // ── Magnetic Card Tilt (Spring Physics via RAF) ──
+  // ── Magnetic Card Tilt ──
   useEffect(() => {
     let rafId;
     const animate = () => {
@@ -406,11 +480,145 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
     }
   }, []);
 
+  // ── Local Validation Speed: Memoized Registration & Program Extraction ──
+  const parsedProgram = useMemo(() => {
+    if (isVitBhopal && email) {
+      return getRegNumberAndProgram(email);
+    }
+    return null;
+  }, [isVitBhopal, email]);
 
-  /* ═══════════════════════════════════════════════════════════════
-     AUTH HANDLERS — All business logic preserved exactly
-     ═══════════════════════════════════════════════════════════════ */
+  const validateEmail = useCallback((emailStr) => {
+    const cleanEmail = emailStr.trim().toLowerCase();
+    if (isVitBhopal) {
+      return VIT_EMAIL_REGEX.test(cleanEmail);
+    } else {
+      return GENERAL_EMAIL_REGEX.test(cleanEmail);
+    }
+  }, [isVitBhopal]);
 
+  // ── Clean JWT Token & Login Success Handler ──
+  const handleLoginSuccess = useCallback((token, user) => {
+    if (!user?.isGuest && !isValidJWT(token)) {
+      setError('Authentication security error: Invalid or expired token received.');
+      return;
+    }
+
+    sessionStorage.removeItem('authEmail');
+    sessionStorage.removeItem('authState');
+    clearSensitiveFields();
+
+    if (onLoginSuccess) {
+      onLoginSuccess(token, user);
+    }
+  }, [onLoginSuccess, clearSensitiveFields]);
+
+  // ── Google Authentication Handler ──
+  const handleGoogleLoginResponse = useCallback(async (googleResponse) => {
+    const idToken = googleResponse.credential;
+    setLoading(true);
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      const response = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Google authentication failed.');
+      }
+
+      handleLoginSuccess(data.token, data.user);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [handleLoginSuccess]);
+
+  // ── Instant Google One-Tap & Sign-In SDK Initialization ──
+  useEffect(() => {
+    let isMounted = true;
+
+    const initGoogleSDK = async () => {
+      // Start fetching config in parallel with waiting for SDK load
+      const configPromise = fetchGoogleConfig();
+
+      // Check if window.google accounts SDK is available, poll briefly if async script is still loading
+      if (!window.google?.accounts?.id) {
+        let retries = 0;
+        while (!window.google?.accounts?.id && retries < 20) {
+          await new Promise(res => setTimeout(res, 100));
+          retries++;
+          if (!isMounted) return;
+        }
+      }
+
+      if (!window.google?.accounts?.id || !isMounted) return;
+
+      const data = await configPromise;
+      if (!data?.googleClientId || !isMounted) return;
+
+      try {
+        if (!googleInitializedRef.current) {
+          window.google.accounts.id.initialize({
+            client_id: data.googleClientId,
+            callback: handleGoogleLoginResponse,
+            auto_select: false,
+            cancel_on_tap_outside: true,
+            itp_support: true,
+          });
+          googleInitializedRef.current = true;
+
+          // Trigger Instant Google One-Tap Prompt
+          window.google.accounts.id.prompt((notification) => {
+            if (IS_DEV && notification.isNotDisplayed()) {
+              console.log('[Google One-Tap] Prompt not displayed:', notification.getNotDisplayedReason());
+            }
+          });
+        }
+
+        // Render Google Sign-In button dynamically into DOM containers
+        const loginBtn = document.getElementById('google-signin-login');
+        if (loginBtn && loginBtn.childElementCount === 0) {
+          window.google.accounts.id.renderButton(loginBtn, {
+            theme: 'outline',
+            size: 'large',
+            width: '100%',
+            text: 'signin_with',
+            shape: 'rectangular',
+            logo_alignment: 'left'
+          });
+        }
+
+        const signupBtn = document.getElementById('google-signin-signup');
+        if (signupBtn && signupBtn.childElementCount === 0) {
+          window.google.accounts.id.renderButton(signupBtn, {
+            theme: 'outline',
+            size: 'large',
+            width: '100%',
+            text: 'signup_with',
+            shape: 'rectangular',
+            logo_alignment: 'left'
+          });
+        }
+      } catch (err) {
+        console.error('Google One-Tap initialization error:', err);
+      }
+    };
+
+    initGoogleSDK();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authState, signupStep, handleGoogleLoginResponse]);
+
+  // ── Course selector state ──
   const handleCourseChange = (courseCode) => {
     if (selectedCourses.includes(courseCode)) {
       setSelectedCourses(selectedCourses.filter(c => c !== courseCode));
@@ -418,25 +626,6 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
       setSelectedCourses([...selectedCourses, courseCode]);
     }
   };
-
-  const validateEmail = (emailStr) => {
-    const cleanEmail = emailStr.trim().toLowerCase();
-    if (isVitBhopal) {
-      const regex = /^[a-zA-Z.-]+\.[a-zA-Z0-9]+@vitbhopal\.ac\.in$/;
-      return regex.test(cleanEmail);
-    } else {
-      const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      return regex.test(cleanEmail);
-    }
-  };
-
-  const handleLoginSuccess = useCallback((token, user) => {
-    sessionStorage.removeItem('authEmail');
-    sessionStorage.removeItem('authState');
-    if (onLoginSuccess) {
-      onLoginSuccess(token, user);
-    }
-  }, [onLoginSuccess]);
 
   const handleGuestContinue = () => {
     let guestId = localStorage.getItem('ds_guest_id');
@@ -468,6 +657,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
     }
   };
 
+  // ── Form Submissions ──
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -475,7 +665,6 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
 
     const isSignUp = authState === 'signup';
 
-    // Multi-step signup interception
     if (isSignUp && signupStep === 1) {
       if (!name || !email || !password) {
         setError('Please fill in all required fields.');
@@ -536,7 +725,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
     const payload = !isSignUp 
       ? { email: targetEmail, password }
       : { 
-          name, 
+          name: name.trim(), 
           email: targetEmail, 
           password, 
           isVitBhopal, 
@@ -558,11 +747,8 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
           setAuthState('verify');
           setError('Email not verified. Please enter the verification code sent to your email.');
           setCooldown(60);
-          if (data.devCode) {
-            setDevCode(data.devCode);
-          } else {
-            setDevCode('');
-          }
+          setDevCode(data.devCode || '');
+          clearSensitiveFields();
           return;
         }
         throw new Error(data.error || 'Authentication failed.');
@@ -573,16 +759,14 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
           setAuthState('login');
           setSuccessMessage(data.message || 'Registration successful! Please sign in.');
           setDevCode('');
+          clearSensitiveFields();
         } else {
           setEmail(data.email || email);
           setAuthState('verify');
           setSuccessMessage(data.message || 'Verification code sent to your email.');
           setCooldown(60);
-          if (data.devCode) {
-            setDevCode(data.devCode);
-          } else {
-            setDevCode('');
-          }
+          setDevCode(data.devCode || '');
+          clearSensitiveFields();
         }
       } else {
         handleLoginSuccess(data.token, data.user);
@@ -609,7 +793,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
       const response = await fetch('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code })
+        body: JSON.stringify({ email: email.trim().toLowerCase(), code: code.trim() })
       });
       
       const data = await response.json();
@@ -634,7 +818,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
       const response = await fetch('/api/auth/resend-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email: email.trim().toLowerCase() })
       });
       
       const data = await response.json();
@@ -643,11 +827,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
       }
 
       setSuccessMessage('A new verification code has been sent.');
-      if (data.devCode) {
-        setDevCode(data.devCode);
-      } else {
-        setDevCode('');
-      }
+      setDevCode(data.devCode || '');
       setCooldown(60);
     } catch (err) {
       setError(err.message);
@@ -671,7 +851,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
       const response = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email: email.trim().toLowerCase() })
       });
       
       const data = await response.json();
@@ -680,13 +860,10 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
       }
 
       setSuccessMessage(data.message || 'If an account exists, a reset code has been sent.');
-      if (data.devCode) {
-        setDevCode(data.devCode);
-      } else {
-        setDevCode('');
-      }
+      setDevCode(data.devCode || '');
       setAuthState('reset');
       setCooldown(60);
+      clearSensitiveFields();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -719,7 +896,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
       const response = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code, newPassword })
+        body: JSON.stringify({ email: email.trim().toLowerCase(), code: code.trim(), newPassword })
       });
       
       const data = await response.json();
@@ -729,10 +906,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
 
       setAuthState('login');
       setSuccessMessage(data.message || 'Password reset successful. You can now sign in.');
-      setPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setCode('');
+      clearSensitiveFields();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -749,7 +923,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
       const response = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email: email.trim().toLowerCase() })
       });
       
       const data = await response.json();
@@ -758,6 +932,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
       }
 
       setSuccessMessage('A new reset code has been sent.');
+      setDevCode(data.devCode || '');
       setCooldown(60);
     } catch (err) {
       setError(err.message);
@@ -766,80 +941,8 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
     }
   };
 
-
-  const handleGoogleLoginResponse = useCallback(async (googleResponse) => {
-    const idToken = googleResponse.credential;
-    setLoading(true);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      const response = await fetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Google authentication failed.');
-      }
-
-      handleLoginSuccess(data.token, data.user);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [handleLoginSuccess]);
-
-  // Google Sign-In Initialization
-  useEffect(() => {
-    if (!window.google) return;
-
-    fetch('/api/auth/config')
-      .then(res => res.json())
-      .then(data => {
-        if (data.googleClientId) {
-          window.google.accounts.id.initialize({
-            client_id: data.googleClientId,
-            callback: handleGoogleLoginResponse,
-            auto_select: false,
-            cancel_on_tap_outside: true
-          });
-
-          // Render Google buttons dynamically if elements are present in the DOM
-          const loginBtn = document.getElementById('google-signin-login');
-          if (loginBtn) {
-            window.google.accounts.id.renderButton(loginBtn, {
-              theme: 'outline',
-              size: 'large',
-              width: '100%',
-              text: 'signin_with',
-              shape: 'rectangular',
-              logo_alignment: 'left'
-            });
-          }
-
-          const signupBtn = document.getElementById('google-signin-signup');
-          if (signupBtn) {
-            window.google.accounts.id.renderButton(signupBtn, {
-              theme: 'outline',
-              size: 'large',
-              width: '100%',
-              text: 'signup_with',
-              shape: 'rectangular',
-              logo_alignment: 'left'
-            });
-          }
-        }
-      })
-      .catch(err => console.error('Failed to load Google Auth configuration:', err));
-  }, [authState, signupStep, handleGoogleLoginResponse]);
-
-
   /* ═══════════════════════════════════════════════════════════════
-     FORM RENDERER — Premium UI with floating labels & animations
+     FORM RENDERER
      ═══════════════════════════════════════════════════════════════ */
   const renderForm = () => {
     switch (authState) {
@@ -848,7 +951,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
           <form onSubmit={handleVerifySubmit} className="aurora-form">
             {error && <div className="aurora-error-banner"><span>⚠️</span> {error}</div>}
             {successMessage && <div className="aurora-success-banner"><span>✅</span> {successMessage}</div>}
-            {devCode && (
+            {devCode && IS_DEV && (
               <div className="aurora-success-banner" style={{ border: '1px solid hsla(var(--primary) / 0.3)', background: 'hsla(var(--primary) / 0.08)', color: 'hsl(var(--primary))' }}>
                 <span>🔧</span>
                 <span><strong>[Development Mode]</strong> Since SMTP is down or unconfigured, use this code: <strong>{devCode}</strong></span>
@@ -862,6 +965,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
               maxLength={6}
+              autoComplete="one-time-code"
               required
               style={{ textAlign: 'center', letterSpacing: '0.5em', fontWeight: 700, fontSize: '1.2rem' }}
             />
@@ -875,7 +979,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
                 {cooldown > 0 ? `Resend (${cooldown}s)` : 'Resend Code'}
               </button>
               <span className="aurora-dot-sep">·</span>
-              <button type="button" className="aurora-link-btn" onClick={() => { setAuthState('login'); setError(''); setSuccessMessage(''); }}>
+              <button type="button" className="aurora-link-btn" onClick={() => { setAuthState('login'); clearSensitiveFields(); setError(''); setSuccessMessage(''); }}>
                 Back to Sign In
               </button>
             </div>
@@ -894,6 +998,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
               required
             />
 
@@ -902,7 +1007,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
             </button>
 
             <div className="aurora-extra-actions" style={{ justifyContent: 'center' }}>
-              <button type="button" className="aurora-link-btn" onClick={() => { setAuthState('login'); setError(''); setSuccessMessage(''); }}>
+              <button type="button" className="aurora-link-btn" onClick={() => { setAuthState('login'); clearSensitiveFields(); setError(''); setSuccessMessage(''); }}>
                 ← Back to Sign In
               </button>
             </div>
@@ -914,7 +1019,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
           <form onSubmit={handleResetPasswordSubmit} className="aurora-form">
             {error && <div className="aurora-error-banner"><span>⚠️</span> {error}</div>}
             {successMessage && <div className="aurora-success-banner"><span>✅</span> {successMessage}</div>}
-            {devCode && (
+            {devCode && IS_DEV && (
               <div className="aurora-success-banner" style={{ border: '1px solid hsla(var(--primary) / 0.3)', background: 'hsla(var(--primary) / 0.08)', color: 'hsl(var(--primary))' }}>
                 <span>🔧</span>
                 <span><strong>[Development Mode]</strong> Since SMTP is down or unconfigured, use this code: <strong>{devCode}</strong></span>
@@ -928,14 +1033,15 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
               maxLength={6}
+              autoComplete="one-time-code"
               required
               style={{ textAlign: 'center', letterSpacing: '0.5em', fontWeight: 700, fontSize: '1.2rem' }}
             />
 
-            <FloatingInput id="new-pass" label="New Password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+            <FloatingInput id="new-pass" label="New Password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" required />
             <p className="aurora-form-hint">Min 8 chars · uppercase · lowercase · digit · symbol (@$!%*?&)</p>
 
-            <FloatingInput id="confirm-pass" label="Confirm Password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+            <FloatingInput id="confirm-pass" label="Confirm Password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" required />
 
             <button type="submit" className="aurora-submit-btn" disabled={loading}>
               {loading ? <span className="aurora-spinner" /> : 'Reset Password'}
@@ -946,7 +1052,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
                 {cooldown > 0 ? `Resend (${cooldown}s)` : 'Resend Code'}
               </button>
               <span className="aurora-dot-sep">·</span>
-              <button type="button" className="aurora-link-btn" onClick={() => { setAuthState('login'); setError(''); setSuccessMessage(''); }}>
+              <button type="button" className="aurora-link-btn" onClick={() => { setAuthState('login'); clearSensitiveFields(); setError(''); setSuccessMessage(''); }}>
                 Back to Sign In
               </button>
             </div>
@@ -965,9 +1071,9 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
             {isSignUp ? (
               signupStep === 1 ? (
                 <>
-                  <FloatingInput id="signup-name" label="Full Name" type="text" value={name} onChange={(e) => setName(e.target.value)} required />
-                  <FloatingInput id="signup-email" label={isVitBhopal ? 'VIT Bhopal Email' : 'Email Address'} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-                  <FloatingInput id="signup-password" label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                  <FloatingInput id="signup-name" label="Full Name" type="text" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required />
+                  <FloatingInput id="signup-email" label={isVitBhopal ? 'VIT Bhopal Email' : 'Email Address'} type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
+                  <FloatingInput id="signup-password" label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required />
                   <p className="aurora-form-hint">Min 8 chars · uppercase · lowercase · digit · symbol (@$!%*?&)</p>
 
                   <div className="aurora-checkbox-row">
@@ -994,31 +1100,26 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
                   </div>
 
                   {/* Detected program */}
-                  {isVitBhopal && email && (() => {
-                    const parsed = getRegNumberAndProgram(email);
-                    if (parsed) {
-                      return (
-                        <div className="aurora-program-badge">
-                          <span>✅ <strong>{parsed.regNum}</strong></span>
-                          <span>🎓 {parsed.program}</span>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
+                  {isVitBhopal && email && parsedProgram && (
+                    <div className="aurora-program-badge">
+                      <span>✅ <strong>{parsedProgram.regNum}</strong></span>
+                      <span>🎓 {parsedProgram.program}</span>
+                    </div>
+                  )}
 
                   {/* Semester select */}
                   <div className="floating-field active">
                     <select
+                      id="signup-semester"
                       value={semester}
                       onChange={(e) => setSemester(e.target.value)}
                       required
+                      aria-label="Current Semester"
                       className="aurora-select"
                     >
                       {isVitBhopal ? (
                         (() => {
-                          const parsed = getRegNumberAndProgram(email);
-                          const maxSem = (parsed && (parsed.isIntegrated || parsed.isBim)) ? 10 : 8;
+                          const maxSem = (parsedProgram && (parsedProgram.isIntegrated || parsedProgram.isBim)) ? 10 : 8;
                           const options = [];
                           for (let i = 1; i <= maxSem; i++) {
                             options.push(<option key={i} value={i.toString()}>Semester {i}</option>);
@@ -1034,7 +1135,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
                         </>
                       )}
                     </select>
-                    <label className="floating-label">Current Semester</label>
+                    <label htmlFor="signup-semester" className="floating-label">Current Semester</label>
                   </div>
 
                   {/* Course selector */}
@@ -1081,15 +1182,15 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
             ) : (
               /* ── SIGN IN ── */
               <>
-                <FloatingInput id="login-email" label="Email Address" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <FloatingInput id="login-email" label="Email Address" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
 
-                <FloatingInput id="login-password" label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <FloatingInput id="login-password" label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
 
                 <div className="aurora-forgot-container">
                   <button
                     type="button"
                     className="aurora-forgot-link-standalone"
-                    onClick={() => { setAuthState('forgot'); setError(''); setSuccessMessage(''); }}
+                    onClick={() => { setAuthState('forgot'); clearSensitiveFields(); setError(''); setSuccessMessage(''); }}
                   >
                     Forgot Password?
                   </button>
@@ -1115,7 +1216,6 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
       }
     }
   };
-
 
   /* ═══════════════════════════════════════════════════════════════
      RENDER — Full-Viewport Aurora Gateway Experience
@@ -1187,14 +1287,14 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
               />
               <button
                 className={`aurora-tab ${authState === 'login' ? 'active' : ''}`}
-                onClick={() => { setAuthState('login'); setSignupStep(1); setError(''); setSuccessMessage(''); }}
+                onClick={() => { setAuthState('login'); setSignupStep(1); clearSensitiveFields(); setError(''); setSuccessMessage(''); }}
                 style={{ background: 'transparent', boxShadow: 'none' }}
               >
                 Sign In
               </button>
               <button
                 className={`aurora-tab ${authState === 'signup' ? 'active' : ''}`}
-                onClick={() => { setAuthState('signup'); setSignupStep(1); setError(''); setSuccessMessage(''); }}
+                onClick={() => { setAuthState('signup'); setSignupStep(1); clearSensitiveFields(); setError(''); setSuccessMessage(''); }}
                 style={{ background: 'transparent', boxShadow: 'none' }}
               >
                 Create Account

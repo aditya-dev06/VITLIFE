@@ -24,31 +24,36 @@ export function ModeToggle() {
         className="mode-toggle-trigger"
         onClick={() => setOpen(o => !o)}
         title="Toggle theme"
-        aria-label="Toggle theme"
+        aria-label="Toggle color theme menu"
+        aria-expanded={open}
+        aria-haspopup="menu"
       >
-        <Sun className="mode-toggle-icon mode-toggle-icon--sun" size={18} />
-        <Moon className="mode-toggle-icon mode-toggle-icon--moon" size={18} />
+        <Sun className="mode-toggle-icon mode-toggle-icon--sun" size={18} aria-hidden="true" />
+        <Moon className="mode-toggle-icon mode-toggle-icon--moon" size={18} aria-hidden="true" />
       </button>
 
       {open && (
-        <div className="mode-toggle-dropdown">
+        <div className="mode-toggle-dropdown" role="menu" aria-label="Select theme option">
           <button
+            role="menuitem"
             className={`mode-toggle-item ${theme === 'light' ? 'active' : ''}`}
             onClick={() => { setTheme('light'); setOpen(false); }}
           >
-            <Sun size={15} /> Light
+            <Sun size={15} aria-hidden="true" /> Light
           </button>
           <button
+            role="menuitem"
             className={`mode-toggle-item ${theme === 'dark' ? 'active' : ''}`}
             onClick={() => { setTheme('dark'); setOpen(false); }}
           >
-            <Moon size={15} /> Dark
+            <Moon size={15} aria-hidden="true" /> Dark
           </button>
           <button
+            role="menuitem"
             className={`mode-toggle-item ${theme === 'system' ? 'active' : ''}`}
             onClick={() => { setTheme('system'); setOpen(false); }}
           >
-            <Monitor size={15} /> System
+            <Monitor size={15} aria-hidden="true" /> System
           </button>
         </div>
       )}

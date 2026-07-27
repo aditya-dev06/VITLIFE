@@ -35,7 +35,12 @@ export default function BounceCards({
         }
       );
     }, containerRef);
-    return () => ctx.revert();
+    return () => {
+      if (containerRef.current) {
+        gsap.killTweensOf(containerRef.current.querySelectorAll('.card'));
+      }
+      ctx.revert();
+    };
   }, [animationStagger, easeType, animationDelay]);
 
   const getNoRotationTransform = transformStr => {
@@ -154,6 +159,8 @@ export default function BounceCards({
             className="image" 
             src={src || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=500&q=80'} 
             alt={`card-${idx}`} 
+            loading="lazy"
+            decoding="async"
             onError={(e) => { 
               e.target.onerror = null; 
               e.target.src = 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=500&q=80'; 
