@@ -16,27 +16,54 @@ import { v2 as cloudinary } from 'cloudinary';
 // Redis is dynamically imported below only when REDIS_URL is set
 import { parseEmailToCardPayload, scanCollegeInboxAndIngest } from './services/emailPipeline.js';
 
-// Force Node.js to prefer IPv4 over IPv6 to resolve connection unreachable errors on IPv4-only networks
-dns.setDefaultResultOrder('ipv4first');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// Redis Presence & Caching Engine Setup (conditional — only loads ioredis when REDIS_URL is set)
+// Load environment variables from .env file if present before initializing Redis / MongoDB
+const envPath = path.join(path.dirname(__dirname), '.env');
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf-8');
+  envContent.split(/\r?\n/).forEach(line => {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      const firstEqual = trimmed.indexOf('=');
+      if (firstEqual !== -1) {
+        const key = trimmed.substring(0, firstEqual).trim();
+        const val = trimmed.substring(firstEqual + 1).trim().replace(/^['"]|['"]$/g, '');
+        if (!process.env[key]) {
+          process.env[key] = val;
+        }
+      }
+    }
+  });
+}
+
+// Redis Presence & Caching Engine Setup (conditional — supports REDIS_URL, REDIS_URI, KV_URL)
 let redisClient = null;
 let redisConnected = false;
 
-const REDIS_URL = process.env.REDIS_URL || process.env.REDIS_URI;
+const REDIS_URL = process.env.REDIS_URL || process.env.REDIS_URI || process.env.KV_URL;
 if (REDIS_URL) {
   import('ioredis').then(({ default: Redis }) => {
     try {
-      redisClient = new Redis(REDIS_URL, {
+      const redisOptions = {
         maxRetriesPerRequest: 2,
-        connectTimeout: 3000,
+        connectTimeout: 5000,
         retryStrategy: (times) => times > 3 ? null : Math.min(times * 500, 2000),
         lazyConnect: true
-      });
+      };
+      if (REDIS_URL.startsWith('rediss://')) {
+        redisOptions.tls = { rejectUnauthorized: false };
+      }
+      redisClient = new Redis(REDIS_URL, redisOptions);
 
       redisClient.on('connect', () => {
         redisConnected = true;
         console.log('⚡ Connected to Redis presence & cache engine!');
+      });
+
+      redisClient.on('ready', () => {
+        redisConnected = true;
       });
 
       redisClient.on('error', (err) => {
@@ -60,26 +87,6 @@ if (REDIS_URL) {
 
 const inMemoryPresence = new Map();
 const inMemoryTyping = new Map();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Load environment variables from .env file if present
-const envPath = path.join(path.dirname(__dirname), '.env');
-if (fs.existsSync(envPath)) {
-  const envContent = fs.readFileSync(envPath, 'utf-8');
-  envContent.split(/\r?\n/).forEach(line => {
-    const trimmed = line.trim();
-    if (trimmed && !trimmed.startsWith('#')) {
-      const firstEqual = trimmed.indexOf('=');
-      if (firstEqual !== -1) {
-        const key = trimmed.substring(0, firstEqual).trim();
-        const val = trimmed.substring(firstEqual + 1).trim().replace(/^['"]|['"]$/g, '');
-        process.env[key] = val;
-      }
-    }
-  });
-}
 
 
 const app = express();
