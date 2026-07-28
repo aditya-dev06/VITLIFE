@@ -6083,12 +6083,12 @@ app.get('/api/chat/messages', async (req, res) => {
   try {
     const channel = sanitizeString(req.query.channel || 'general', 100);
 
-    // 1. Try Redis cache first for sub-second response
+    // 1. Try Redis Engine first for sub-second response
     if (redisConnected && redisClient) {
       try {
         const cached = await redisClient.lrange(`chat:messages:${channel}`, 0, 100);
         if (cached && cached.length > 0) {
-          const parsed = cached.map(item => JSON.parse(item)).reverse();
+          const parsed = cached.map(item => typeof item === 'string' ? JSON.parse(item) : item).reverse();
           return res.json({ success: true, messages: parsed });
         }
       } catch (e) {
@@ -6096,32 +6096,7 @@ app.get('/api/chat/messages', async (req, res) => {
       }
     }
 
-    // 2. Try MongoDB if available
-    if (db) {
-      try {
-        const messages = await db.collection('chat_messages')
-          .find({ channel: { $eq: channel } })
-          .sort({ _id: -1 })
-          .limit(100)
-          .toArray();
-        if (messages) {
-          const sortedChronological = messages.reverse();
-          // Seed Redis cache asynchronously if empty
-          if (redisConnected && redisClient && sortedChronological.length > 0) {
-            redisClient.del(`chat:messages:${channel}`).then(() => {
-              const pipeline = redisClient.pipeline();
-              sortedChronological.forEach(msg => pipeline.lpush(`chat:messages:${channel}`, JSON.stringify(msg)));
-              pipeline.exec().catch(() => {});
-            }).catch(() => {});
-          }
-          return res.json({ success: true, messages: sortedChronological });
-        }
-      } catch (dbErr) {
-        console.error("MongoDB fetch chat messages error, falling back to memory:", dbErr.message);
-      }
-    }
-
-    // 3. Fallback to in-memory store
+    // 2. High-performance in-memory fallback
     const filtered = inMemoryChatMessages.filter(m => m.channel === channel).slice(-100);
     res.json({ success: true, messages: filtered });
   } catch (err) {
@@ -6176,27 +6151,18 @@ app.post('/api/chat/messages', async (req, res) => {
       timestamp: new Date().toISOString()
     };
 
-    // Save to MongoDB if connected
-    if (db) {
-      try {
-        await db.collection('chat_messages').insertOne(messageObj);
-      } catch (e) {
-        console.error("MongoDB message save warning:", e.message);
-      }
-    }
-
-    // Always maintain in-memory cache
-    inMemoryChatMessages.push(messageObj);
-    if (inMemoryChatMessages.length > 300) {
-      inMemoryChatMessages.shift();
-    }
-
-    // Save to Redis if connected
+    // Save to Redis (Primary Chat DB)
     if (redisConnected && redisClient) {
       try {
         await redisClient.lpush(`chat:messages:${targetChannel}`, JSON.stringify(messageObj));
         await redisClient.ltrim(`chat:messages:${targetChannel}`, 0, 199);
       } catch (e) {}
+    }
+
+    // Always maintain in-memory store
+    inMemoryChatMessages.push(messageObj);
+    if (inMemoryChatMessages.length > 300) {
+      inMemoryChatMessages.shift();
     }
 
     // Broadcast over WebSocket to connected clients
@@ -6849,18 +6815,15 @@ wss.on('connection', (ws) => {
           timestamp: new Date().toISOString()
         };
 
-        if (db) {
-          try { await db.collection('chat_messages').insertOne(messageObj); } catch (e) {}
-        }
-        inMemoryChatMessages.push(messageObj);
-        if (inMemoryChatMessages.length > 300) inMemoryChatMessages.shift();
-
+        // Save to Redis (Primary Chat DB)
         if (redisConnected && redisClient) {
           try {
             await redisClient.lpush(`chat:messages:${targetChannel}`, JSON.stringify(messageObj));
             await redisClient.ltrim(`chat:messages:${targetChannel}`, 0, 199);
           } catch (e) {}
         }
+        inMemoryChatMessages.push(messageObj);
+        if (inMemoryChatMessages.length > 300) inMemoryChatMessages.shift();
 
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'ack_server', tempId: data.tempId, message: messageObj }));
