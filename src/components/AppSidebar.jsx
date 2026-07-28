@@ -33,6 +33,7 @@ const GithubIcon = ({ size = 18, className = '' }) => (
 
 const NAV_ITEMS = [
   { id: 'dashboard',     label: 'Dashboard',        icon: LayoutDashboard, alwaysVisible: true },
+  { id: 'chats',         label: 'Student Chat',     icon: MessageSquare,   alwaysVisible: true },
   { id: 'faculty',       label: 'Faculty Cabins',   icon: Building2,       alwaysVisible: true },
   { id: 'opportunities', label: 'Opportunities Hub', icon: Target,          alwaysVisible: true },
   { id: 'community',     label: 'Student Community', icon: Users,           alwaysVisible: true },

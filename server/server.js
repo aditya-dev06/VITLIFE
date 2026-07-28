@@ -1,4 +1,6 @@
 import express from 'express';
+import http from 'http';
+import { WebSocketServer, WebSocket } from 'ws';
 import cors from 'cors';
 import compression from 'compression';
 import zlib from 'zlib';
@@ -3239,7 +3241,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
       success: true, 
       message: 'Verification code sent.', 
       email: lowerEmail,
-      ...((!transporter || !smtpHealthy || isDev) && { devCode: rawCode })
+      ...((isDev && process.env.NODE_ENV === 'development') && { devCode: rawCode })
     });
   } catch (error) {
     console.error('Server registration error:', error);
@@ -3369,7 +3371,7 @@ app.post('/api/auth/resend-code', authLimiter, authRateLimiter(5, 15 * 60 * 1000
     res.json({ 
       success: true, 
       message: 'New verification code sent.',
-      ...((!transporter || !smtpHealthy || isDev) && { devCode: rawCode })
+      ...((isDev && process.env.NODE_ENV === 'development') && { devCode: rawCode })
     });
   } catch (error) {
     console.error('Failed to resend code:', error);
@@ -3578,12 +3580,12 @@ app.delete('/api/user/sessions/:id', authenticate, async (req, res) => {
 });
 
 // Secret Admin Pipeline Endpoint: Ingest Raw Email Payload & Post Live Cards
-app.post('/api/admin/pipeline/ingest', async (req, res) => {
+app.post('/api/admin/pipeline/ingest', authenticate, requireAdmin, async (req, res) => {
   try {
     const pipelineSecret = req.headers['x-pipeline-secret'];
     const expectedSecret = process.env.ADMIN_PIPELINE_SECRET || 'vitlife_secret_pipeline_key_2026';
 
-    if (pipelineSecret !== expectedSecret) {
+    if (!pipelineSecret || pipelineSecret !== expectedSecret) {
       return res.status(403).json({ error: 'Unauthorized pipeline access.' });
     }
 
@@ -3622,12 +3624,12 @@ app.post('/api/admin/pipeline/ingest', async (req, res) => {
 });
 
 // Secret Admin Pipeline Endpoint: Trigger Direct IMAP Fetch Worker
-app.post('/api/admin/pipeline/run', async (req, res) => {
+app.post('/api/admin/pipeline/run', authenticate, requireAdmin, async (req, res) => {
   try {
     const pipelineSecret = req.headers['x-pipeline-secret'];
     const expectedSecret = process.env.ADMIN_PIPELINE_SECRET || 'vitlife_secret_pipeline_key_2026';
 
-    if (pipelineSecret !== expectedSecret) {
+    if (!pipelineSecret || pipelineSecret !== expectedSecret) {
       return res.status(403).json({ error: 'Unauthorized pipeline access.' });
     }
 
@@ -3755,7 +3757,7 @@ app.post('/api/auth/forgot-password', authLimiter, authRateLimiter(5, 15 * 60 * 
 
     res.json({
       ...genericSuccessResponse,
-      ...((!transporter || !smtpHealthy || isDev) && { devCode: rawCode })
+      ...((isDev && process.env.NODE_ENV === 'development') && { devCode: rawCode })
     });
   } catch (error) {
     console.error('Server error:', error);
@@ -5964,6 +5966,8 @@ const scheduleDailyScraper = () => {
 
 // --- STUDENT COMMUNITY CHAT API ENDPOINTS ---
 const inMemoryChatMessages = [];
+const inMemoryChatReports = [];
+
 
 // Helper to identify faculty/official accounts
 const isFacultyAccount = (user) => {
@@ -5978,16 +5982,32 @@ const isFacultyAccount = (user) => {
 // GET /api/chat/messages?channel=general
 app.get('/api/chat/messages', async (req, res) => {
   try {
-    const channel = req.query.channel || 'general';
+    const channel = String(req.query.channel || 'general').trim();
 
+    // 1. Try Redis cache first for instant sub-second response
+    if (redisConnected && redisClient) {
+      try {
+        const cached = await redisClient.lrange(`chat:messages:${channel}`, 0, 100);
+        if (cached && cached.length > 0) {
+          const parsed = cached.map(item => JSON.parse(item)).reverse();
+          return res.json({ success: true, messages: parsed });
+        }
+      } catch (e) {}
+    }
+
+    // 2. Try MongoDB if available
     if (db) {
       const messages = await db.collection('chat_messages')
-        .find({ channel })
-        .sort({ timestamp: 1 })
+        .find({ channel: { $eq: channel } })
+        .sort({ _id: 1 })
         .limit(100)
         .toArray();
-      return res.json({ success: true, messages });
+      if (messages && messages.length > 0) {
+        return res.json({ success: true, messages });
+      }
     }
+
+    // 3. Fallback to in-memory store
     const filtered = inMemoryChatMessages.filter(m => m.channel === channel);
     res.json({ success: true, messages: filtered });
   } catch (err) {
@@ -5999,7 +6019,7 @@ app.get('/api/chat/messages', async (req, res) => {
 // POST /api/chat/messages
 app.post('/api/chat/messages', async (req, res) => {
   try {
-    const { channel, content, attachment, replyTo, authorName, authorRole } = req.body;
+    const { channel, content, attachment, replyTo, authorName, authorRole, tempId } = req.body;
     if (!content && !attachment) {
       return res.status(400).json({ error: "Message content or attachment required" });
     }
@@ -6027,6 +6047,7 @@ app.post('/api/chat/messages', async (req, res) => {
 
     const messageObj = {
       id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+      tempId: tempId || null,
       channel: targetChannel,
       author: user ? (user.name || user.email.split('@')[0]) : (authorName || 'Guest Student'),
       authorId: user ? (user._id ? String(user._id) : user.id) : 'guest_' + Math.random().toString(36).substr(2, 5),
@@ -6039,10 +6060,27 @@ app.post('/api/chat/messages', async (req, res) => {
       timestamp: new Date().toISOString()
     };
 
+    // Save to MongoDB if connected
     if (db) {
-      await db.collection('chat_messages').insertOne(messageObj);
-    } else {
-      inMemoryChatMessages.push(messageObj);
+      try {
+        await db.collection('chat_messages').insertOne(messageObj);
+      } catch (e) {
+        console.error("MongoDB message save warning:", e.message);
+      }
+    }
+
+    // Always maintain in-memory cache for instant real-time polling
+    inMemoryChatMessages.push(messageObj);
+    if (inMemoryChatMessages.length > 300) {
+      inMemoryChatMessages.shift();
+    }
+
+    // Save to Redis if connected
+    if (redisConnected && redisClient) {
+      try {
+        await redisClient.lpush(`chat:messages:${targetChannel}`, JSON.stringify(messageObj));
+        await redisClient.ltrim(`chat:messages:${targetChannel}`, 0, 199);
+      } catch (e) {}
     }
 
     res.json({ success: true, message: messageObj });
@@ -6059,12 +6097,19 @@ app.post('/api/chat/upload', authenticate, upload.single('file'), async (req, re
       return res.status(400).json({ error: "No file uploaded" });
     }
 
+    const safeExt = path.extname(req.file.originalname).toLowerCase();
+    const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.doc', '.docx'];
+    if (!allowedExts.includes(safeExt)) {
+      return res.status(400).json({ error: "Unsupported file type" });
+    }
+
     let fileUrl = '';
     if (isCloudinaryConfigured) {
       fileUrl = await uploadToCloudinary(req.file.buffer, 'chat_attachments');
     } else {
-      // Local fallback
-      const filename = `chat_${Date.now()}_${path.basename(req.file.originalname)}`;
+      // Local fallback with sanitized filename
+      const cleanBaseName = path.basename(req.file.originalname, safeExt).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const filename = `chat_${Date.now()}_${cleanBaseName}${safeExt}`;
       const uploadsDir = path.join(__dirname, 'uploads');
       if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
       fs.writeFileSync(path.join(uploadsDir, filename), req.file.buffer);
@@ -6074,7 +6119,7 @@ app.post('/api/chat/upload', authenticate, upload.single('file'), async (req, re
     res.json({ success: true, url: fileUrl });
   } catch (err) {
     console.error("Error uploading chat attachment:", err);
-    res.status(500).json({ error: "Failed to upload image" });
+    res.status(500).json({ error: "Failed to upload file" });
   }
 });
 
@@ -6135,23 +6180,42 @@ app.post('/api/chat/react', async (req, res) => {
 app.put('/api/chat/messages/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { content } = req.body;
+    const { content, guestUserId } = req.body;
     if (!content || !content.trim()) {
       return res.status(400).json({ error: "Message content cannot be empty" });
     }
 
+    let userId = req.headers['x-guest-user-id'] || guestUserId || null;
+    let isAdmin = false;
+
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
+        userId = String(decoded._id || decoded.id || decoded.email);
+        isAdmin = decoded.role === 'admin';
+      } catch (e) {}
+    }
+
     if (db) {
+      const msg = await db.collection('chat_messages').findOne({ id });
+      if (!msg) return res.status(404).json({ error: "Message not found" });
+      if (userId && String(msg.authorId) !== String(userId) && !isAdmin) {
+        return res.status(403).json({ error: "Unauthorized to edit this message" });
+      }
       await db.collection('chat_messages').updateOne(
         { id },
         { $set: { content: content.trim(), isEdited: true, editedAt: new Date().toISOString() } }
       );
     } else {
       const msg = inMemoryChatMessages.find(m => m.id === id);
-      if (msg) {
-        msg.content = content.trim();
-        msg.isEdited = true;
-        msg.editedAt = new Date().toISOString();
+      if (!msg) return res.status(404).json({ error: "Message not found" });
+      if (userId && String(msg.authorId) !== String(userId) && !isAdmin) {
+        return res.status(403).json({ error: "Unauthorized to edit this message" });
       }
+      msg.content = content.trim();
+      msg.isEdited = true;
+      msg.editedAt = new Date().toISOString();
     }
 
     res.json({ success: true, message: "Message updated successfully" });
@@ -6165,16 +6229,124 @@ app.put('/api/chat/messages/:id', async (req, res) => {
 app.delete('/api/chat/messages/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    let userId = req.headers['x-guest-user-id'] || null;
+    let isAdmin = false;
+
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
+        userId = String(decoded._id || decoded.id || decoded.email);
+        isAdmin = decoded.role === 'admin';
+      } catch (e) {}
+    }
+
     if (db) {
+      const msg = await db.collection('chat_messages').findOne({ id });
+      if (!msg) return res.status(404).json({ error: "Message not found" });
+      if (userId && String(msg.authorId) !== String(userId) && !isAdmin) {
+        return res.status(403).json({ error: "Unauthorized to delete this message" });
+      }
       await db.collection('chat_messages').deleteOne({ id });
     } else {
       const idx = inMemoryChatMessages.findIndex(m => m.id === id);
-      if (idx !== -1) inMemoryChatMessages.splice(idx, 1);
+      if (idx === -1) return res.status(404).json({ error: "Message not found" });
+      if (userId && String(inMemoryChatMessages[idx].authorId) !== String(userId) && !isAdmin) {
+        return res.status(403).json({ error: "Unauthorized to delete this message" });
+      }
+      inMemoryChatMessages.splice(idx, 1);
     }
     res.json({ success: true, message: "Message deleted successfully" });
   } catch (err) {
     console.error("Error deleting message:", err);
     res.status(500).json({ error: "Failed to delete message" });
+  }
+});
+
+// POST /api/chat/report
+app.post('/api/chat/report', async (req, res) => {
+  try {
+    const { messageId, reason, details, channel, reportedUser, reportedUserId, messageContent, reporterName } = req.body;
+    if (!messageId || !reason) {
+      return res.status(400).json({ success: false, error: "messageId and reason are required for submitting a report" });
+    }
+
+    let reporter = reporterName || 'Anonymous Student';
+    let reporterId = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, JWT_SECRET);
+        reporter = decoded.name || decoded.email || reporter;
+        reporterId = decoded._id ? String(decoded._id) : (decoded.id || null);
+      } catch (e) {}
+    }
+
+    const validReasons = ['Spam', 'Harassment', 'Misinformation', 'Inappropriate'];
+    let normalizedReason = reason;
+    if (!validReasons.includes(reason)) {
+      const matched = validReasons.find(r => reason.toLowerCase().includes(r.toLowerCase()));
+      if (matched) {
+        normalizedReason = matched;
+      }
+    }
+
+    const reportObj = {
+      id: 'rep_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      messageId: String(messageId),
+      reason: normalizedReason,
+      details: details ? String(details).trim() : '',
+      channel: channel || 'general',
+      reportedUser: reportedUser || 'Unknown Student',
+      reportedUserId: reportedUserId || null,
+      messageContent: messageContent || '',
+      reporter: reporter,
+      reporterId: reporterId,
+      status: 'pending',
+      timestamp: new Date().toISOString(),
+      createdAt: new Date()
+    };
+
+    if (db) {
+      try {
+        await db.collection('chat_reports').insertOne(reportObj);
+      } catch (e) {
+        console.error("MongoDB chat report save error:", e.message);
+      }
+    }
+
+    inMemoryChatReports.push(reportObj);
+    if (inMemoryChatReports.length > 500) {
+      inMemoryChatReports.shift();
+    }
+
+    res.json({
+      success: true,
+      message: "Report submitted successfully. Community moderators have been notified.",
+      reportId: reportObj.id
+    });
+  } catch (err) {
+    console.error("Error submitting chat report:", err);
+    res.status(500).json({ success: false, error: "Failed to submit report" });
+  }
+});
+
+// GET /api/chat/reports (Admin endpoint to view submitted reports)
+app.get('/api/chat/reports', async (req, res) => {
+  try {
+    if (db) {
+      const reports = await db.collection('chat_reports')
+        .find({})
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .toArray();
+      return res.json({ success: true, reports });
+    }
+    res.json({ success: true, reports: inMemoryChatReports });
+  } catch (err) {
+    console.error("Error fetching chat reports:", err);
+    res.status(500).json({ success: false, error: "Failed to fetch chat reports" });
   }
 });
 
@@ -6188,9 +6360,9 @@ app.post('/api/chat/typing', async (req, res) => {
     const uId = userId || 'anon_' + username;
 
     if (redisConnected && redisClient) {
-      await redisClient.setex(`typing:${channel}:${uId}`, 3, username);
+      await redisClient.setex(`typing:${channel}:${uId}`, 4, username);
     } else {
-      inMemoryTyping.set(`typing:${channel}:${uId}`, { username, expiresAt: Date.now() + 3000 });
+      inMemoryTyping.set(`typing:${channel}:${uId}`, { username, expiresAt: Date.now() + 4000 });
     }
 
     res.json({ success: true, isTyping: true });
@@ -6251,21 +6423,50 @@ app.post('/api/chat/presence', async (req, res) => {
 app.get('/api/chat/online-users', async (req, res) => {
   try {
     let onlineCount = 494; // Base online student counter
+    let activeUsers = [];
+
     if (redisConnected && redisClient) {
       const keys = await redisClient.keys('presence:*');
       onlineCount += keys.length;
+      if (keys.length > 0) {
+        const names = await redisClient.mget(...keys);
+        activeUsers = keys.map((k, i) => ({
+          userId: k.replace('presence:', ''),
+          username: names[i] || 'Student'
+        }));
+      }
     } else {
       const now = Date.now();
       let activeCount = 0;
       for (const [key, val] of inMemoryPresence.entries()) {
-        if (val.expiresAt > now) activeCount++;
-        else inMemoryPresence.delete(key);
+        if (val.expiresAt > now) {
+          activeCount++;
+          activeUsers.push({
+            userId: key.replace('presence:', ''),
+            username: val.username
+          });
+        } else {
+          inMemoryPresence.delete(key);
+        }
       }
       onlineCount += activeCount;
     }
-    res.json({ success: true, onlineCount, redisConnected });
+
+    // Include connected WebSocket clients
+    for (const [ws, meta] of wsClients.entries()) {
+      if (ws.readyState === 1 && meta.username) {
+        if (!activeUsers.some(u => u.username === meta.username || u.userId === meta.userId)) {
+          activeUsers.push({
+            userId: meta.userId || meta.username,
+            username: meta.username
+          });
+        }
+      }
+    }
+
+    res.json({ success: true, onlineCount, activeUsers, redisConnected });
   } catch (err) {
-    res.json({ success: true, onlineCount: 494, redisConnected: false });
+    res.json({ success: true, onlineCount: 494, activeUsers: [], redisConnected: false });
   }
 });
 
@@ -6275,43 +6476,29 @@ app.get('/api/cron/cleanup', authenticate, requireAdmin, async (req, res) => {
     await cleanupExpiredEvents();
     res.json({ success: true, message: 'Expired events and assets cleanup completed.' });
   } catch (err) {
-    console.error('Cron cleanup handler failed:', err);
-    res.status(500).json({ error: 'Cleanup failed. Check server logs for details.' });
+    res.status(500).json({ error: 'Failed to run cleanup.' });
   }
 });
 
+// --- CLOUDINARY TEST DIAGNOSTIC ROUTE ---
 app.get('/api/test-cloudinary', async (req, res) => {
   try {
-    const status = {
-      CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ? 'Configured (' + process.env.CLOUDINARY_CLOUD_NAME + ')' : 'Missing',
-      CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY ? 'Configured (len: ' + process.env.CLOUDINARY_API_KEY.length + ')' : 'Missing',
-      CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET ? 'Configured (len: ' + process.env.CLOUDINARY_API_SECRET.length + ')' : 'Missing',
-      isCloudinaryConfigured: !!isCloudinaryConfigured
-    };
-
-    if (!isCloudinaryConfigured) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cloudinary is not configured. Missing environment variables.',
-        status
-      });
-    }
-
-    // 1x1 transparent pixel PNG buffer
-    const testBuffer = Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
-      'base64'
+    const testResult = await uploadToCloudinary(
+      Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'),
+      'test_uploads'
     );
-
-    const testUrl = await uploadToCloudinary(testBuffer, 'vitlife_test');
     res.json({
       success: true,
       message: 'Cloudinary test upload succeeded!',
-      url: testUrl,
-      status
+      url: testResult,
+      status: {
+        CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ? 'Configured (' + process.env.CLOUDINARY_CLOUD_NAME + ')' : 'Missing',
+        CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY ? 'Configured' : 'Missing',
+        CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET ? 'Configured' : 'Missing',
+        isCloudinaryConfigured: !!isCloudinaryConfigured
+      }
     });
   } catch (error) {
-    console.error('Cloudinary self-test failed:', error);
     res.status(500).json({
       success: false,
       message: 'Cloudinary test upload failed: ' + error.message,
@@ -6324,6 +6511,133 @@ app.get('/api/test-cloudinary', async (req, res) => {
       }
     });
   }
+});
+
+// --- WHATSAPP WEBSOCKET REAL-TIME ENGINE & GATEWAY ---
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+const wsClients = new Map(); // ws -> { channel, userId, username, isAlive }
+
+function heartbeat() {
+  this.isAlive = true;
+}
+
+wss.on('connection', (ws) => {
+  ws.isAlive = true;
+  ws.on('pong', heartbeat);
+
+  ws.on('message', async (rawMsg) => {
+    try {
+      const data = JSON.parse(rawMsg);
+
+      if (data.type === 'subscribe') {
+        wsClients.set(ws, {
+          channel: data.channel || 'general',
+          userId: data.userId,
+          username: data.username,
+          isAlive: true
+        });
+        ws.send(JSON.stringify({ type: 'subscribed', channel: data.channel || 'general' }));
+      } else if (data.type === 'message') {
+        const clientMeta = wsClients.get(ws) || {};
+        const targetChannel = data.channel || clientMeta.channel || 'general';
+
+        const messageObj = {
+          id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+          tempId: data.tempId || null,
+          channel: targetChannel,
+          author: data.authorName || clientMeta.username || 'Guest Student',
+          authorId: data.userId || clientMeta.userId || 'guest_' + Math.random().toString(36).substr(2, 5),
+          avatar: (data.authorName || clientMeta.username || 'G').charAt(0).toUpperCase(),
+          role: data.authorRole || 'Student',
+          content: data.content ? data.content.trim() : '',
+          attachment: data.attachment || null,
+          replyTo: data.replyTo || null,
+          reactions: { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] },
+          timestamp: new Date().toISOString()
+        };
+
+        // 1. Save to DB, Memory, Redis
+        if (db) {
+          try { await db.collection('chat_messages').insertOne(messageObj); } catch (e) {}
+        }
+        inMemoryChatMessages.push(messageObj);
+        if (inMemoryChatMessages.length > 300) inMemoryChatMessages.shift();
+
+        if (redisConnected && redisClient) {
+          try {
+            await redisClient.lpush(`chat:messages:${targetChannel}`, JSON.stringify(messageObj));
+            await redisClient.ltrim(`chat:messages:${targetChannel}`, 0, 199);
+          } catch (e) {}
+        }
+
+        // 2. Ack to Sender (Single Tick ✓)
+        ws.send(JSON.stringify({ type: 'ack_server', tempId: data.tempId, message: messageObj }));
+
+        // 3. Broadcast to all clients in targetChannel or involved in DM (Double Tick ✓✓ on Delivery)
+        let deliveredCount = 0;
+        const isDM = targetChannel.startsWith('dm_');
+        
+        for (const [client, meta] of wsClients.entries()) {
+          const isDirectSub = meta.channel === targetChannel;
+          const isDMUser = isDM && meta.username && targetChannel.toLowerCase().includes(meta.username.toLowerCase());
+
+          if (client.readyState === WebSocket.OPEN && (isDirectSub || isDMUser)) {
+            client.send(JSON.stringify({ type: 'new_message', channel: targetChannel, message: messageObj }));
+            if (client !== ws) deliveredCount++;
+          }
+        }
+
+        if (deliveredCount > 0) {
+          ws.send(JSON.stringify({ type: 'ack_delivered', tempId: data.tempId, messageId: messageObj.id }));
+        }
+      } else if (data.type === 'typing') {
+        const clientMeta = wsClients.get(ws) || {};
+        const targetChannel = data.channel || clientMeta.channel || 'general';
+
+        for (const [client, meta] of wsClients.entries()) {
+          if (client !== ws && client.readyState === WebSocket.OPEN && meta.channel === targetChannel) {
+            client.send(JSON.stringify({
+              type: 'peer_typing',
+              channel: targetChannel,
+              username: data.username || clientMeta.username,
+              isTyping: data.isTyping !== false
+            }));
+          }
+        }
+      } else if (data.type === 'delete_message') {
+        const targetChannel = data.channel || 'general';
+        for (const [client, meta] of wsClients.entries()) {
+          if (client !== ws && client.readyState === WebSocket.OPEN && meta.channel === targetChannel) {
+            client.send(JSON.stringify({
+              type: 'delete_message',
+              channel: targetChannel,
+              id: data.id
+            }));
+          }
+        }
+      }
+    } catch (e) {
+      console.error("WS message parse error:", e.message);
+    }
+  });
+
+  ws.on('close', () => {
+    wsClients.delete(ws);
+  });
+});
+
+// Ping interval every 15s to keep connections alive and clean dead sockets
+const pingInterval = setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (ws.isAlive === false) return ws.terminate();
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 15000);
+
+wss.on('close', () => {
+  clearInterval(pingInterval);
 });
 
 if (!process.env.VERCEL) {
@@ -6343,9 +6657,9 @@ if (!process.env.VERCEL) {
     cleanupExpiredEvents().catch(err => console.error("Local interval cleanup failed:", err));
   }, 24 * 60 * 60 * 1000);
 
-  app.listen(PORT, () => {
+  server.listen(PORT, () => {
     console.log(`=========================================`);
-    console.log(`Express Backend running on port ${PORT}`);
+    console.log(`Express Backend + WhatsApp WS Gateway running on port ${PORT}`);
     console.log(`=========================================`);
   });
 }

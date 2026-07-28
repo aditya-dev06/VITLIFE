@@ -2,8 +2,17 @@ import { useState, useEffect, useCallback, useMemo, useRef, memo, startTransitio
 import { createPortal } from 'react-dom';
 import { Search, X, Send } from 'lucide-react';
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/InputGroup';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator } from './ui/DropdownMenu';
+import { Bubble, BubbleContent, BubbleReactions, BubbleGroup } from './ui/bubble';
 import FacultyDirectory from './FacultyDirectory';
 import { encryptText, decryptText } from '../utils/crypto.js';
+import { WhatsAppPollModal } from './WhatsAppPollModal';
+import { WhatsAppPollVotingCard } from './WhatsAppPollVotingCard';
+import { WhatsAppVoterListDrawer } from './WhatsAppVoterListDrawer';
+import { ForwardMessageModal } from './ForwardMessageModal';
+import { useToast } from '../hooks/useToast';
+import './WhatsAppPolls.css';
+
 
 const EXAM_TYPES = ['MTE', 'TEE', 'CAT-1', 'CAT-2', 'FAT'];
 const ACADEMIC_YEARS = ['2023-24', '2024-25', '2025-26'];
@@ -887,7 +896,9 @@ const ModerationCard = memo(function ModerationCard({ paper, onApprove, onDelete
 const getGuestClientId = () => {
   let id = localStorage.getItem('ds_guest_client_id');
   if (!id) {
-    id = 'guest_' + Math.random().toString(36).substr(2, 8);
+    const array = new Uint8Array(8);
+    window.crypto.getRandomValues(array);
+    id = 'guest_' + Array.from(array, b => b.toString(36)).join('').substr(0, 8);
     localStorage.setItem('ds_guest_client_id', id);
   }
   return id;
@@ -900,30 +911,114 @@ const getGuestClientId = () => {
 const ChatMessageItem = memo(function ChatMessageItem({ 
   message, 
   currentUser, 
+  activeMenuMsgId,
+  setActiveMenuMsgId,
   onReact, 
   onEdit, 
   onDelete, 
-  onReply, 
+  onReply,
+  onReplyPrivately,
+  onDirectMessageUser,
+  onAskMetaAI,
+  onReportMessage,
+  onSelectMessage,
+  isSelected,
+  isSelectionMode,
   onStar, 
   onVotePoll, 
+  onOpenVoterList,
   onForward, 
+  onCopySuccess,
   onRequireAuth, 
   onPreviewImage 
 }) {
-  const currentUserId = currentUser && !currentUser.isGuest 
-    ? (currentUser._id || currentUser.id || currentUser.email)
-    : getGuestClientId();
+  if (!message) return null;
 
+  const currentAuthorName = getSafeAuthorName(currentUser);
+  const guestClientId = getGuestClientId();
+  const currentUserId = currentUser && !currentUser.isGuest 
+    ? String(currentUser._id || currentUser.id || currentUser.email || '')
+    : guestClientId;
   const isOwner = Boolean(
-    (message.authorId && message.authorId === currentUserId) || 
-    (currentUser && !currentUser.isGuest && currentUser.name === message.author)
+    currentUser?.role === 'admin' ||
+    (message && message.authorId && (String(message.authorId) === String(currentUserId) || String(message.authorId) === String(guestClientId))) ||
+    (message && message.author && message.author === currentAuthorName) ||
+    (message && message.tempId && String(message.tempId).startsWith('temp_'))
   );
 
-  const reactions = message.reactions || { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] };
+  const reactions = message.reactions || { '👍': [], '❤️': [], '😂': [], '😮': [], '😢': [], '🙏': [], '💡': [], '🔥': [], '🚀': [] };
+  const activeReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏', '💡', '🔥', '🚀']
+    .map(emoji => ({
+      emoji,
+      count: (reactions[emoji] || []).length,
+      hasReacted: (reactions[emoji] || []).includes(currentUserId)
+    }))
+    .filter(item => item.count > 0);
+
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.content || '');
-  const [showMenu, setShowMenu] = useState(false);
+  const showMenu = activeMenuMsgId === message.id;
+  const setShowMenu = useCallback((val) => {
+    if (val) {
+      if (setActiveMenuMsgId) setActiveMenuMsgId(message.id);
+    } else {
+      if (setActiveMenuMsgId && activeMenuMsgId === message.id) setActiveMenuMsgId(null);
+    }
+  }, [activeMenuMsgId, message.id, setActiveMenuMsgId]);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+
+  // Touch & Mouse Swipe-to-Reply & Long Press Gestures
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const startXRef = useRef(0);
+  const startYRef = useRef(0);
+  const isMouseDownRef = useRef(false);
+  const longPressTimerRef = useRef(null);
+
+  const handleGestureStart = (clientX, clientY) => {
+    startXRef.current = clientX;
+    startYRef.current = clientY;
+    setIsSwiping(false);
+
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      if (window.navigator?.vibrate) window.navigator.vibrate(50);
+      setShowMenu(true);
+    }, 450);
+  };
+
+  const handleGestureMove = (clientX, clientY) => {
+    const deltaX = clientX - startXRef.current;
+    const deltaY = Math.abs(clientY - startYRef.current);
+
+    if (deltaY > 14 && !isSwiping) {
+      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+      setSwipeOffset(0);
+      return;
+    }
+
+    if (Math.abs(deltaX) > 8 && longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+
+    if (deltaX > 0) {
+      setIsSwiping(true);
+      const offset = Math.min(deltaX * 0.45, 70);
+      setSwipeOffset(offset);
+    }
+  };
+
+  const handleGestureEnd = () => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    if (swipeOffset >= 35) {
+      if (window.navigator?.vibrate) window.navigator.vibrate(30);
+      if (onReply) onReply(message);
+    }
+    setIsSwiping(false);
+    setSwipeOffset(0);
+  };
 
   const handleSaveEdit = () => {
     if (!editText.trim()) return;
@@ -931,263 +1026,612 @@ const ChatMessageItem = memo(function ChatMessageItem({
     setIsEditing(false);
   };
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   const handleCopyText = () => {
     if (message.content) {
-      navigator.clipboard.writeText(message.content);
-      alert("Copied to clipboard!");
+      navigator.clipboard.writeText(message.content).then(() => {
+        // Toast is shown from parent; no local alert needed
+      }).catch(() => {});
     }
+    if (onCopySuccess) onCopySuccess();
     setShowMenu(false);
   };
 
   return (
-    <div className={`wa-msg-row ${isOwner ? 'sent' : 'received'} animate-fade-in`}>
-      <div className={`wa-msg-bubble ${isOwner ? 'sent' : 'received'}`}>
-        {/* Header Name for Received Messages */}
-        {!isOwner && (
-          <div className="wa-msg-author">
-            {message.author}
-            {message.role && (
-              <span style={{ fontSize: '0.65rem', marginLeft: '0.4rem', padding: '0.05rem 0.35rem', borderRadius: '4px', background: 'rgba(255,255,255,0.1)', color: '#aebac1' }}>
-                {message.role}
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* WhatsApp Hover Dropdown Trigger Chevron for ALL Messages */}
-        <button
-          className="wa-msg-dropdown-trigger"
-          onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-          title="Message options"
+    <div
+      className={`wa-msg-row ${isOwner ? 'sent' : 'received'} animate-fade-in`}
+      style={{ 
+        display: 'flex', 
+        width: '100%', 
+        justifyContent: isOwner ? 'flex-end' : 'flex-start', 
+        alignItems: 'center',
+        margin: '0.4rem 0', 
+        position: 'relative',
+        gap: '0.5rem',
+        cursor: isSelectionMode ? 'pointer' : 'default'
+      }}
+      onClick={isSelectionMode ? () => onSelectMessage && onSelectMessage(message.id) : undefined}
+    >
+      {/* Checkbox when in Multi-Selection Mode */}
+      {isSelectionMode && (
+        <div
+          className="wa-msg-checkbox-wrapper"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectMessage && onSelectMessage(message.id);
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 0.35rem',
+            cursor: 'pointer',
+            flexShrink: 0,
+            order: -1
+          }}
         >
-          ▼
-        </button>
-
-        {showMenu && (
-          <div className="wa-dropdown-menu" onClick={(e) => e.stopPropagation()}>
-            <div className="wa-dropdown-item" onClick={() => { setShowMenu(false); onReply && onReply(message); }}>
-              <span>💬 Reply</span>
-            </div>
-            <div className="wa-dropdown-item" onClick={() => { setShowMenu(false); onStar && onStar(message.id); }}>
-              <span>{message.isStarred ? '⭐ Unstar' : '⭐ Star Message'}</span>
-            </div>
-            <div className="wa-dropdown-item" onClick={handleCopyText}>
-              <span>📋 Copy Text</span>
-            </div>
-            <div className="wa-dropdown-item" onClick={() => { setShowMenu(false); onForward && onForward(message); }}>
-              <span>↪️ Forward</span>
-            </div>
-            {isOwner && (
-              <>
-                <div className="wa-dropdown-item" onClick={() => { setIsEditing(true); setEditText(message.content || ''); setShowMenu(false); }}>
-                  <span>✏️ Edit Message</span>
-                </div>
-                <div className="wa-dropdown-item delete" onClick={() => { setShowMenu(false); if (window.confirm("Delete this message?")) onDelete && onDelete(message.id); }}>
-                  <span>🗑️ Delete Message</span>
-                </div>
-              </>
+          <div
+            style={{
+              width: '20px',
+              height: '20px',
+              borderRadius: '5px',
+              border: isSelected ? '2px solid #00a884' : '2px solid rgba(255, 255, 255, 0.4)',
+              background: isSelected ? '#00a884' : 'transparent',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ffffff',
+              fontSize: '0.75rem',
+              fontWeight: 'bold',
+              transition: 'all 0.15s ease',
+              boxShadow: isSelected ? '0 0 8px rgba(0, 168, 132, 0.4)' : 'none'
+            }}
+          >
+            {isSelected && (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
             )}
           </div>
-        )}
-
-        {/* WhatsApp Quoted Reply Preview */}
-        {message.replyTo && (
-          <div style={{
-            background: 'rgba(0, 0, 0, 0.25)',
-            borderLeft: '4px solid #00a884',
-            borderRadius: '6px',
-            padding: '0.35rem 0.6rem',
-            marginBottom: '0.4rem',
-            fontSize: '0.78rem'
-          }}>
-            <div style={{ color: '#00a884', fontWeight: 700, fontSize: '0.72rem' }}>
-              {message.replyTo.author}
-            </div>
-            <div style={{ color: '#aebac1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {message.replyTo.content || 'Photo attachment'}
-            </div>
-          </div>
-        )}
-
-        {/* Voice Note Bubble */}
-        {message.isAudio ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.3rem 0.2rem', minWidth: '180px' }}>
-            <button
-              onClick={() => setIsPlayingAudio(!isPlayingAudio)}
+        </div>
+      )}
+      <Bubble
+        variant={isOwner ? 'default' : 'secondary'}
+        align={isOwner ? 'end' : 'start'}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        style={{
+          position: 'relative',
+          transform: `translateX(${swipeOffset}px)`,
+          transition: isSwiping ? 'none' : 'transform 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+          touchAction: 'pan-y'
+        }}
+        onTouchStart={(e) => handleGestureStart(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchMove={(e) => handleGestureMove(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchEnd={handleGestureEnd}
+        onMouseDown={(e) => {
+          if (e.button !== 0) return;
+          isMouseDownRef.current = true;
+          handleGestureStart(e.clientX, e.clientY);
+        }}
+        onMouseMove={(e) => {
+          if (!isMouseDownRef.current) return;
+          handleGestureMove(e.clientX, e.clientY);
+        }}
+        onMouseUp={() => {
+          if (isMouseDownRef.current) {
+            isMouseDownRef.current = false;
+            handleGestureEnd();
+          }
+        }}
+        onMouseLeave={() => {
+          if (isMouseDownRef.current) {
+            isMouseDownRef.current = false;
+            handleGestureEnd();
+          }
+        }}
+      >
+          {/* Swipe-to-Reply Floating Trigger Icon */}
+          {swipeOffset > 5 && (
+            <div
               style={{
-                width: '36px',
-                height: '36px',
+                position: 'absolute',
+                left: '-34px',
+                top: '50%',
+                transform: `translateY(-50%) scale(${Math.min(swipeOffset / 35, 1.2)})`,
+                opacity: Math.min(swipeOffset / 25, 1),
+                width: '26px',
+                height: '26px',
                 borderRadius: '50%',
                 background: '#00a884',
-                border: 'none',
-                color: '#fff',
+                color: '#ffffff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                cursor: 'pointer',
-                fontSize: '0.9rem'
+                fontSize: '0.85rem',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                transition: isSwiping ? 'none' : 'all 0.2s ease',
+                zIndex: 12
               }}
             >
-              {isPlayingAudio ? '⏸️' : '▶️'}
-            </button>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-              <div style={{ height: '6px', background: 'rgba(255,255,255,0.2)', borderRadius: '3px', position: 'relative', overflow: 'hidden' }}>
-                <div style={{ width: isPlayingAudio ? '100%' : '35%', height: '100%', background: '#00a884', transition: isPlayingAudio ? 'width 3s linear' : 'none' }} />
+              ↪️
+            </div>
+          )}
+
+          {/* Header Name for Received Messages */}
+          {!isOwner && (
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#38bdf8', marginBottom: '0.15rem', padding: '0.5rem 0.85rem 0 0.85rem' }}>
+              {message.author}
+              {message.role && (
+                <span style={{ fontSize: '0.65rem', marginLeft: '0.4rem', padding: '0.05rem 0.35rem', borderRadius: '4px', background: 'rgba(255,255,255,0.1)', color: '#aebac1', fontWeight: 400 }}>
+                  {message.role}
+                </span>
+              )}
+            </div>
+          )}
+
+
+        <BubbleContent style={{ padding: !isOwner ? '0.2rem 0.85rem 0.4rem 0.85rem' : '0.55rem 0.85rem 0.4rem 0.85rem' }}>
+          {/* Forwarded Badge */}
+          {message.isForwarded && (
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              fontSize: '0.72rem',
+              fontStyle: 'italic',
+              color: '#8696a0',
+              marginBottom: '0.35rem',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              padding: '0.15rem 0.5rem',
+              borderRadius: '6px'
+            }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 17 20 12 15 7" />
+                <path d="M4 18v-2a4 4 0 0 1 4-4h12" />
+              </svg>
+              <span style={{ fontWeight: 600, letterSpacing: '0.01em' }}>Forwarded</span>
+            </div>
+          )}
+
+          {/* Quoted Reply Preview */}
+          {message.replyTo && (
+            <div style={{
+              background: 'rgba(0, 0, 0, 0.25)',
+              borderLeft: '3px solid #00a884',
+              borderRadius: '4px',
+              padding: '0.35rem 0.6rem',
+              marginBottom: '0.4rem',
+              fontSize: '0.78rem'
+            }}>
+              <div style={{ color: '#00a884', fontWeight: 700, fontSize: '0.72rem' }}>
+                {message.replyTo.author}
               </div>
-              <div style={{ fontSize: '0.68rem', color: '#8696a0' }}>
-                🎙️ Voice Note • {message.audioDuration || '0:05'}
+              <div style={{ color: '#aebac1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {message.replyTo.content || 'Photo attachment'}
               </div>
             </div>
-          </div>
-        ) : isEditing ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.2rem' }}>
-            <input
-              type="text"
-              value={editText}
-              onChange={(e) => setEditText(e.target.value)}
-              style={{
-                width: '100%',
-                background: '#111b21',
-                border: '1px solid #00a884',
-                borderRadius: '6px',
-                color: '#e9edef',
-                fontSize: '0.88rem',
-                padding: '0.4rem 0.6rem',
-                outline: 'none'
-              }}
-              autoFocus
+          )}
+
+          {/* Poll Card or Voice Note / Text */}
+          {message.poll ? (
+            <WhatsAppPollVotingCard
+              poll={message.poll}
+              currentUserId={currentUserId}
+              currentUserName={currentAuthorName}
+              currentUserAvatar={currentUser?.avatar}
+              currentUserRole={currentUser?.role}
+              onCastVote={(pollId, voteData) => onVotePoll && onVotePoll(message.id, voteData)}
+              onOpenVoterList={(pollObj) => onOpenVoterList && onOpenVoterList(pollObj)}
             />
-            <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+          ) : message.isAudio ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.3rem 0.2rem', minWidth: '180px' }}>
               <button
-                onClick={() => setIsEditing(false)}
-                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#aebac1', borderRadius: '4px', padding: '0.2rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveEdit}
-                style={{ background: '#00a884', border: 'none', color: '#ffffff', borderRadius: '4px', padding: '0.2rem 0.6rem', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        ) : (
-          message.content && (
-            <div style={{ color: '#e9edef', fontSize: '0.9rem', lineHeight: '1.45', wordBreak: 'break-word', paddingTop: isOwner ? '0.1rem' : 0 }}>
-              {message.content}
-            </div>
-          )
-        )}
-
-        {/* WhatsApp Poll Bubble */}
-        {message.poll && (
-          <div style={{ marginTop: '0.5rem', background: '#111b21', borderRadius: '8px', padding: '0.65rem', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#e9edef', marginBottom: '0.5rem' }}>
-              📊 {message.poll.question}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-              {message.poll.options.map((opt, idx) => {
-                const votes = message.poll.votes ? (message.poll.votes[idx] || 0) : 0;
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => onVotePoll && onVotePoll(message.id, idx)}
-                    style={{
-                      display: 'flex',
-                      justify: 'space-between',
-                      alignItems: 'center',
-                      background: '#202c33',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '6px',
-                      padding: '0.4rem 0.65rem',
-                      color: '#e9edef',
-                      fontSize: '0.82rem',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <span>{opt}</span>
-                    <span style={{ fontWeight: 700, color: '#00a884', fontSize: '0.75rem' }}>{votes} votes</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Attachment Image */}
-        {message.attachment && (
-          <div style={{ marginTop: '0.35rem' }}>
-            <img 
-              src={message.attachment} 
-              alt="Chat attachment" 
-              onClick={() => onPreviewImage && onPreviewImage(message.attachment)}
-              style={{
-                maxWidth: '240px',
-                maxHeight: '180px',
-                borderRadius: '8px',
-                objectFit: 'cover',
-                border: '1px solid rgba(255,255,255,0.15)',
-                cursor: 'pointer',
-                transition: 'transform 0.2s ease'
-              }}
-            />
-          </div>
-        )}
-
-        {/* Timestamp & Read Receipt */}
-        <div className="wa-msg-meta">
-          {message.isStarred && <span style={{ color: '#eab308', marginRight: '0.2rem' }}>⭐</span>}
-          {message.isEdited && <span style={{ fontSize: '0.65rem', fontStyle: 'italic', marginRight: '0.2rem' }}>(edited)</span>}
-          <span>{message.timestamp}</span>
-          {isOwner && <span className="wa-msg-checks">✓✓</span>}
-        </div>
-
-        {/* Reactions Bar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.35rem', flexWrap: 'wrap', clear: 'both' }}>
-          {['👍', '❤️', '💡', '🔥', '🚀'].map(emoji => {
-            const list = reactions[emoji] || [];
-            const count = list.length;
-            const hasReacted = list.includes(currentUserId);
-            return (
-              <button
-                key={emoji}
-                onClick={() => onReact && onReact(message.id, emoji)}
+                onClick={() => setIsPlayingAudio(!isPlayingAudio)}
                 style={{
-                  background: hasReacted ? 'rgba(0, 168, 132, 0.25)' : 'rgba(255, 255, 255, 0.06)',
-                  border: '1px solid ' + (hasReacted ? '#00a884' : 'rgba(255, 255, 255, 0.08)'),
-                  borderRadius: '10px',
-                  padding: '0.1rem 0.35rem',
-                  fontSize: '0.7rem',
-                  cursor: 'pointer',
-                  color: '#e9edef',
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  background: '#00a884',
+                  border: 'none',
+                  color: '#fff',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.2rem',
-                  transition: 'all 0.15s ease'
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem'
+                }}
+              >
+                {isPlayingAudio ? '⏸️' : '▶️'}
+              </button>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                <div style={{ height: '6px', background: 'rgba(255,255,255,0.2)', borderRadius: '3px', position: 'relative', overflow: 'hidden' }}>
+                  <div style={{ width: isPlayingAudio ? '100%' : '35%', height: '100%', background: '#00a884', transition: isPlayingAudio ? 'width 3s linear' : 'none' }} />
+                </div>
+                <div style={{ fontSize: '0.68rem', color: '#8696a0' }}>
+                  🎙️ Voice Note • {message.audioDuration || '0:05'}
+                </div>
+              </div>
+            </div>
+          ) : isEditing ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.2rem' }}>
+              <input
+                type="text"
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                style={{
+                  width: '100%',
+                  background: '#111b21',
+                  border: '1px solid #00a884',
+                  borderRadius: '6px',
+                  color: '#e9edef',
+                  fontSize: '0.88rem',
+                  padding: '0.4rem 0.6rem',
+                  outline: 'none'
+                }}
+                autoFocus
+              />
+              <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setIsEditing(false)}
+                  style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#aebac1', borderRadius: '4px', padding: '0.2rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  style={{ background: '#00a884', border: 'none', color: '#ffffff', borderRadius: '4px', padding: '0.2rem 0.6rem', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          ) : (
+            message.content && (
+              <div style={{ color: '#e9edef', fontSize: '0.9rem', lineHeight: '1.45', wordBreak: 'break-word' }}>
+                {message.content}
+              </div>
+            )
+          )}
+
+          {/* Attachment Image */}
+          {message.attachment && (
+            <div style={{ marginTop: '0.35rem' }}>
+              <img 
+                src={message.attachment} 
+                alt="Chat attachment" 
+                onClick={() => onPreviewImage && onPreviewImage(message.attachment)}
+                style={{
+                  maxWidth: '240px',
+                  maxHeight: '180px',
+                  borderRadius: '8px',
+                  objectFit: 'cover',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s ease'
+                }}
+              />
+            </div>
+          )}
+
+          {/* Timestamp & Read Receipt */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.25rem', marginTop: '0.25rem', fontSize: '0.68rem', color: '#8696a0' }}>
+            {message.isStarred && <span style={{ color: '#eab308' }}>⭐</span>}
+            {message.isEdited && <span style={{ fontStyle: 'italic' }}>(edited)</span>}
+            <span>{message.timestamp}</span>
+            {isOwner && (
+              <span style={{ color: message.status === 'sending' ? '#8696a0' : '#53bdeb', fontWeight: 700, fontSize: '0.75rem' }}>
+                {message.status === 'sending' ? '⏱️' : '✓✓'}
+              </span>
+            )}
+          </div>
+        </BubbleContent>
+
+        {/* WhatsApp Real-Time Edge Reactions Pill (Only displayed when active votes exist!) */}
+        {activeReactions.length > 0 && (
+          <BubbleReactions side="bottom" align={isOwner ? 'end' : 'start'} role="img" aria-label="Reactions">
+            {activeReactions.map(({ emoji, count, hasReacted }) => (
+              <button
+                key={emoji}
+                onClick={(e) => { e.stopPropagation(); onReact && onReact(message.id, emoji); }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: hasReacted ? '#00a884' : '#e9edef',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.15rem'
                 }}
               >
                 <span>{emoji}</span>
                 {count > 0 && <span style={{ fontWeight: 700, fontSize: '0.65rem' }}>{count}</span>}
               </button>
-            );
-          })}
-        </div>
-      </div>
+            ))}
+          </BubbleReactions>
+        )}
+        {/* Base UI / Shadcn DropdownMenu for Message Actions */}
+        <DropdownMenu open={showMenu} onOpenChange={setShowMenu}>
+          <DropdownMenuTrigger
+            className={`wa-msg-dropdown-trigger ${showMenu ? 'open' : ''}`}
+            showChevron={false}
+            title="Message options"
+          >
+            <svg
+              style={{
+                width: '12px',
+                height: '12px',
+                transition: 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                transform: showMenu ? 'rotate(180deg)' : 'rotate(0deg)'
+              }}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent align={isOwner ? 'end' : 'start'} side="bottom">
+            {/* ── Quick Emoji Reactions Header (Authentic WhatsApp Pill Style) ── */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-around',
+              padding: '6px 10px',
+              background: '#111b21',
+              borderRadius: '20px',
+              marginBottom: '6px'
+            }}>
+              {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    fontSize: '1.25rem',
+                    cursor: 'pointer',
+                    padding: '2px 4px',
+                    lineHeight: 1,
+                    transition: 'transform 0.12s ease'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.3)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  onClick={(e) => { e.stopPropagation(); onReact && onReact(message.id, emoji); setShowMenu(false); }}
+                  title={emoji}
+                >
+                  {emoji}
+                </button>
+              ))}
+              <button
+                type="button"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.1rem',
+                  fontWeight: 700,
+                  color: '#8696a0',
+                  cursor: 'pointer',
+                  padding: '2px 4px',
+                  lineHeight: 1
+                }}
+                title="More reactions"
+              >
+                +
+              </button>
+            </div>
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuGroup>
+              {/* 1. Reply */}
+              <DropdownMenuItem
+                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>}
+                onClick={() => onReply && onReply(message)}
+              >
+                Reply
+              </DropdownMenuItem>
+
+              {/* 2. Reply privately */}
+              <DropdownMenuItem
+                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>}
+                onClick={() => onReplyPrivately && onReplyPrivately(message)}
+              >
+                Reply privately
+              </DropdownMenuItem>
+
+              {/* 3. Message Author */}
+              <DropdownMenuItem
+                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>}
+                onClick={() => onDirectMessageUser && onDirectMessageUser(message.author)}
+              >
+                Message {message.author ? message.author : 'User'}
+              </DropdownMenuItem>
+
+              {/* 4. Copy */}
+              <DropdownMenuItem
+                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>}
+                onClick={handleCopyText}
+              >
+                Copy
+              </DropdownMenuItem>
+
+              {/* 5. Forward */}
+              <DropdownMenuItem
+                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>}
+                onClick={() => onForward && onForward(message)}
+              >
+                Forward
+              </DropdownMenuItem>
+
+              {/* 6. Ask Meta AI */}
+              <DropdownMenuItem
+                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/></svg>}
+                onClick={() => onAskMetaAI && onAskMetaAI(message)}
+              >
+                Ask Meta AI
+              </DropdownMenuItem>
+
+              {/* 7. Star */}
+              <DropdownMenuItem
+                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>}
+                onClick={() => onStar && onStar(message.id)}
+              >
+                {message.isStarred ? 'Unstar' : 'Star'}
+              </DropdownMenuItem>
+
+              {/* 8. Select */}
+              <DropdownMenuItem
+                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>}
+                onClick={() => {
+                  setShowMenu(false);
+                  onSelectMessage && onSelectMessage(message.id);
+                }}
+              >
+                {isSelected ? 'Deselect' : 'Select'}
+              </DropdownMenuItem>
+
+              {isOwner && (
+                <DropdownMenuItem
+                  icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>}
+                  onClick={() => { setIsEditing(true); setEditText(message.content || ''); }}
+                >
+                  Edit
+                </DropdownMenuItem>
+              )}
+
+              <DropdownMenuSeparator />
+
+              {/* 9. Report */}
+              <DropdownMenuItem
+                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4.3v7a2.31 2.31 0 0 1-2.33 2.3H17"/></svg>}
+                onClick={() => onReportMessage && onReportMessage(message)}
+              >
+                Report
+              </DropdownMenuItem>
+
+              {/* 10. Delete */}
+              <DropdownMenuItem
+                variant="destructive"
+                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>}
+                onClick={() => { onDelete && onDelete(message.id); }}
+              >
+                {isOwner ? 'Delete for everyone' : 'Delete for me'}
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </Bubble>
     </div>
   );
 });
+
+/**
+ * ReportMessageModal — multi-step report flow
+ */
+function ReportMessageModal({ message, currentUser, onClose, onSubmit }) {
+  const REASONS = [
+    'Spam or Promotional Content',
+    'Harassment or Bullying',
+    'Hate Speech or Discrimination',
+    'Misinformation or False Information',
+    'Inappropriate Content / NSFW',
+    'Scam or Fraud',
+    'Other'
+  ];
+  const [step, setStep] = useState(1);
+  const [selectedReason, setSelectedReason] = useState('');
+  const [details, setDetails] = useState('');
+
+  if (!message) return null;
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }} onClick={onClose}>
+      <div style={{ background: '#111b21', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', width: '400px', maxWidth: '94vw', padding: '1.5rem', boxShadow: '0 20px 60px rgba(0,0,0,0.7)', color: '#e9edef' }} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800, fontSize: '1rem', color: '#fb7185' }}>
+            👎 Report Message
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#8696a0', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
+        </div>
+
+        {step === 1 && (
+          <>
+            <p style={{ fontSize: '0.84rem', color: '#8696a0', margin: '0 0 0.85rem 0' }}>
+              Reporting message from <strong style={{ color: '#e9edef' }}>{message.author}</strong>. Select a reason:
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', marginBottom: '1rem' }}>
+              {REASONS.map(r => (
+                <label key={r} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 0.75rem', background: selectedReason === r ? 'rgba(0,168,132,0.12)' : '#182229', border: `1px solid ${selectedReason === r ? '#00a884' : 'rgba(255,255,255,0.08)'}`, borderRadius: '8px', cursor: 'pointer', fontSize: '0.84rem', color: '#e9edef', transition: 'all 0.15s' }}>
+                  <input type="radio" name="report_reason" value={r} checked={selectedReason === r} onChange={() => setSelectedReason(r)} style={{ accentColor: '#00a884' }} />
+                  {r}
+                </label>
+              ))}
+            </div>
+            <button
+              onClick={() => { if (selectedReason) setStep(2); }}
+              disabled={!selectedReason}
+              style={{ width: '100%', padding: '0.65rem', background: selectedReason ? '#00a884' : '#2a3942', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 700, cursor: selectedReason ? 'pointer' : 'not-allowed', fontSize: '0.875rem', transition: 'background 0.15s' }}
+            >
+              Next →
+            </button>
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <p style={{ fontSize: '0.84rem', color: '#8696a0', margin: '0 0 0.65rem 0' }}>Reason: <strong style={{ color: '#00a884' }}>{selectedReason}</strong></p>
+            <textarea
+              value={details}
+              onChange={e => setDetails(e.target.value)}
+              placeholder="Add more details (optional)..."
+              style={{ width: '100%', minHeight: '90px', background: '#182229', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#e9edef', fontSize: '0.84rem', padding: '0.65rem', outline: 'none', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.85rem' }}>
+              <button onClick={() => setStep(1)} style={{ flex: 1, padding: '0.6rem', background: '#182229', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: '#e9edef', cursor: 'pointer', fontWeight: 600 }}>← Back</button>
+              <button
+                onClick={() => { setStep(3); onSubmit(selectedReason, details); }}
+                style={{ flex: 2, padding: '0.6rem', background: '#fb7185', border: 'none', borderRadius: '10px', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+              >
+                Submit Report
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 3 && (
+          <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '0.6rem' }}>✅</div>
+            <h3 style={{ color: '#00a884', margin: '0 0 0.5rem 0', fontWeight: 800 }}>Report Submitted!</h3>
+            <p style={{ color: '#8696a0', fontSize: '0.84rem', lineHeight: 1.5 }}>Our moderators will review this within 24 hours. Thank you for keeping the community safe.</p>
+            <button onClick={onClose} style={{ marginTop: '1rem', padding: '0.6rem 1.5rem', background: '#00a884', border: 'none', borderRadius: '10px', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Close</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /**
  * StudentChatSection Component
  * WhatsApp Web Style Community Chat.
  */
 const StudentChatSection = memo(function StudentChatSection({ user, onRequireAuth, onBackToApp }) {
-  // Faculty & VIT Official Access Restriction: Chat section is strictly for students
   const isFaculty = useMemo(() => isFacultyOrOfficial(user), [user]);
+  const { showToast } = useToast();
 
   const [activeChannel, setActiveChannel] = useState('general');
   const [showMobileChat, setShowMobileChat] = useState(false);
+  const [activeMenuMsgId, setActiveMenuMsgId] = useState(null);
+  const [forwardModalMsg, setForwardModalMsg] = useState(null);
   const [messages, setMessages] = useState(() => {
     try {
       const saved = localStorage.getItem('ds_community_messages_v2');
@@ -1202,6 +1646,15 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     return [];
   });
 
+  const [deletedForMeIds, setDeletedForMeIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ds_deleted_for_me_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
   const [chatSearch, setChatSearch] = useState('');
   const [debouncedChatSearch, setDebouncedChatSearch] = useState('');
   const [newMessage, setNewMessage] = useState('');
@@ -1212,10 +1665,94 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
   const [unreadCounts, setUnreadCounts] = useState({});
   const [replyingToMessage, setReplyingToMessage] = useState(null);
   const [showPollModal, setShowPollModal] = useState(false);
+  const [activeVoterDrawerPoll, setActiveVoterDrawerPoll] = useState(null);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOpt1, setPollOpt1] = useState('');
   const [pollOpt2, setPollOpt2] = useState('');
+
+  // Interactive Popup States for WhatsApp Buttons
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showProfileDrawer, setShowProfileDrawer] = useState(false);
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+  const [showChannelInfoModal, setShowChannelInfoModal] = useState(false);
+  const [inHeaderSearch, setInHeaderSearch] = useState(false);
+
+  // States for Context Menu Actions (Meta AI, Report, Select)
+  const [metaAiModalMessage, setMetaAiModalMessage] = useState(null);
+  const [reportModalMessage, setReportModalMessage] = useState(null);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedMsgIds, setSelectedMsgIds] = useState([]);
+
+  const handleReplyPrivately = useCallback((msg) => {
+    setReplyingToMessage(msg);
+    const chatInput = document.querySelector('.wa-input-field');
+    if (chatInput) chatInput.focus();
+  }, []);
+
+  const handleDirectMessageUser = useCallback((authorName) => {
+    setChatSearch(authorName);
+    showToast(`Filtering messages by ${authorName}`, 'info');
+  }, [showToast]);
+
+  const handleAskMetaAI = useCallback((msg) => {
+    setMetaAiModalMessage(msg);
+  }, []);
+
+  const handleReportMessage = useCallback((msg) => {
+    setReportModalMessage(msg);
+  }, []);
+
+  const handleSelectMessage = useCallback((msgId) => {
+    setIsSelectionMode(true);
+    setSelectedMsgIds(prev => prev.includes(msgId) ? prev.filter(id => id !== msgId) : [...prev, msgId]);
+  }, []);
+
+  const handleExitSelectionMode = useCallback(() => {
+    setIsSelectionMode(false);
+    setSelectedMsgIds([]);
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    const visibleIds = (Array.isArray(messages) ? messages : [])
+      .filter(m => m && m.channel === activeChannel)
+      .map(m => m.id);
+    if (selectedMsgIds.length === visibleIds.length && visibleIds.length > 0) {
+      setSelectedMsgIds([]);
+    } else {
+      setSelectedMsgIds(visibleIds);
+    }
+  }, [messages, activeChannel, selectedMsgIds.length]);
+
+  const handleBulkCopy = useCallback(() => {
+    if (selectedMsgIds.length === 0) return;
+    const selectedMsgs = messages.filter(m => selectedMsgIds.includes(m.id));
+    const text = selectedMsgs.map(m => {
+      const textContent = m.content || (m.poll ? `[Poll: ${m.poll.question}]` : m.attachment ? '[Image Attachment]' : '[Voice Note]');
+      return `[${m.author} - ${m.timestamp}]: ${textContent}`;
+    }).join('\n');
+    navigator.clipboard.writeText(text);
+    showToast(`${selectedMsgIds.length} message(s) copied 📋`, 'success');
+  }, [messages, selectedMsgIds, showToast]);
+
+  const handleBulkForward = useCallback(() => {
+    if (selectedMsgIds.length === 0) return;
+    const selectedMsgs = messages.filter(m => selectedMsgIds.includes(m.id));
+    if (selectedMsgs.length > 0) {
+      setForwardModalMsg({ _bulk: true, _msgs: selectedMsgs, author: 'Selected Messages', content: `${selectedMsgs.length} messages` });
+    }
+  }, [messages, selectedMsgIds]);
+
+  const handleBulkDelete = useCallback(() => {
+    if (selectedMsgIds.length === 0) return;
+    setMessages(prev => prev.filter(m => !selectedMsgIds.includes(m.id)));
+    showToast(`${selectedMsgIds.length} message(s) deleted`, 'info');
+    handleExitSelectionMode();
+  }, [selectedMsgIds, handleExitSelectionMode, showToast]);
+
+
 
   const fileInputRef = useRef(null);
   const chatScrollRef = useRef(null);
@@ -1282,6 +1819,70 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
   const isGuestUser = !user || user.isGuest;
   const isChannelLockedForGuest = isGuestUser && activeChannel !== 'general' && !activeChannelObj.isPublic;
 
+  // WhatsApp Live WebSocket Protocol Connection
+  const wsRef = useRef(null);
+  const peerTypingTimerRef = useRef(null);
+
+  useEffect(() => {
+    let socket;
+    try {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}`;
+      socket = new WebSocket(wsUrl);
+      wsRef.current = socket;
+
+      socket.onopen = () => {
+        const userId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
+        const authorName = getSafeAuthorName(user);
+        socket.send(JSON.stringify({ type: 'subscribe', channel: activeChannel, userId, username: authorName }));
+      };
+
+      socket.onmessage = async (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          if (data.type === 'new_message' && data.message) {
+            const rawContent = await decryptText(data.message.content);
+            const tsFormatted = data.message.timestamp ? (data.message.timestamp.includes('T') ? new Date(data.message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : data.message.timestamp) : 'Just now';
+            const serverMsg = { ...data.message, content: rawContent, timestamp: tsFormatted, status: 'sent' };
+
+            setMessages(prev => {
+              const exists = prev.some(m => m.id === serverMsg.id || (serverMsg.tempId && m.tempId === serverMsg.tempId));
+              if (exists) {
+                return prev.map(m => (m.id === serverMsg.id || (serverMsg.tempId && m.tempId === serverMsg.tempId)) ? serverMsg : m);
+              }
+              return [...prev, serverMsg];
+            });
+          } else if (data.type === 'ack_server') {
+            setMessages(prev => prev.map(m => (m.tempId === data.tempId || m.id === data.tempId) ? { ...m, id: data.message.id, status: 'sent' } : m));
+          } else if (data.type === 'ack_delivered') {
+            setMessages(prev => prev.map(m => (m.tempId === data.tempId || m.id === data.messageId) ? { ...m, status: 'delivered' } : m));
+          } else if (data.type === 'peer_typing') {
+            if (data.username !== getSafeAuthorName(user)) {
+              if (peerTypingTimerRef.current) clearTimeout(peerTypingTimerRef.current);
+              setIsPeerTyping(data.isTyping);
+              if (data.isTyping) {
+                setTypingPeerName(data.username);
+                peerTypingTimerRef.current = setTimeout(() => {
+                  setIsPeerTyping(false);
+                }, 3500);
+              }
+            }
+          } else if (data.type === 'delete_message') {
+            setMessages(prev => prev.filter(m => m.id !== data.id));
+          }
+        } catch (e) {}
+      };
+    } catch (e) {}
+
+    return () => {
+      if (peerTypingTimerRef.current) clearTimeout(peerTypingTimerRef.current);
+      if (socket) {
+        try { socket.close(); } catch (e) {}
+      }
+    };
+  }, [activeChannel, user]);
+
   // Auto-switch to general if active channel is not visible to current user
   useEffect(() => {
     const isChannelAvailable = CHANNELS.some(c => c.id === activeChannel);
@@ -1290,33 +1891,131 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     }
   }, [CHANNELS, activeChannel]);
 
-  // Fetch messages from backend API & merge with decryption
+  // Ultra-Fast Real-Time WhatsApp Polling Loop (800ms interval) with robust deduplication
   useEffect(() => {
-    fetch(`/api/chat/messages?channel=${activeChannel}`)
-      .then(res => res.json())
-      .then(async (data) => {
-        if (data.success && data.messages && data.messages.length > 0) {
-          const decryptedMsgs = await Promise.all(data.messages.map(async (m) => ({
-            ...m,
-            content: await decryptText(m.content)
-          })));
+    let isMounted = true;
+    
+    const syncMessages = async () => {
+      try {
+        const res = await fetch(`/api/chat/messages?channel=${activeChannel}`);
+        const data = await res.json();
+        if (isMounted && data.success && Array.isArray(data.messages)) {
+          const validServerMsgs = data.messages.filter(m => m && !deletedForMeIds.includes(m.id));
+          const decryptedMsgs = await Promise.all(validServerMsgs.map(async (m) => {
+            const rawContent = await decryptText(m.content);
+            const tsFormatted = m.timestamp ? (m.timestamp.includes('T') ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : m.timestamp) : 'Just now';
+            return {
+              ...m,
+              content: rawContent,
+              timestamp: tsFormatted
+            };
+          }));
+
           setMessages(prev => {
-            const existingIds = new Set(prev.map(m => m.id));
-            const newServerMsgs = decryptedMsgs.filter(m => !existingIds.has(m.id));
-            if (newServerMsgs.length === 0) return prev;
-            return [...prev, ...newServerMsgs];
+            const existingMap = new Map();
+            prev.forEach(m => {
+              if (m.id) existingMap.set(m.id, m);
+              if (m.tempId) existingMap.set(m.tempId, m);
+            });
+
+            let hasChanges = false;
+            let merged = [...prev];
+
+            for (const serverMsg of decryptedMsgs) {
+              const existingById = existingMap.get(serverMsg.id);
+              const existingByTemp = serverMsg.tempId ? existingMap.get(serverMsg.tempId) : null;
+              const existing = existingById || existingByTemp;
+
+              if (existing) {
+                const idx = merged.findIndex(m => m === existing || m.id === existing.id);
+                if (idx !== -1) {
+                  if (merged[idx].status === 'sending' || JSON.stringify(merged[idx].reactions) !== JSON.stringify(serverMsg.reactions)) {
+                    merged[idx] = { ...serverMsg, status: 'sent' };
+                    hasChanges = true;
+                  }
+                }
+              } else {
+                const optMatchIdx = merged.findIndex(m => 
+                  m.status === 'sending' && 
+                  m.authorId === serverMsg.authorId && 
+                  m.content === serverMsg.content
+                );
+
+                if (optMatchIdx !== -1) {
+                  merged[optMatchIdx] = { ...serverMsg, status: 'sent' };
+                  hasChanges = true;
+                } else {
+                  // Real-time incoming message from another student!
+                  merged.push({ ...serverMsg, status: 'sent' });
+                  hasChanges = true;
+                }
+              }
+            }
+
+            return hasChanges ? merged : prev;
           });
         }
-      })
-      .catch(err => console.log("Using cached chat feed:", err));
+      } catch (err) {
+        // Fallback silently
+      }
+    };
+
+    syncMessages();
+    const interval = setInterval(syncMessages, 800); // 800ms ultra-fast real-time loop
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [activeChannel]);
 
-  // Clear unread count when switching channel
+  // Clear unread count when switching channel & push history state
   const handleChannelSelect = (chId) => {
     setActiveChannel(chId);
     setUnreadCounts(prev => ({ ...prev, [chId]: 0 }));
     setShowMobileChat(true);
+    try {
+      window.history.pushState({ view: 'chat-channel', channel: chId }, '', `#channel-${chId}`);
+    } catch (e) {}
   };
+
+  // Phone Gesture & Hardware Back Button (popstate) Listener
+  useEffect(() => {
+    const handleCommunityPopState = (e) => {
+      // 1. High Priority: Close any open modals/drawers first
+      if (previewImageModal) {
+        setPreviewImageModal(null);
+        return;
+      }
+      if (activeVoterDrawerPoll) {
+        setActiveVoterDrawerPoll(null);
+        return;
+      }
+      if (showPollModal) {
+        setShowPollModal(false);
+        return;
+      }
+      if (showStatusModal) {
+        setShowStatusModal(false);
+        return;
+      }
+
+      // 2. Medium Priority: If user is inside an active chat channel on mobile (showMobileChat === true)
+      if (showMobileChat) {
+        setShowMobileChat(false);
+        return;
+      }
+
+      // 3. Low Priority: Only return to dashboard if popped to dashboard state
+      const state = e.state;
+      if (state && state.tab === 'dashboard' && onBackToApp) {
+        onBackToApp();
+      }
+    };
+
+    window.addEventListener('popstate', handleCommunityPopState);
+    return () => window.removeEventListener('popstate', handleCommunityPopState);
+  }, [showMobileChat, previewImageModal, activeVoterDrawerPoll, showPollModal, showStatusModal, onBackToApp]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedChatSearch(chatSearch), 150);
@@ -1335,7 +2034,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
-      alert("Image size should be less than 5MB");
+      showToast('Image must be smaller than 5MB', 'error');
       return;
     }
     setSelectedAttachment(file);
@@ -1399,20 +2098,22 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       }).catch(() => {});
     }, 30000);
 
-    // Typing poll every 5s (was 2s)
+    // Real-time typing poll every 1.2s
     const typingPollInterval = setInterval(() => {
       fetch(`/api/chat/typing-status?channel=${activeChannel}`)
         .then(res => res.json())
         .then(data => {
-          if (data.success && data.typers) {
-            const activeTypers = data.typers.filter(name => name !== username);
+          if (data.success && Array.isArray(data.typers)) {
+            const activeTypers = data.typers.filter(name => name !== username && name !== getSafeAuthorName(user));
             if (activeTypers.length > 0) {
               setIsPeerTyping(true);
               setTypingPeerName(activeTypers[0]);
+            } else {
+              setIsPeerTyping(false);
             }
           }
         }).catch(() => {});
-    }, 5000);
+    }, 1200);
 
     return () => {
       clearTimeout(initTimer);
@@ -1421,57 +2122,86 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     };
   }, [activeChannel, user]);
 
-  // Debounced typing notifier (fires at most once per 2s instead of every keystroke)
+  // Typing notifier (fires WS stanza + HTTP backup)
   const lastTypingNotify = useRef(0);
   const handleInputChange = (e) => {
     setNewMessage(e.target.value);
 
-    // Debounce typing API calls — max once every 2 seconds
+    // Instant WebSocket typing stanza (0ms latency)
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'typing',
+        channel: activeChannel,
+        username: getSafeAuthorName(user),
+        isTyping: e.target.value.length > 0
+      }));
+    }
+
     const now = Date.now();
-    if (now - lastTypingNotify.current > 2000) {
+    if (now - lastTypingNotify.current > 1200) {
       lastTypingNotify.current = now;
       const userId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
-      const username = user && !user.isGuest ? (user.name || user.email) : 'Guest Student';
+      const authorName = getSafeAuthorName(user);
       fetch('/api/chat/typing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel: activeChannel, username, userId })
+        body: JSON.stringify({ channel: activeChannel, username: authorName, userId })
       }).catch(() => {});
     }
   };
 
   // Star / Unstar Message Handler
   const handleStarMessage = useCallback((messageId) => {
-    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, isStarred: !m.isStarred } : m));
-  }, []);
+    setMessages(prev => {
+      const msg = prev.find(m => m.id === messageId);
+      const willStar = msg ? !msg.isStarred : true;
+      showToast(willStar ? 'Message starred ⭐' : 'Removed from starred', willStar ? 'success' : 'info');
+      return prev.map(m => m.id === messageId ? { ...m, isStarred: !m.isStarred } : m);
+    });
+  }, [showToast]);
 
   // Poll Vote Handler
-  const handleVotePoll = useCallback((messageId, optionIdx) => {
+  const handleVotePoll = useCallback((messageId, voteData) => {
     setMessages(prev => prev.map(m => {
       if (m.id !== messageId || !m.poll) return m;
-      const votes = [...(m.poll.votes || [0, 0])];
-      votes[optionIdx] = (votes[optionIdx] || 0) + 1;
-      return { ...m, poll: { ...m.poll, votes } };
+      if (typeof voteData === 'number') {
+        const votes = Array.isArray(m.poll.votes) ? [...m.poll.votes] : [0, 0];
+        votes[voteData] = (votes[voteData] || 0) + 1;
+        return { ...m, poll: { ...m.poll, votes } };
+      }
+      const existingVotes = (Array.isArray(m.poll.votes) ? m.poll.votes : []).filter(v => typeof v === 'object' && String(v.userId) !== String(voteData.userId));
+      const updatedVotes = voteData.selectedOptionIndexes.length > 0
+        ? [...existingVotes, voteData]
+        : existingVotes;
+      return {
+        ...m,
+        poll: { ...m.poll, votes: updatedVotes }
+      };
     }));
   }, []);
 
-  // Forward Message Handler
+  // Forward Message Handler — opens modal
   const handleForwardMessage = useCallback((msgToForward) => {
-    const targetChannel = window.prompt("Enter target channel (general, pyq-doubts, exam-prep, buy-sell, placements, lost-found):", "general");
-    if (!targetChannel) return;
+    setForwardModalMsg(msgToForward);
+  }, []);
+
+  // Actual forward after user picks channels in modal
+  const handleDoForward = useCallback((msgToForward, targetChannels) => {
     const currentAuthorId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
-    const forwardedMsg = {
+    const now = Date.now();
+    const forwardedMsgs = targetChannels.map((ch, i) => ({
       ...msgToForward,
-      id: String(Date.now()),
-      channel: targetChannel,
+      id: String(now + i),
+      channel: ch,
       author: getSafeAuthorName(user),
       authorId: currentAuthorId,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isForwarded: true
-    };
-    setMessages(prev => [...prev, forwardedMsg]);
-    alert(`Forwarded to #${targetChannel}!`);
-  }, [user]);
+      isForwarded: true,
+      replyTo: null
+    }));
+    setMessages(prev => [...prev, ...forwardedMsgs]);
+    showToast(`Forwarded to ${targetChannels.length} channel${targetChannels.length > 1 ? 's' : ''}`, 'success');
+  }, [user, showToast]);
 
   // Voice Note Handler
   const handleSendVoiceNote = () => {
@@ -1560,12 +2290,16 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       }
     }
 
+    const rnd = new Uint8Array(4);
+    window.crypto.getRandomValues(rnd);
+    const tempId = 'temp_' + Date.now() + '_' + Array.from(rnd, b => b.toString(36)).join('');
     const currentAuthorId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
     const rawText = newMessage.trim();
     const encryptedContent = await encryptText(rawText);
 
     const msg = {
-      id: String(Date.now()),
+      id: tempId,
+      tempId: tempId,
       channel: activeChannel,
       author: getSafeAuthorName(user),
       authorId: currentAuthorId,
@@ -1575,6 +2309,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       attachment: attachmentUrl,
       replyTo: replyingToMessage ? { author: replyingToMessage.author, content: replyingToMessage.content } : null,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      status: 'sending',
       reactions: { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] }
     };
 
@@ -1585,6 +2320,21 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     setReplyingToMessage(null);
     setUploading(false);
 
+    // Instant WebSocket stanza transmission (0ms latency!)
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'message',
+        tempId: tempId,
+        channel: activeChannel,
+        content: encryptedContent,
+        attachment: attachmentUrl,
+        authorName: msg.author,
+        authorRole: msg.role,
+        userId: currentAuthorId,
+        replyTo: msg.replyTo
+      }));
+    }
+
     const token = localStorage.getItem('ds_ai_token');
     fetch('/api/chat/messages', {
       method: 'POST',
@@ -1593,51 +2343,103 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         ...(token ? { 'Authorization': `Bearer ${token}` } : {})
       },
       body: JSON.stringify({ 
+        tempId: tempId,
         channel: activeChannel, 
         content: encryptedContent, 
         attachment: attachmentUrl,
         authorName: msg.author,
         authorRole: msg.role
       })
-    }).catch(err => console.error("Server message sync failed:", err));
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success && data.message) {
+        const confirmedMsg = {
+          ...data.message,
+          tempId: tempId,
+          content: rawText,
+          timestamp: new Date(data.message.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          status: 'sent'
+        };
+        setMessages(prev => prev.map(m => (m.id === tempId || m.tempId === tempId) ? confirmedMsg : m));
+      }
+    })
+    .catch(err => console.error("Server message sync failed:", err));
   };
 
   // Edit Message Handler
   const handleEditMessage = useCallback(async (messageId, newContent) => {
     setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: newContent, isEdited: true } : m));
+    showToast('Message updated ✏️', 'success');
     const encrypted = await encryptText(newContent);
+    const token = localStorage.getItem('ds_ai_token');
+    const guestUserId = getGuestClientId();
     fetch(`/api/chat/messages/${messageId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: encrypted })
-    }).catch(err => console.error("Edit sync failed:", err));
-  }, []);
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-guest-user-id': guestUserId,
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ content: encrypted, guestUserId })
+    }).catch(err => console.error('Edit sync failed:', err));
+  }, [showToast]);
 
-  // Delete Message Handler
+  // Delete Message Handler (Delete for everyone if author/admin, Delete for me if recipient)
   const handleDeleteMessage = useCallback((messageId) => {
-    setMessages(prev => prev.filter(m => m.id !== messageId));
-    fetch(`/api/chat/messages/${messageId}`, {
-      method: 'DELETE'
-    }).catch(err => console.error("Delete sync failed:", err));
-  }, []);
+    const targetMsg = messages.find(m => m && (m.id === messageId || m.tempId === messageId));
+    const currentAuthorName = getSafeAuthorName(user);
+    const guestClientId = getGuestClientId();
+    const currentUserId = user && !user.isGuest ? String(user._id || user.id || user.email || '') : guestClientId;
+
+    const isMsgOwner = Boolean(
+      user?.role === 'admin' ||
+      (targetMsg && targetMsg.authorId && (String(targetMsg.authorId) === String(currentUserId) || String(targetMsg.authorId) === String(guestClientId))) ||
+      (targetMsg && targetMsg.author && targetMsg.author === currentAuthorName)
+    );
+
+    if (isMsgOwner) {
+      // Deleting OUR message completely for everyone
+      setMessages(prev => prev.filter(m => m.id !== messageId && m.tempId !== messageId));
+      showToast('Message deleted for everyone', 'info');
+
+      // Send WS real-time deletion stanza to all connected users
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'delete_message',
+          channel: activeChannel,
+          id: messageId
+        }));
+      }
+
+      const token = localStorage.getItem('ds_ai_token');
+      fetch(`/api/chat/messages/${messageId}`, {
+        method: 'DELETE',
+        headers: {
+          'x-guest-user-id': guestClientId,
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      }).catch(err => console.error('Delete sync failed:', err));
+    } else {
+      // Deleting OTHER user's message ONLY from my view
+      setDeletedForMeIds(prev => {
+        const next = Array.from(new Set([...prev, messageId]));
+        try { localStorage.setItem('ds_deleted_for_me_ids', JSON.stringify(next)); } catch (e) {}
+        return next;
+      });
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+      showToast('Message deleted for you', 'info');
+    }
+  }, [messages, user, activeChannel, showToast]);
 
   const filteredMessages = useMemo(() => {
-    let list = messages.filter(m => m.channel === activeChannel);
+    let list = (Array.isArray(messages) ? messages : []).filter(m => m && m.channel === activeChannel && !deletedForMeIds.includes(m.id));
     const q = debouncedChatSearch.trim().toLowerCase();
     if (q) {
-      list = list.filter(m => (m.content && m.content.toLowerCase().includes(q)) || (m.author && m.author.toLowerCase().includes(q)));
+      list = list.filter(m => m && ((m.content && m.content.toLowerCase().includes(q)) || (m.author && m.author.toLowerCase().includes(q))));
     }
     return list;
-  }, [messages, activeChannel, debouncedChatSearch]);
-
-  // Interactive Popup States for WhatsApp Buttons
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showAttachMenu, setShowAttachMenu] = useState(false);
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [showProfileDrawer, setShowProfileDrawer] = useState(false);
-  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
-  const [showChannelInfoModal, setShowChannelInfoModal] = useState(false);
-  const [inHeaderSearch, setInHeaderSearch] = useState(false);
+  }, [messages, activeChannel, debouncedChatSearch, deletedForMeIds]);
 
   const EMOJI_LIST = ['😊', '😂', '🔥', '🚀', '👍', '❤️', '💡', '🎉', '🙌', '👏', '💯', '📄', '📚', '🎓', '💻', '⭐', '✅', '📌'];
 
@@ -1726,17 +2528,25 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         </div>
 
         {/* Search Bar */}
-        <div className="wa-search-box">
-          <div style={{ position: 'relative', width: '100%' }}>
-            <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#8696a0', fontSize: '0.85rem' }}>🔍</span>
-            <input
+        <div className="wa-search-box" style={{ padding: '0.45rem 0.75rem', background: '#111b21', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+          <InputGroup>
+            <InputGroupAddon align="inline-start">
+              <Search size={15} />
+            </InputGroupAddon>
+            <InputGroupInput
               type="text"
               placeholder="Search or start new chat"
               value={chatSearch}
               onChange={(e) => setChatSearch(e.target.value)}
-              className="wa-search-input"
             />
-          </div>
+            {chatSearch && (
+              <InputGroupAddon align="inline-end">
+                <button type="button" onClick={() => setChatSearch('')} title="Clear search">
+                  <X size={14} />
+                </button>
+              </InputGroupAddon>
+            )}
+          </InputGroup>
         </div>
 
         {/* Rooms List */}
@@ -1821,53 +2631,62 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: '#aebac1', position: 'relative' }}>
             {/* Inline Header Search Bar */}
             {inHeaderSearch ? (
-              <input
-                type="text"
-                placeholder="Search messages..."
-                value={chatSearch}
-                onChange={(e) => setChatSearch(e.target.value)}
-                autoFocus
-                onClick={(e) => e.stopPropagation()}
-                style={{ background: '#111b21', border: '1px solid #00a884', borderRadius: '6px', color: '#e9edef', padding: '0.25rem 0.6rem', fontSize: '0.82rem', outline: 'none', width: '160px' }}
-              />
+              <div style={{ width: '220px' }} onClick={(e) => e.stopPropagation()}>
+                <InputGroup style={{ borderRadius: '20px' }}>
+                  <InputGroupAddon align="inline-start">
+                    <Search size={14} />
+                  </InputGroupAddon>
+                  <InputGroupInput
+                    type="text"
+                    placeholder="Search messages..."
+                    value={chatSearch}
+                    onChange={(e) => setChatSearch(e.target.value)}
+                    autoFocus
+                  />
+                  <InputGroupAddon align="inline-end">
+                    <button type="button" onClick={() => { setChatSearch(''); setInHeaderSearch(false); }} title="Close search">
+                      <X size={14} />
+                    </button>
+                  </InputGroupAddon>
+                </InputGroup>
+              </div>
             ) : (
               <span 
                 title="Search Messages" 
                 onClick={(e) => { e.stopPropagation(); setInHeaderSearch(true); }} 
-                style={{ cursor: 'pointer', fontSize: '1.1rem' }}
+                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
               >
-                🔍
+                <Search size={18} />
               </span>
             )}
 
             {/* Header Options Menu Button */}
-            <span 
-              title="Channel Options" 
-              onClick={(e) => { e.stopPropagation(); setShowHeaderMenu(!showHeaderMenu); }} 
-              style={{ cursor: 'pointer', fontSize: '1.2rem' }}
-            >
-              ⋮
-            </span>
-
-            {/* Floating Options Dropdown Menu */}
-            {showHeaderMenu && (
-              <div className="wa-dropdown-menu" onClick={(e) => e.stopPropagation()} style={{ right: 0, top: '35px', width: '180px' }}>
-                <div className="wa-dropdown-item" onClick={() => { setShowChannelInfoModal(true); setShowHeaderMenu(false); }}>
-                  <span>ℹ️ Channel Info</span>
-                </div>
-                <div className="wa-dropdown-item" onClick={() => { alert("Notifications muted for 8 hours."); setShowHeaderMenu(false); }}>
-                  <span>🔔 Mute Notifications</span>
-                </div>
-                <div className="wa-dropdown-item" onClick={handleClearHistory}>
-                  <span>🧹 Clear Messages</span>
-                </div>
-                {isGuestUser && (
-                  <div className="wa-dropdown-item" onClick={() => { if (onRequireAuth) onRequireAuth(); setShowHeaderMenu(false); }}>
-                    <span>🔒 Log In Account</span>
-                  </div>
-                )}
-              </div>
-            )}
+            <DropdownMenu open={showHeaderMenu} onOpenChange={setShowHeaderMenu}>
+              <DropdownMenuTrigger showChevron={false} title="Channel Options" style={{ fontSize: '1.2rem', padding: '0.2rem 0.4rem', color: '#aebac1' }}>
+                ⋮
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" side="bottom" style={{ width: '190px' }}>
+                <DropdownMenuGroup>
+                  <DropdownMenuItem icon="☑️" onClick={() => { setIsSelectionMode(true); setShowHeaderMenu(false); }}>
+                    Select Messages
+                  </DropdownMenuItem>
+                  <DropdownMenuItem icon="ℹ️" onClick={() => setShowChannelInfoModal(true)}>
+                    Channel Info
+                  </DropdownMenuItem>
+                  <DropdownMenuItem icon="🔔" onClick={() => showToast('Notifications muted for 8 hours 🔕', 'info')}>
+                    Mute Notifications
+                  </DropdownMenuItem>
+                  <DropdownMenuItem icon="🧹" onClick={handleClearHistory}>
+                    Clear Messages
+                  </DropdownMenuItem>
+                  {isGuestUser && (
+                    <DropdownMenuItem icon="🔒" onClick={() => { if (onRequireAuth) onRequireAuth(); }}>
+                      Log In Account
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -1916,13 +2735,24 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                     key={msg.id}
                     message={msg}
                     currentUser={user}
+                    activeMenuMsgId={activeMenuMsgId}
+                    setActiveMenuMsgId={setActiveMenuMsgId}
                     onReact={handleReactMessage}
                     onEdit={handleEditMessage}
                     onDelete={handleDeleteMessage}
                     onReply={(m) => setReplyingToMessage(m)}
+                    onReplyPrivately={handleReplyPrivately}
+                    onDirectMessageUser={handleDirectMessageUser}
+                    onAskMetaAI={handleAskMetaAI}
+                    onReportMessage={handleReportMessage}
+                    onSelectMessage={handleSelectMessage}
+                    isSelected={selectedMsgIds.includes(msg.id)}
+                    isSelectionMode={isSelectionMode}
                     onStar={handleStarMessage}
                     onVotePoll={handleVotePoll}
+                    onOpenVoterList={(pollObj) => setActiveVoterDrawerPoll(pollObj)}
                     onForward={handleForwardMessage}
+                    onCopySuccess={() => showToast('Message copied 📋', 'success')}
                     onRequireAuth={onRequireAuth}
                     onPreviewImage={(url) => setPreviewImageModal(url)}
                   />
@@ -1931,17 +2761,17 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
               {/* Animated WhatsApp Typing Bubble */}
               {isPeerTyping && (
-                <div className="wa-msg-row received animate-fade-in">
-                  <div className="wa-msg-bubble received" style={{ padding: '0.4rem 0.85rem 0.4rem 0.85rem' }}>
-                    <div className="wa-msg-author" style={{ fontSize: '0.75rem', marginBottom: '0.15rem' }}>
-                      {typingPeerName}
+                <div className="wa-msg-row received animate-fade-in" style={{ display: 'flex', width: '100%', justifyContent: 'flex-start', margin: '0.4rem 0' }}>
+                  <Bubble variant="secondary" align="start" style={{ padding: '0.45rem 0.85rem' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#38bdf8', marginBottom: '0.2rem' }}>
+                      {typingPeerName} <span style={{ fontSize: '0.68rem', color: '#8696a0', fontWeight: 400 }}>is typing...</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.15rem 0' }}>
-                      <span className="wa-typing-dot">●</span>
-                      <span className="wa-typing-dot delay-1">●</span>
-                      <span className="wa-typing-dot delay-2">●</span>
+                    <div className="wa-typing-indicator-dots">
+                      <span className="wa-typing-dot"></span>
+                      <span className="wa-typing-dot delay-1"></span>
+                      <span className="wa-typing-dot delay-2"></span>
                     </div>
-                  </div>
+                  </Bubble>
                 </div>
               )}
             </div>
@@ -1987,9 +2817,11 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
               <span 
                 title="Emojis" 
                 onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(!showEmojiPicker); setShowAttachMenu(false); }}
-                style={{ color: '#8696a0', fontSize: '1.3rem', cursor: 'pointer' }}
+                style={{ color: '#8696a0', fontSize: '1.3rem', cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
               >
-                😊
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="#8696a0">
+                  <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8zm3.5-9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm-7 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm5.893 4.11C14.025 15.68 13.054 16 12 16s-2.025-.32-2.393-.89A.999.999 0 1 0 7.94 16.22C8.734 17.35 10.29 18 12 18c1.71 0 3.266-.65 4.06-1.78a.999.999 0 1 0-1.667-1.11z"/>
+                </svg>
               </span>
 
               {/* Floating Emoji Picker Palette */}
@@ -2029,9 +2861,11 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setShowAttachMenu(!showAttachMenu); setShowEmojiPicker(false); }}
                 title="Attach File or Image"
-                style={{ background: 'none', border: 'none', color: '#8696a0', fontSize: '1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                style={{ background: 'none', border: 'none', color: '#8696a0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}
               >
-                📎
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#8696a0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                </svg>
               </button>
 
               {/* Floating Attachment Menu Popup */}
@@ -2052,7 +2886,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   }}
                 >
                   <div className="wa-dropdown-item" onClick={() => { setShowAttachMenu(false); if (fileInputRef.current) fileInputRef.current.click(); }}>
-                    <span>📷 Photos & Videos</span>
+                    <span>📷 Photos &amp; Videos</span>
                   </div>
                   <div className="wa-dropdown-item" onClick={() => { setShowAttachMenu(false); if (fileInputRef.current) fileInputRef.current.click(); }}>
                     <span>📄 PYQ Document</span>
@@ -2066,12 +2900,40 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
               {/* WhatsApp Message Field */}
               <input
                 type="text"
-                placeholder={isRecordingVoice ? "🎙️ Recording Voice Note..." : "Type a message"}
+                placeholder={isRecordingVoice ? "🎙️ Recording Voice Note..." : "Message"}
                 value={newMessage}
                 onChange={handleInputChange}
+                onFocus={() => setActiveMenuMsgId(null)}
                 className="wa-input-field"
                 disabled={isRecordingVoice}
               />
+
+              {/* Mobile-only: ₹ rupee pay icon */}
+              <button
+                type="button"
+                className="wa-mobile-extra-btn"
+                title="Pay"
+                onClick={(e) => { e.preventDefault(); showToast('UPI Pay feature coming soon 💸', 'info'); }}
+                style={{ background: 'none', border: 'none', color: '#8696a0', cursor: 'pointer', display: 'none', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}
+              >
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="#8696a0">
+                  <path d="M15 3H9v2h2.5L6 19h2l5.5-14H16l-1-2zm-4 8H9l-1 2h2l-1 2H7l-1 2h2l-1 2h2l1-2h2l1 2h2l-1-2h2l1-2h-2l1-2h-2l-1-2z"/>
+                </svg>
+              </button>
+
+              {/* Mobile-only: camera icon */}
+              <button
+                type="button"
+                className="wa-mobile-extra-btn"
+                title="Camera"
+                onClick={(e) => { e.preventDefault(); if (fileInputRef.current) { fileInputRef.current.accept = 'image/*'; fileInputRef.current.click(); } }}
+                style={{ background: 'none', border: 'none', color: '#8696a0', cursor: 'pointer', display: 'none', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}
+              >
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="#8696a0">
+                  <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"/>
+                  <path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
+                </svg>
+              </button>
 
               {/* WhatsApp Voice Mic or Send Button */}
               {(!newMessage.trim() && !selectedAttachment) ? (
@@ -2082,7 +2944,9 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   title="Send Voice Note"
                   style={{ background: isRecordingVoice ? '#f43f5e' : '#00a884' }}
                 >
-                  🎙️
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="#ffffff">
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                  </svg>
                 </button>
               ) : (
                 <button
@@ -2091,7 +2955,9 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   className="wa-send-btn"
                   title="Send Message"
                 >
-                  <Send size={18} />
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="#ffffff">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                  </svg>
                 </button>
               )}
             </form>
@@ -2099,56 +2965,311 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         )}
       </div>
 
-      {/* WhatsApp Interactive Poll Creator Modal */}
-      {showPollModal && (
-        <div className="aurora-modal-overlay" onClick={() => setShowPollModal(false)} style={{ zIndex: 99999 }}>
-          <div className="aurora-modal-card glass-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px', padding: '1.5rem', borderRadius: '16px', background: '#111b21', color: '#e9edef' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>📊 Create WhatsApp Poll</h3>
-              <button onClick={() => setShowPollModal(false)} style={{ background: 'none', border: 'none', color: '#fb7185', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+      {/* WhatsApp Interactive Poll Creator Modal & Voter List Drawer */}
+      <WhatsAppPollModal
+        isOpen={showPollModal}
+        onClose={() => setShowPollModal(false)}
+        onSubmitPoll={({ question, options, allowMultipleAnswers }) => {
+          const currentAuthorId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
+          const pollMsg = {
+            id: String(Date.now()),
+            channel: activeChannel,
+            author: getSafeAuthorName(user),
+            authorId: currentAuthorId,
+            avatar: user && user.name ? user.name.charAt(0).toUpperCase() : 'G',
+            role: user && !user.isGuest ? (user.role === 'admin' ? 'Admin' : (user.program || 'Student')) : 'Guest User',
+            poll: {
+              id: `poll_${Date.now()}`,
+              question,
+              options,
+              allowMultipleAnswers,
+              votes: [],
+              createdById: currentAuthorId,
+              createdByName: getSafeAuthorName(user),
+              createdAt: new Date().toISOString(),
+            },
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            reactions: { '👍': [], '❤️': [], '😂': [], '😮': [], '😢': [], '🙏': [], '💡': [], '🔥': [], '🚀': [] }
+          };
+          setMessages(prev => [...prev, pollMsg]);
+        }}
+      />
+
+      <WhatsAppVoterListDrawer
+        isOpen={Boolean(activeVoterDrawerPoll)}
+        onClose={() => setActiveVoterDrawerPoll(null)}
+        poll={activeVoterDrawerPoll}
+      />
+
+      {/* Forward Message Modal */}
+      <ForwardMessageModal
+        isOpen={Boolean(forwardModalMsg)}
+        message={forwardModalMsg}
+        onClose={() => setForwardModalMsg(null)}
+        onForward={(msg, channels) => {
+          if (msg && msg._bulk && msg._msgs) {
+            // Bulk forward
+            const currentAuthorId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
+            const now = Date.now();
+            const allForwarded = [];
+            msg._msgs.forEach((m, mi) => {
+              channels.forEach((ch, ci) => {
+                allForwarded.push({
+                  ...m,
+                  id: String(now + mi * 100 + ci),
+                  channel: ch,
+                  author: getSafeAuthorName(user),
+                  authorId: currentAuthorId,
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  isForwarded: true,
+                  replyTo: null
+                });
+              });
+            });
+            setMessages(prev => [...prev, ...allForwarded]);
+            showToast(`${msg._msgs.length} message(s) forwarded to ${channels.length} channel(s)`, 'success');
+            handleExitSelectionMode();
+          } else {
+            handleDoForward(msg, channels);
+          }
+          setForwardModalMsg(null);
+        }}
+      />
+
+
+      {/* Ask Meta AI Assistant Modal */}
+      {metaAiModalMessage && (
+        <div className="aurora-modal-overlay" onClick={() => setMetaAiModalMessage(null)} style={{ zIndex: 99999 }}>
+          <div className="aurora-modal-card glass-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px', padding: '1.6rem', borderRadius: '16px', background: '#111b21', color: '#e9edef', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.6rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '1.2rem' }}>✨</span>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#00a884' }}>Meta AI Assistant Analysis</h3>
+              </div>
+              <button onClick={() => setMetaAiModalMessage(null)} style={{ background: 'none', border: 'none', color: '#fb7185', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
             </div>
-            <form onSubmit={handleCreatePollSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div>
-                <label style={{ fontSize: '0.78rem', color: '#8696a0', fontWeight: 600 }}>Question</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Is CAT-2 preparation complete?"
-                  value={pollQuestion}
-                  onChange={(e) => setPollQuestion(e.target.value)}
-                  required
-                  style={{ width: '100%', background: '#202c33', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '0.5rem', color: '#e9edef', marginTop: '0.2rem', outline: 'none' }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: '0.78rem', color: '#8696a0', fontWeight: 600 }}>Option 1</label>
-                <input
-                  type="text"
-                  placeholder="Option 1"
-                  value={pollOpt1}
-                  onChange={(e) => setPollOpt1(e.target.value)}
-                  required
-                  style={{ width: '100%', background: '#202c33', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '0.5rem', color: '#e9edef', marginTop: '0.2rem', outline: 'none' }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: '0.78rem', color: '#8696a0', fontWeight: 600 }}>Option 2</label>
-                <input
-                  type="text"
-                  placeholder="Option 2"
-                  value={pollOpt2}
-                  onChange={(e) => setPollOpt2(e.target.value)}
-                  required
-                  style={{ width: '100%', background: '#202c33', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '0.5rem', color: '#e9edef', marginTop: '0.2rem', outline: 'none' }}
-                />
-              </div>
+            
+            <div style={{ background: '#182229', padding: '0.85rem 1rem', borderRadius: '10px', fontSize: '0.85rem', color: '#8696a0', marginBottom: '1rem', borderLeft: '3px solid #00a884' }}>
+              <div style={{ fontWeight: 700, color: '#e9edef', marginBottom: '0.2rem' }}>Target Message ({metaAiModalMessage.author}):</div>
+              "{metaAiModalMessage.content || 'Attachment / Media'}"
+            </div>
+
+            <div style={{ fontSize: '0.88rem', color: '#e9edef', lineHeight: 1.6, background: 'rgba(0,168,132,0.08)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,168,132,0.2)' }}>
+              🤖 <strong>Smart Insights:</strong>
+              <p style={{ margin: '0.5rem 0 0 0', color: '#aebac1' }}>
+                This message in #{activeChannel} asks about: <em>"{metaAiModalMessage.content || 'Media update'}"</em>. 
+                <br /><br />
+                <strong>Suggested Quick Reply:</strong> "Understood! Thanks for sharing this information with the cohort."
+              </p>
+            </div>
+
+            <div style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
               <button
-                type="submit"
-                style={{ width: '100%', marginTop: '0.5rem', padding: '0.65rem', borderRadius: '8px', background: '#00a884', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+                onClick={() => {
+                  setNewMessage(`Replying to ${metaAiModalMessage.author}: Got it!`);
+                  setMetaAiModalMessage(null);
+                }}
+                style={{ padding: '0.5rem 1rem', background: '#00a884', color: '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.84rem' }}
               >
-                Post Poll to Chat
+                Use Quick Reply
               </button>
-            </form>
+              <button
+                onClick={() => setMetaAiModalMessage(null)}
+                style={{ padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.08)', color: '#e9edef', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontSize: '0.84rem' }}
+              >
+                Close
+              </button>
+            </div>
           </div>
+        </div>
+      )}
+
+      {/* Report Message Modal */}
+      {reportModalMessage && (
+        <ReportMessageModal
+          message={reportModalMessage}
+          currentUser={user}
+          onClose={() => setReportModalMessage(null)}
+          onSubmit={(reason, details) => {
+            // Store report in localStorage
+            try {
+              const existing = JSON.parse(localStorage.getItem('ds_reported_messages') || '[]');
+              existing.push({
+                messageId: reportModalMessage.id,
+                authorId: reportModalMessage.authorId,
+                authorName: reportModalMessage.author,
+                reportedBy: user?.name || 'Guest',
+                reason,
+                details,
+                timestamp: new Date().toISOString()
+              });
+              localStorage.setItem('ds_reported_messages', JSON.stringify(existing));
+            } catch (e) {}
+            showToast('Report submitted to moderators ✅', 'success', 3500);
+            setReportModalMessage(null);
+          }}
+        />
+      )}
+
+
+
+      {/* Multi-Select Messages Floating Bar */}
+      {(isSelectionMode || selectedMsgIds.length > 0) && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 99999,
+          background: 'rgba(17, 27, 33, 0.95)',
+          border: '1px solid rgba(0, 168, 132, 0.4)',
+          borderRadius: '30px',
+          padding: '0.6rem 1.2rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.85rem',
+          boxShadow: '0 12px 35px rgba(0,0,0,0.75), 0 0 15px rgba(0,168,132,0.15)',
+          backdropFilter: 'blur(16px)',
+          color: '#e9edef',
+          maxWidth: '92vw',
+          flexWrap: 'wrap',
+          justifyContent: 'center'
+        }}>
+          {/* Selected Count */}
+          <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#00a884', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <span style={{ background: 'rgba(0, 168, 132, 0.15)', padding: '0.15rem 0.55rem', borderRadius: '12px' }}>
+              {selectedMsgIds.length} selected
+            </span>
+          </span>
+
+          <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.15)' }} />
+
+          {/* Select All / Deselect All Button */}
+          <button
+            type="button"
+            onClick={handleSelectAll}
+            style={{
+              background: selectedMsgIds.length === filteredMessages.length && filteredMessages.length > 0 ? 'rgba(0, 168, 132, 0.2)' : 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: '18px',
+              color: '#e9edef',
+              padding: '0.4rem 0.8rem',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '0.8rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              transition: 'all 0.15s ease'
+            }}
+            title="Select or deselect all visible messages"
+          >
+            <span>{selectedMsgIds.length === filteredMessages.length && filteredMessages.length > 0 ? '✓' : '☑️'}</span>
+            <span>{selectedMsgIds.length === filteredMessages.length && filteredMessages.length > 0 ? 'Deselect All' : 'Select All'}</span>
+          </button>
+
+          {/* Bulk Copy Button */}
+          <button
+            type="button"
+            onClick={handleBulkCopy}
+            disabled={selectedMsgIds.length === 0}
+            style={{
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: '18px',
+              color: selectedMsgIds.length > 0 ? '#e9edef' : '#667781',
+              padding: '0.4rem 0.8rem',
+              cursor: selectedMsgIds.length > 0 ? 'pointer' : 'not-allowed',
+              fontWeight: 600,
+              fontSize: '0.8rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              opacity: selectedMsgIds.length > 0 ? 1 : 0.5,
+              transition: 'all 0.15s ease'
+            }}
+            title="Copy selected messages to clipboard"
+          >
+            <span>📋</span>
+            <span>Bulk Copy</span>
+          </button>
+
+          {/* Bulk Forward Button */}
+          <button
+            type="button"
+            onClick={handleBulkForward}
+            disabled={selectedMsgIds.length === 0}
+            style={{
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: '18px',
+              color: selectedMsgIds.length > 0 ? '#38bdf8' : '#667781',
+              padding: '0.4rem 0.8rem',
+              cursor: selectedMsgIds.length > 0 ? 'pointer' : 'not-allowed',
+              fontWeight: 600,
+              fontSize: '0.8rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              opacity: selectedMsgIds.length > 0 ? 1 : 0.5,
+              transition: 'all 0.15s ease'
+            }}
+            title="Forward selected messages to another channel"
+          >
+            <span>↪️</span>
+            <span>Bulk Forward</span>
+          </button>
+
+          {/* Bulk Delete Button */}
+          <button
+            type="button"
+            onClick={handleBulkDelete}
+            disabled={selectedMsgIds.length === 0}
+            style={{
+              background: 'rgba(244, 63, 94, 0.15)',
+              border: '1px solid rgba(244, 63, 94, 0.3)',
+              borderRadius: '18px',
+              color: selectedMsgIds.length > 0 ? '#fb7185' : '#667781',
+              padding: '0.4rem 0.8rem',
+              cursor: selectedMsgIds.length > 0 ? 'pointer' : 'not-allowed',
+              fontWeight: 600,
+              fontSize: '0.8rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              opacity: selectedMsgIds.length > 0 ? 1 : 0.5,
+              transition: 'all 0.15s ease'
+            }}
+            title="Delete selected messages"
+          >
+            <span>🗑️</span>
+            <span>Bulk Delete</span>
+          </button>
+
+          <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.15)' }} />
+
+          {/* Close / Exit Selection Mode Button */}
+          <button
+            type="button"
+            onClick={handleExitSelectionMode}
+            style={{
+              background: 'rgba(255,255,255,0.1)',
+              border: 'none',
+              color: '#8696a0',
+              borderRadius: '50%',
+              width: '24px',
+              height: '24px',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.15s ease'
+            }}
+            title="Exit selection mode"
+          >
+            ✕
+          </button>
         </div>
       )}
 
@@ -2692,29 +3813,33 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
 
   return (
     <div className={`community-container ${activeSubTab === 'chats' ? 'chats-mode-active' : ''}`}>
-      {/* Upper Navigation Tabs (Hidden in pure Chat mode) */}
-      {activeSubTab !== 'chats' && (
-        <div className="community-tabs">
-          <button
-            className={`community-tab-btn ${activeSubTab === 'pyq' ? 'active' : ''}`}
-            onClick={() => startTransition(() => setActiveSubTab('pyq'))}
-          >
-            📄 PYQ Hub
-          </button>
-          <button
-            className={`community-tab-btn ${activeSubTab === 'cabins' ? 'active' : ''}`}
-            onClick={() => startTransition(() => setActiveSubTab('cabins'))}
-          >
-            🏫 Faculty Cabins
-          </button>
-          <button
-            className={`community-tab-btn ${activeSubTab === 'marketplace' ? 'active' : ''}`}
-            onClick={() => startTransition(() => setActiveSubTab('marketplace'))}
-          >
-            🛍️ Buy & Sell
-          </button>
-        </div>
-      )}
+      {/* Upper Navigation Tabs */}
+      <div className="community-tabs">
+        <button
+          className={`community-tab-btn ${activeSubTab === 'pyq' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('pyq')}
+        >
+          📄 PYQ Hub
+        </button>
+        <button
+          className={`community-tab-btn ${activeSubTab === 'chats' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('chats')}
+        >
+          💬 Student Chats
+        </button>
+        <button
+          className={`community-tab-btn ${activeSubTab === 'cabins' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('cabins')}
+        >
+          🏫 Faculty Cabins
+        </button>
+        <button
+          className={`community-tab-btn ${activeSubTab === 'marketplace' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('marketplace')}
+        >
+          🛍️ Buy & Sell
+        </button>
+      </div>
 
       {activeSubTab === 'pyq' && (
         <div className="pyq-workspace animate-fade-in">

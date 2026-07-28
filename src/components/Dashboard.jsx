@@ -2384,9 +2384,9 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
               const N = recommendedEvents.length;
               if (N === 0) {
                 return (
-                  <div style={{ display: 'flex', flexGrow: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', minHeight: '120px' }}>
-                    <span style={{ fontSize: '2rem' }}>📅</span>
-                    <p style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>No recommended events at this time.</p>
+                  <div style={{ display: 'flex', flexGrow: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', padding: '1rem 0' }}>
+                    <span style={{ fontSize: '1.6rem' }}>📅</span>
+                    <p style={{ marginTop: '0.35rem', fontSize: '0.85rem' }}>No recommended events at this time.</p>
                   </div>
                 );
               }

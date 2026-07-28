@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import BounceCards from './BounceCards';
 import Masonry from './Masonry';
 import ElectricBorder from './ElectricBorder';
+import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/InputGroup';
+import { Search, X } from 'lucide-react';
 
 const eventTransformStyles = [
   'rotate(5deg) translate(-45px)',
@@ -1250,49 +1252,24 @@ function CampusLife({
       {/* Search Filter Input Bar */}
       {(activeSubTab === 'clubs' || activeSubTab === 'events' || activeSubTab === 'active_events' || activeSubTab === 'recruitments') && (
         <div style={{ margin: '0.75rem 0 0.5rem 0', width: '100%', maxWidth: '480px' }}>
-          <div style={{ position: 'relative', width: '100%' }}>
-            <input
+          <InputGroup>
+            <InputGroupAddon align="inline-start">
+              <Search size={16} />
+            </InputGroupAddon>
+            <InputGroupInput
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={`Search ${activeSubTab === 'clubs' ? 'clubs' : activeSubTab === 'recruitments' ? 'recruitments' : 'events'} by title, venue, tag...`}
-              style={{
-                width: '100%',
-                padding: '0.65rem 2.5rem 0.65rem 2.6rem',
-                borderRadius: '12px',
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid hsla(var(--border-glass))',
-                color: 'hsl(var(--text-primary))',
-                fontSize: '0.88rem',
-                outline: 'none',
-                transition: 'all 0.2s ease',
-                boxSizing: 'border-box'
-              }}
             />
-            <span style={{ position: 'absolute', left: '0.9rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5, fontSize: '0.95rem', pointerEvents: 'none' }}>
-              🔍
-            </span>
             {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                style={{
-                  position: 'absolute',
-                  right: '0.75rem',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'hsl(var(--text-muted))',
-                  cursor: 'pointer',
-                  fontSize: '0.85rem',
-                  padding: '2px 6px'
-                }}
-              >
-                ✕
-              </button>
+              <InputGroupAddon align="inline-end">
+                <button type="button" onClick={() => setSearchQuery('')} title="Clear search">
+                  <X size={14} />
+                </button>
+              </InputGroupAddon>
             )}
-          </div>
+          </InputGroup>
         </div>
       )}
 

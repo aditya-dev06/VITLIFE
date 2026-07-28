@@ -289,11 +289,58 @@ function App() {
 
 
 
+  // Global History & Phone Back Gesture Manager
+  useEffect(() => {
+    if (!window.history.state) {
+      try {
+        window.history.replaceState({ tab: 'dashboard' }, '', '#dashboard');
+      } catch (e) {}
+    }
+
+    const handleGlobalPopState = (e) => {
+      // 1. Close global modals if open
+      if (showEditProfile) {
+        setShowEditProfile(false);
+        return;
+      }
+      if (showFeedback) {
+        setShowFeedback(false);
+        return;
+      }
+      if (showAboutUs) {
+        setShowAboutUs(false);
+        return;
+      }
+      if (showMobileProfileSheet) {
+        setShowMobileProfileSheet(false);
+        return;
+      }
+
+      // 2. Tab history pop navigation (only if not on community/chats where CommunityPage handles its own view stack)
+      if (activeTab !== 'community' && activeTab !== 'chats') {
+        const state = e.state;
+        if (state && state.tab) {
+          setActiveTab(state.tab);
+        } else if (activeTab !== 'dashboard') {
+          setActiveTab('dashboard');
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handleGlobalPopState);
+    return () => window.removeEventListener('popstate', handleGlobalPopState);
+  }, [showEditProfile, showFeedback, showAboutUs, showMobileProfileSheet, activeTab]);
+
   const handleTabClick = useCallback((tab) => {
+    if (tab !== activeTab) {
+      try {
+        window.history.pushState({ tab }, '', `#${tab}`);
+      } catch (e) {}
+    }
     setActiveTab(tab);
     setMobileMenuOpen(false);
     setShowMobileProfileSheet(false);
-  }, []);
+  }, [activeTab]);
 
   const handleRequireAuth = useCallback(() => {
     localStorage.removeItem('ds_guest_user');
@@ -629,6 +676,7 @@ function App() {
       case 'chats':
         return (
           <CommunityPage 
+            key="chats"
             user={user}
             onRequireAuth={handleRequireAuth}
             initialSubTab="chats"
@@ -638,6 +686,7 @@ function App() {
       case 'community':
         return (
           <CommunityPage 
+            key="community"
             user={user}
             onRequireAuth={handleRequireAuth}
             initialSubTab="pyq"

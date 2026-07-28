@@ -1375,8 +1375,8 @@ a {
 .bento-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
   contain: layout style;
   content-visibility: auto;
   contain-intrinsic-size: 1px 600px;
@@ -1915,7 +1915,7 @@ a {
 
 /* Common Components */
 .section-header {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .section-title {
@@ -6895,6 +6895,14 @@ a {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE and Edge */
+}
+
+.wa-chat-messages-area::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 /* WhatsApp Date Divider Pill */
@@ -6917,6 +6925,26 @@ a {
   width: 100%;
 }
 
+.wa-msg-highlight {
+  animation: waMsgFlash 1.5s ease-in-out;
+  border-radius: 8px;
+}
+
+@keyframes waMsgFlash {
+  0% {
+    background-color: rgba(0, 168, 132, 0.45);
+    box-shadow: 0 0 16px rgba(0, 168, 132, 0.6);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+.wa-reply-quote-banner:hover {
+  background: rgba(0, 168, 132, 0.15) !important;
+}
+
 .wa-msg-row.sent {
   justify-content: flex-end;
 }
@@ -6925,50 +6953,12 @@ a {
   justify-content: flex-start;
 }
 
-/* WhatsApp Bubble Shape & Tails */
+/* Shadcn Bubble Base Enhancements */
 .wa-msg-bubble {
-  max-width: 65%;
-  padding: 0.55rem 0.85rem 0.45rem 0.85rem;
-  border-radius: 8px;
   position: relative;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   font-size: 0.9rem;
   line-height: 1.45;
   word-break: break-word;
-}
-
-.wa-msg-bubble.sent {
-  background-color: #005c4b;
-  color: #e9edef;
-  border-top-right-radius: 0;
-}
-
-.wa-msg-bubble.sent::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: -8px;
-  width: 0;
-  height: 0;
-  border-top: 8px solid #005c4b;
-  border-right: 8px solid transparent;
-}
-
-.wa-msg-bubble.received {
-  background-color: #202c33;
-  color: #e9edef;
-  border-top-left-radius: 0;
-}
-
-.wa-msg-bubble.received::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: -8px;
-  width: 0;
-  height: 0;
-  border-top: 8px solid #202c33;
-  border-left: 8px solid transparent;
 }
 
 .wa-msg-author {
@@ -7045,57 +7035,213 @@ a {
   box-shadow: none;
 }
 
-/* WhatsApp Message Hover Dropdown Menu */
+/* ==========================================================================
+   WHATSAPP-EXACT UNIFIED HOVER POPUP
+   ========================================================================== */
+
+/* WhatsApp Message Hover Dropdown Chevron Trigger */
 .wa-msg-dropdown-trigger {
   position: absolute;
   top: 4px;
   right: 6px;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(11, 20, 26, 0.8);
   color: #aebac1;
   border: none;
-  border-radius: 4px;
-  padding: 0.15rem 0.4rem;
-  fontSize: 0.7rem;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: none !important;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
   cursor: pointer;
-  display: none;
-  z-index: 10;
+  z-index: 15;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background 0.15s ease, color 0.15s ease;
+  transform-origin: center;
+  backdrop-filter: blur(4px);
+  padding: 0;
 }
 
-.wa-msg-bubble:hover .wa-msg-dropdown-trigger {
-  display: block;
+.ui-bubble-root:hover .wa-msg-dropdown-trigger,
+.wa-msg-dropdown-trigger.open,
+.wa-msg-dropdown-trigger[data-state="open"] {
+  display: flex !important;
 }
 
+.wa-msg-dropdown-trigger.open,
+.wa-msg-dropdown-trigger[data-state="open"] {
+  transform: rotate(180deg);
+  background: rgba(11, 20, 26, 0.95);
+  color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(0, 168, 132, 0.4);
+}
+
+.wa-msg-dropdown-trigger:hover {
+  background: rgba(11, 20, 26, 0.95);
+  color: #ffffff;
+}
+
+/* The unified WhatsApp context popup panel */
+.wa-hover-popup {
+  position: absolute;
+  top: 28px;
+  z-index: 500;
+  background: #233138;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65);
+  min-width: 220px;
+  overflow: hidden;
+  animation: waPopupIn 0.16s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.wa-hover-popup--sent {
+  right: 6px;
+  transform-origin: top right;
+}
+
+.wa-hover-popup--received {
+  left: 6px;
+  transform-origin: top left;
+}
+
+@keyframes waPopupIn {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ── Emoji reaction row (centered) ──────────────────────── */
+.wa-hover-emoji-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px 8px;
+  gap: 2px;
+}
+
+.wa-quick-react-btn {
+  background: none;
+  border: none;
+  font-size: 1.55rem;
+  cursor: pointer;
+  padding: 4px 5px;
+  border-radius: 50%;
+  line-height: 1;
+  transition: transform 0.1s ease, background 0.1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wa-quick-react-btn:hover {
+  transform: scale(1.4);
+  background: rgba(255,255,255,0.07);
+}
+
+.wa-quick-react-more {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #8696a0;
+  width: 32px;
+  height: 32px;
+}
+
+.wa-quick-react-more:hover {
+  color: #e9edef;
+}
+
+/* ── Divider between emoji and menu ─────────────────────── */
+.wa-hover-divider {
+  height: 1px;
+  background: rgba(255,255,255,0.06);
+  margin: 0 0 2px;
+}
+
+/* ── Context menu list ───────────────────────────────────── */
+.wa-hover-menu-list {
+  padding: 4px 0 6px;
+}
+
+.wa-menu-item {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 10px 18px;
+  color: #e9edef;
+  font-size: 0.91rem;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: background 0.1s ease;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif;
+  white-space: nowrap;
+}
+
+.wa-menu-item:hover {
+  background: rgba(255,255,255,0.055);
+}
+
+.wa-menu-item--danger {
+  color: #ff7875;
+}
+
+.wa-menu-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: #8696a0;
+  fill: #8696a0;
+}
+
+.wa-menu-item--danger .wa-menu-icon {
+  color: #ff7875;
+  fill: #ff7875;
+}
+
+/* Legacy dropdown support (fallback) */
 .wa-dropdown-menu {
   position: absolute;
-  top: 26px;
-  right: 6px;
+  bottom: calc(100% + 2px);
   background-color: #233138;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-  padding: 0.35rem 0;
-  z-index: 100;
-  min-width: 130px;
+  border: none;
+  border-radius: 6px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
+  padding: 4px 0;
+  z-index: 300;
+  min-width: 170px;
+  animation: waFadeIn 0.1s ease;
 }
 
 .wa-dropdown-item {
-  padding: 0.45rem 0.85rem;
+  padding: 9px 16px;
   color: #e9edef;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background 0.1s ease;
+  white-space: nowrap;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .wa-dropdown-item:hover {
-  background-color: #182229;
+  background-color: rgba(255,255,255,0.06);
 }
 
 .wa-dropdown-item.delete {
-  color: #fb7185;
+  color: #ff7875;
 }
+
+
 
 /* WhatsApp Typing Indicator Dots Animation */
 @keyframes waTypingBounce {
@@ -7110,51 +7256,105 @@ a {
   }
 }
 
-.wa-typing-dot {
+/* WhatsApp Bouncing Typing Dots Animation */
+.wa-typing-indicator-dots {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 2px;
+}
+
+.wa-typing-indicator-dots .wa-typing-dot {
+  width: 7px;
+  height: 7px;
+  background-color: #00a884;
+  border-radius: 50%;
   display: inline-block;
-  font-size: 0.65rem;
-  color: #00a884;
-  animation: waTypingBounce 1.4s infinite ease-in-out both;
+  animation: waDotBounce 1.3s infinite ease-in-out both;
 }
 
-.wa-typing-dot.delay-1 { 
-  animation-delay: 0.2s; 
+.wa-typing-indicator-dots .wa-typing-dot.delay-1 {
+  animation-delay: 0.2s;
 }
 
-.wa-typing-dot.delay-2 { 
-  animation-delay: 0.4s; 
+.wa-typing-indicator-dots .wa-typing-dot.delay-2 {
+  animation-delay: 0.4s;
+}
+
+@keyframes waDotBounce {
+  0%, 80%, 100% {
+    transform: scale(0.7) translateY(0);
+    opacity: 0.4;
+    background-color: #8696a0;
+  }
+  40% {
+    transform: scale(1.25) translateY(-5px);
+    opacity: 1;
+    background-color: #00a884;
+  }
+}
+
+/* Fullscreen WhatsApp Chat Mode (Desktop & Mobile) */
+.chats-mode-active {
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  height: 100vh !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 99999 !important;
+  background-color: #0b141a !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.chats-mode-active .community-tabs {
+  display: none !important;
+}
+
+.chats-mode-active .wa-container {
+  height: 100vh !important;
+  height: 100dvh !important;
+  width: 100% !important;
+  border-radius: 0 !important;
+  border: none !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Global scrollbar hiding for chat */
+.wa-chat-messages-area,
+.wa-sidebar,
+.wa-chat-panel,
+.wa-container,
+.community-container {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.wa-chat-messages-area::-webkit-scrollbar,
+.wa-sidebar::-webkit-scrollbar,
+.wa-chat-panel::-webkit-scrollbar,
+.wa-container::-webkit-scrollbar,
+.community-container::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 @media (max-width: 768px) {
-  .chats-mode-active {
-    padding: 0 !important;
-    margin: 0 !important;
-    width: 100vw !important;
-    height: 100dvh !important;
-    height: 100vh !important;
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    z-index: 99999 !important;
-    background-color: #0b141a !important;
-  }
-
-  .chats-mode-active .wa-container {
-    height: 100% !important;
-    min-height: 100% !important;
-    width: 100% !important;
-    border-radius: 0 !important;
-    border: none !important;
-    margin: 0 !important;
-    position: relative !important;
-    overflow: hidden !important;
-    box-shadow: none !important;
-  }
 
   .community-container {
     padding: 0.5rem !important;
+  }
+  .community-container.chats-mode-active {
+    padding: 0 !important;
+    margin: 0 !important;
   }
   .community-tabs {
     flex-wrap: nowrap !important;
@@ -7165,6 +7365,10 @@ a {
     margin-bottom: 0 !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     background-color: #111b21;
+    scrollbar-width: none !important;
+  }
+  .community-tabs::-webkit-scrollbar {
+    display: none !important;
   }
   .community-tab-btn {
     white-space: nowrap !important;
@@ -7184,6 +7388,12 @@ a {
     position: relative !important;
     overflow: hidden !important;
     box-shadow: none !important;
+  }
+  
+  .chats-mode-active .wa-container {
+    height: 100dvh !important;
+    height: 100vh !important;
+    min-height: 100dvh !important;
   }
   
   .wa-sidebar {
@@ -7214,7 +7424,10 @@ a {
     right: 0;
     bottom: 0;
     z-index: 20;
-    background-color: #0b141a;
+    /* WhatsApp mobile chat background with subtle pattern */
+    background-color: #0b141a !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300' opacity='0.04'%3E%3Ctext y='60' font-size='30' fill='%23ffffff'%3E💬%3C/text%3E%3Ctext x='80' y='130' font-size='25' fill='%23ffffff'%3E🎓%3C/text%3E%3Ctext x='160' y='80' font-size='28' fill='%23ffffff'%3E⭐%3C/text%3E%3Ctext x='30' y='200' font-size='22' fill='%23ffffff'%3E📚%3C/text%3E%3Ctext x='120' y='220' font-size='30' fill='%23ffffff'%3E💡%3C/text%3E%3Ctext x='210' y='190' font-size='24' fill='%23ffffff'%3E🔥%3C/text%3E%3Ctext x='60' y='270' font-size='28' fill='%23ffffff'%3E🚀%3C/text%3E%3Ctext x='180' y='270' font-size='22' fill='%23ffffff'%3E✨%3C/text%3E%3C/svg%3E") !important;
+    background-size: 300px 300px !important;
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
@@ -7223,6 +7436,7 @@ a {
     pointer-events: none;
   }
 
+  /* ── Mobile Header ── */
   .wa-mobile-back-btn {
     display: flex !important;
     align-items: center;
@@ -7243,34 +7457,238 @@ a {
     background: rgba(255, 255, 255, 0.1);
   }
 
-  .wa-msg-bubble {
-    max-width: 90% !important;
-  }
-
   .wa-chat-header {
-    padding: 0 0.6rem !important;
-  }
-
-  .wa-input-container {
-    padding: 0.5rem 0.6rem !important;
+    padding: 0.4rem 0.6rem !important;
+    min-height: 58px !important;
+    background-color: #202c33 !important;
     gap: 0.4rem !important;
   }
 
-  .wa-input-box {
-    font-size: 0.9rem !important;
+  /* ── Messages Area ── */
+  .wa-chat-messages-area {
+    padding: 0.75rem 0.65rem !important;
+    gap: 0.3rem !important;
+    /* WhatsApp mobile: smaller gap between messages */
   }
 
+  /* ── Message Bubbles ── */
+  .wa-msg-bubble {
+    max-width: 88% !important;
+    border-radius: 8px !important;
+  }
+
+  /* Sent bubbles - WhatsApp dark green */
+  .wa-msg-row.sent .ui-bubble-root {
+    background: #005c4b !important;
+    border-radius: 8px 0px 8px 8px !important;
+  }
+
+  /* Received bubbles - WhatsApp dark grey */
+  .wa-msg-row.received .ui-bubble-root {
+    background: #202c33 !important;
+    border-radius: 0px 8px 8px 8px !important;
+  }
+
+  /* Tail triangle for sent bubbles */
+  .wa-msg-row.sent .ui-bubble-root::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: -8px;
+    width: 0;
+    height: 0;
+    border-left: 8px solid #005c4b;
+    border-bottom: 8px solid transparent;
+  }
+
+  /* Tail triangle for received bubbles */
+  .wa-msg-row.received .ui-bubble-root::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -8px;
+    width: 0;
+    height: 0;
+    border-right: 8px solid #202c33;
+    border-bottom: 8px solid transparent;
+  }
+
+  .ui-bubble-root {
+    position: relative;
+  }
+
+  /* Compact author name inside received bubble */
+  .wa-msg-bubble .wa-author-name {
+    font-size: 0.78rem !important;
+    margin-bottom: 0.1rem !important;
+  }
+
+  /* Message text */
+  .wa-msg-bubble .wa-msg-text {
+    font-size: 0.9rem !important;
+    line-height: 1.4 !important;
+  }
+
+  /* Timestamp row: time + ticks tightly packed at bottom-right */
+  .wa-msg-meta {
+    font-size: 0.68rem !important;
+    gap: 0.15rem !important;
+    margin-top: 0.1rem !important;
+    justify-content: flex-end !important;
+  }
+
+  /* ── Date Divider ── */
+  .wa-date-divider {
+    background: rgba(17, 27, 33, 0.85) !important;
+    border-radius: 8px !important;
+    font-size: 0.72rem !important;
+    padding: 0.2rem 0.7rem !important;
+    margin: 0.5rem auto !important;
+    color: #e9edef !important;
+    font-weight: 500 !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+  }
+
+  /* ── Input Bar — WhatsApp Mobile Style ── */
+  .wa-input-bar {
+    min-height: 60px !important;
+    height: auto !important;
+    padding: 0.4rem 0.5rem !important;
+    gap: 0.45rem !important;
+    background: #111b21 !important;
+    border-top: none !important;
+    align-items: center !important;
+    /* Safe area for bottom notch */
+    padding-bottom: max(0.4rem, env(safe-area-inset-bottom)) !important;
+  }
+
+  /* Message input pill */
+  .wa-input-field {
+    flex: 1 !important;
+    border-radius: 24px !important;
+    padding: 0.7rem 1rem !important;
+    font-size: 0.92rem !important;
+    background-color: #2a3942 !important;
+    min-height: 44px !important;
+    max-height: 120px !important;
+  }
+
+  .wa-input-field::placeholder {
+    color: #8696a0;
+  }
+
+  /* Send/Mic button — green circle like WhatsApp */
+  .wa-send-btn {
+    width: 48px !important;
+    height: 48px !important;
+    border-radius: 50% !important;
+    background: #00a884 !important;
+    flex-shrink: 0 !important;
+    font-size: 1.3rem !important;
+    box-shadow: 0 2px 8px rgba(0, 168, 132, 0.4) !important;
+  }
+
+  .wa-send-btn:active {
+    transform: scale(0.93) !important;
+    background: #008f6f !important;
+  }
+
+  /* Input icon buttons (emoji, paperclip) */
+  .wa-input-bar > span,
+  .wa-input-bar > button:not(.wa-send-btn) {
+    font-size: 1.4rem !important;
+    min-width: 28px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #8696a0 !important;
+    flex-shrink: 0;
+  }
+
+  /* Sidebar header */
   .wa-sidebar-header {
     padding: 0 0.6rem !important;
+    min-height: 58px !important;
+    background-color: #202c33 !important;
   }
 
+  /* Chat list items */
   .wa-chat-item {
-    padding: 0.65rem 0.75rem !important;
+    padding: 0.6rem 0.75rem !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
   }
 
   .wa-chat-item-avatar {
-    width: 42px !important;
-    height: 42px !important;
+    width: 46px !important;
+    height: 46px !important;
+    font-size: 1.1rem !important;
+  }
+
+  .wa-chat-item-name {
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+  }
+
+  .wa-chat-item-preview {
+    font-size: 0.78rem !important;
+    color: #8696a0 !important;
+  }
+
+  /* Dropdown menu — full width bottom sheet on mobile */
+  .dropdown-menu-content {
+    min-width: 240px !important;
+    max-width: min(92vw, 280px) !important;
+    border-radius: 12px !important;
+  }
+
+  /* Emoji row in message context menu — larger on mobile */
+  .wa-emoji-row button {
+    font-size: 1.5rem !important;
+    padding: 0.35rem !important;
+  }
+
+  /* Reply quote preview in bubble */
+  .wa-reply-preview {
+    border-left-width: 3px !important;
+    border-radius: 4px !important;
+    padding: 0.25rem 0.5rem !important;
+    margin-bottom: 0.35rem !important;
+    font-size: 0.78rem !important;
+  }
+
+  /* Poll bubbles on mobile */
+  .wa-poll-bubble {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  /* Channel info modal */
+  .aurora-modal-card {
+    max-width: 96vw !important;
+    max-height: 90dvh !important;
+    overflow-y: auto !important;
+  }
+
+  /* Floating multi-select bar */
+  .wa-select-bar {
+    bottom: 70px !important;
+    left: 0.5rem !important;
+    right: 0.5rem !important;
+    transform: none !important;
+    width: auto !important;
+    border-radius: 16px !important;
+    padding: 0.5rem 0.85rem !important;
+  }
+
+  /* Typing indicator */
+  .wa-typing-indicator-dots {
+    padding: 0.35rem 0.5rem !important;
+  }
+
+  /* Show ₹ and camera icons on mobile */
+  .wa-mobile-extra-btn {
+    display: flex !important;
   }
 }
 

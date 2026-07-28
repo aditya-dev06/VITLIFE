@@ -1,0 +1,182 @@
+/* ── Forward Message Modal ── */
+
+.fwd-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.fwd-modal {
+  background: #111b21;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  width: 360px;
+  max-width: 94vw;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+}
+
+.fwd-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fwd-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #e9edef;
+}
+
+.fwd-close {
+  background: none;
+  border: none;
+  color: #8696a0;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: color 0.15s;
+}
+.fwd-close:hover { color: #e9edef; }
+
+.fwd-preview {
+  margin: 0.75rem 1rem;
+  padding: 0.65rem 0.85rem;
+  background: #182229;
+  border-left: 3px solid #00a884;
+  border-radius: 6px;
+}
+
+.fwd-preview-author {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #00a884;
+  margin-bottom: 0.15rem;
+}
+
+.fwd-preview-content {
+  font-size: 0.82rem;
+  color: #8696a0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fwd-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 1rem 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: #182229;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.fwd-search {
+  background: none;
+  border: none;
+  color: #e9edef;
+  font-size: 0.84rem;
+  outline: none;
+  width: 100%;
+}
+.fwd-search::placeholder { color: #8696a0; }
+
+.fwd-channel-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 0.5rem 0.5rem;
+}
+
+.fwd-channel-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.65rem;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.fwd-channel-row:hover { background: rgba(255, 255, 255, 0.05); }
+.fwd-selected { background: rgba(0, 168, 132, 0.1) !important; }
+
+.fwd-ch-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.fwd-ch-label {
+  flex: 1;
+  font-size: 0.88rem;
+  color: #e9edef;
+  font-weight: 500;
+}
+
+.fwd-check {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.fwd-check-active {
+  background: #00a884;
+  border-color: #00a884;
+}
+
+.fwd-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fwd-count {
+  font-size: 0.8rem;
+  color: #00a884;
+  font-weight: 600;
+  flex: 1;
+}
+
+.fwd-btn-send {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.1rem;
+  background: #00a884;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.fwd-btn-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.fwd-btn-send:not(:disabled):hover { opacity: 0.9; }

@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/InputGroup';
+import { Search, X } from 'lucide-react';
 
 const sanitizeUrl = (url) => {
   if (!url) return '#';
@@ -121,15 +123,26 @@ const Opportunities = ({ initialOpportunities = [], lastUpdated }) => {
           </button>
         </div>
 
-        <div className="search-box">
-          <span style={{ marginRight: '0.5rem' }} aria-hidden="true">🔍</span>
-          <input 
-            type="text" 
-            placeholder="Search opportunities (e.g., Python, remote, hackathon)..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="Search opportunities by keyword, skill, or organization"
-          />
+        <div className="search-box" style={{ padding: 0, background: 'transparent', border: 'none' }}>
+          <InputGroup style={{ maxWidth: '480px' }}>
+            <InputGroupAddon align="inline-start">
+              <Search size={16} />
+            </InputGroupAddon>
+            <InputGroupInput 
+              type="text" 
+              placeholder="Search opportunities (e.g., Python, remote, hackathon)..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search opportunities by keyword, skill, or organization"
+            />
+            {searchQuery && (
+              <InputGroupAddon align="inline-end">
+                <button type="button" onClick={() => setSearchQuery('')} title="Clear search">
+                  <X size={14} />
+                </button>
+              </InputGroupAddon>
+            )}
+          </InputGroup>
         </div>
       </div>
 

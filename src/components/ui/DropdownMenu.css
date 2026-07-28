@@ -1,0 +1,194 @@
+/* ── Authentic WhatsApp Web Desktop DropdownMenu Styles ── */
+
+.dropdown-menu-container {
+  position: relative;
+  display: inline-block;
+}
+
+/* Trigger Button with Animated Chevron Arrow */
+.dropdown-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  background: transparent;
+  border: none;
+  color: #aebac1;
+  cursor: pointer;
+  padding: 0.25rem 0.4rem;
+  border-radius: 6px;
+  transition: background 0.15s ease, color 0.15s ease;
+  outline: none;
+  font-family: inherit;
+}
+
+.dropdown-menu-trigger:hover,
+.dropdown-menu-trigger[data-state="open"] {
+  color: #f4f4f5;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Animated Rotating Arrow Icon */
+.dropdown-menu-chevron {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: center;
+  fill: currentColor;
+}
+
+.dropdown-menu-trigger[data-state="open"] .dropdown-menu-chevron {
+  transform: rotate(180deg);
+}
+
+/* Floating Content Menu Container (Exact WhatsApp Web Match) */
+.dropdown-menu-content {
+  min-width: 250px;
+  max-width: 270px;
+  padding: 0.4rem;
+  background: #233138; /* Exact WhatsApp Web Dark Background */
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.3);
+  animation: dropdownFadeScale 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: top right;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.dropdown-menu-content.align-end {
+  right: 0;
+}
+
+.dropdown-menu-content.align-start {
+  left: 0;
+}
+
+@keyframes dropdownFadeScale {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes dropdownFadeScaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.dropdown-menu-content.opens-up {
+  transform-origin: bottom right;
+  animation: dropdownFadeScaleUp 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.dropdown-menu-content.opens-up.align-start {
+  transform-origin: bottom left;
+}
+
+.dropdown-menu-content.opens-down {
+  transform-origin: top right;
+}
+
+.dropdown-menu-content.opens-down.align-start {
+  transform-origin: top left;
+}
+
+/* Menu Group */
+.dropdown-menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* Menu Label */
+.dropdown-menu-label {
+  padding: 0.4rem 0.75rem 0.25rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #8696a0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Menu Item (Exact WhatsApp Desktop Dimensions & Typography) */
+.dropdown-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #e9edef;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease, color 0.12s ease;
+  user-select: none;
+  gap: 0.75rem;
+}
+
+.dropdown-menu-item-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.dropdown-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.dropdown-menu-item.variant-destructive {
+  color: #ea868f;
+}
+
+.dropdown-menu-item.variant-destructive:hover {
+  background: rgba(239, 68, 68, 0.16);
+  color: #ef4444;
+}
+
+/* Item Icon & Shortcut */
+.dropdown-menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: #aebac1;
+  flex-shrink: 0;
+}
+
+.dropdown-menu-item:hover .dropdown-menu-icon {
+  color: #ffffff;
+}
+
+.dropdown-menu-shortcut {
+  font-size: 0.75rem;
+  color: #8696a0;
+  font-weight: 400;
+  margin-left: auto;
+  font-family: inherit;
+}
+
+/* Menu Separator */
+.dropdown-menu-separator {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 0;
+}
