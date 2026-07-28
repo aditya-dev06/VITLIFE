@@ -20,6 +20,7 @@ function getFastKey() {
         );
       } catch (e) {
         console.error("Crypto key initialization error:", e);
+        keyPromise = null;
         return null;
       }
     })();
@@ -52,10 +53,14 @@ export async function decryptText(text) {
   try {
     const parts = text.split(':');
     if (parts.length !== 3) return text;
-    const ivHex = parts[1];
-    const cipherHex = parts[2];
-    const iv = new Uint8Array(ivHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-    const ciphertext = new Uint8Array(cipherHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+    const ivHex = parts[1] || '';
+    const cipherHex = parts[2] || '';
+    const ivMatches = ivHex.match(/.{1,2}/g) || [];
+    const cipherMatches = cipherHex.match(/.{1,2}/g) || [];
+    if (ivMatches.length === 0 || cipherMatches.length === 0) return text;
+
+    const iv = new Uint8Array(ivMatches.map(byte => parseInt(byte, 16)));
+    const ciphertext = new Uint8Array(cipherMatches.map(byte => parseInt(byte, 16)));
     
     const key = await getFastKey();
     if (!key) return text;

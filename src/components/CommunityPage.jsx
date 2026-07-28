@@ -65,6 +65,35 @@ const loadJsPDF = () => {
   });
 };
 
+const sanitizeImageSrc = (url) => {
+  if (typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (trimmed.startsWith('//')) return '';
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('data:image/') ||
+    trimmed.startsWith('/') ||
+    trimmed.startsWith('blob:')
+  ) {
+    return trimmed;
+  }
+  return '';
+};
+
+const sanitizeUrl = (url) => {
+  if (typeof url !== 'string') return '#';
+  const trimmed = url.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith('javascript:') || lower.startsWith('vbscript:') || lower.startsWith('data:text/html')) {
+    return '#';
+  }
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('/') || trimmed.startsWith('blob:')) {
+    return trimmed;
+  }
+  return '#';
+};
+
 const preprocessCanvasForOCR = (canvas) => {
   try {
     const ctx = canvas.getContext('2d');
@@ -679,7 +708,8 @@ const PaperFileItem = memo(function PaperFileItem({ paper, user, onDelete }) {
   const handleOpenPaper = useCallback((e) => {
     e.stopPropagation();
     for (let i = 1; i < urls.length; i++) {
-      window.open(urls[i], '_blank');
+      const safe = sanitizeUrl(urls[i]);
+      if (safe !== '#') window.open(safe, '_blank');
     }
   }, [urls]);
 
@@ -753,7 +783,7 @@ const PaperFileItem = memo(function PaperFileItem({ paper, user, onDelete }) {
       
       <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
         <a
-          href={urls[0] || '#'}
+          href={sanitizeUrl(urls[0])}
           target="_blank"
           rel="noopener noreferrer"
           className="paper-btn download"
@@ -893,6 +923,17 @@ const ModerationCard = memo(function ModerationCard({ paper, onApprove, onDelete
 /**
  * Helper to get or create persistent guest client ID
  */
+const generateSecureId = (prefix = '') => {
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
+    return prefix ? `${prefix}_${window.crypto.randomUUID()}` : window.crypto.randomUUID();
+  }
+  const array = new Uint8Array(12);
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+    window.crypto.getRandomValues(array);
+  }
+  return prefix ? `${prefix}_${Date.now()}_${Array.from(array, b => b.toString(36)).join('')}` : `id_${Date.now()}_${Array.from(array, b => b.toString(36)).join('')}`;
+};
+
 const getGuestClientId = () => {
   let id = localStorage.getItem('ds_guest_client_id');
   if (!id) {
@@ -957,6 +998,20 @@ const ChatMessageItem = memo(function ChatMessageItem({
 
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.content || '');
+  const [decryptedReplyContent, setDecryptedReplyContent] = useState(message?.replyTo?.content || '');
+
+  useEffect(() => {
+    let isMounted = true;
+    if (message?.replyTo?.content && message.replyTo.content.startsWith('🔒e2ee:')) {
+      decryptText(message.replyTo.content).then(res => {
+        if (isMounted) setDecryptedReplyContent(res);
+      });
+    } else {
+      setDecryptedReplyContent(message?.replyTo?.content || '');
+    }
+    return () => { isMounted = false; };
+  }, [message?.replyTo?.content]);
+
   const showMenu = activeMenuMsgId === message.id;
   const setShowMenu = useCallback((val) => {
     if (val) {
@@ -1210,7 +1265,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
                 {message.replyTo.author}
               </div>
               <div style={{ color: '#aebac1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {message.replyTo.content || 'Photo attachment'}
+                {decryptedReplyContent || 'Photo attachment'}
               </div>
             </div>
           )}
@@ -1300,7 +1355,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
           {message.attachment && (
             <div style={{ marginTop: '0.35rem' }}>
               <img 
-                src={message.attachment} 
+                src={sanitizeImageSrc(message.attachment)} 
                 alt="Chat attachment" 
                 onClick={() => onPreviewImage && onPreviewImage(message.attachment)}
                 style={{
@@ -2215,7 +2270,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       setIsRecordingVoice(false);
       const currentAuthorId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
       const voiceMsg = {
-        id: String(Date.now()),
+        id: generateSecureId('voice'),
         channel: activeChannel,
         author: getSafeAuthorName(user),
         authorId: currentAuthorId,
@@ -2290,12 +2345,14 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       }
     }
 
-    const rnd = new Uint8Array(4);
-    window.crypto.getRandomValues(rnd);
-    const tempId = 'temp_' + Date.now() + '_' + Array.from(rnd, b => b.toString(36)).join('');
+    const tempId = generateSecureId('temp');
     const currentAuthorId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
     const rawText = newMessage.trim();
     const encryptedContent = await encryptText(rawText);
+    const encryptedReplyTo = replyingToMessage ? {
+      author: replyingToMessage.author,
+      content: await encryptText(replyingToMessage.content)
+    } : null;
 
     const msg = {
       id: tempId,
@@ -2331,7 +2388,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         authorName: msg.author,
         authorRole: msg.role,
         userId: currentAuthorId,
-        replyTo: msg.replyTo
+        replyTo: encryptedReplyTo
       }));
     }
 
@@ -2348,7 +2405,8 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         content: encryptedContent, 
         attachment: attachmentUrl,
         authorName: msg.author,
-        authorRole: msg.role
+        authorRole: msg.role,
+        replyTo: encryptedReplyTo
       })
     })
     .then(res => res.json())
@@ -2972,14 +3030,14 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         onSubmitPoll={({ question, options, allowMultipleAnswers }) => {
           const currentAuthorId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
           const pollMsg = {
-            id: String(Date.now()),
+            id: generateSecureId('poll_msg'),
             channel: activeChannel,
             author: getSafeAuthorName(user),
             authorId: currentAuthorId,
             avatar: user && user.name ? user.name.charAt(0).toUpperCase() : 'G',
             role: user && !user.isGuest ? (user.role === 'admin' ? 'Admin' : (user.program || 'Student')) : 'Guest User',
             poll: {
-              id: `poll_${Date.now()}`,
+              id: generateSecureId('poll'),
               question,
               options,
               allowMultipleAnswers,
@@ -3355,7 +3413,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       {previewImageModal && (
         <div className="aurora-modal-overlay" onClick={() => setPreviewImageModal(null)} style={{ zIndex: 99999 }}>
           <div className="aurora-modal-card glass-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '90vh', padding: '1rem', borderRadius: '16px', textAlign: 'center', background: '#111b21' }}>
-            <img src={previewImageModal} alt="Expanded Attachment" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: '10px', objectFit: 'contain' }} />
+            <img src={sanitizeImageSrc(previewImageModal)} alt="Expanded Attachment" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: '10px', objectFit: 'contain' }} />
             <button 
               onClick={() => setPreviewImageModal(null)}
               style={{ marginTop: '0.75rem', padding: '0.5rem 1.5rem', fontSize: '0.85rem', borderRadius: '8px', background: '#00a884', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}

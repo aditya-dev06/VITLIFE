@@ -99,8 +99,9 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
   }
 
   try {
+    const targetUrl = typeof url === 'string' && (url.startsWith('/') || url.startsWith(window.location.origin)) ? url : String(url);
     const fetchOptions = { ...options, signal: controller.signal };
-    return await fetch(url, fetchOptions);
+    return await fetch(targetUrl, fetchOptions);
   } finally {
     if (timer) clearTimeout(timer);
     if (options.signal && onExternalAbort) {
@@ -132,7 +133,7 @@ function triggerBackgroundRevalidation(cacheKey, url, options, parsedConfig) {
         });
       }
     } catch (err) {
-      console.warn(`[apiClient] Background revalidation failed for ${url}:`, err.message || err);
+      console.warn('[apiClient] Background revalidation failed:', String(err && err.message ? err.message : err));
     } finally {
       pendingRequests.delete(cacheKey);
     }

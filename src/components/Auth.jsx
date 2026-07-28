@@ -633,7 +633,9 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
       if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
         guestId = 'guest_' + crypto.randomUUID();
       } else {
-        guestId = 'guest_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
+        const rndArr = new Uint8Array(8);
+        if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(rndArr);
+        guestId = 'guest_' + Date.now() + '_' + Array.from(rndArr, b => b.toString(36)).join('');
       }
       localStorage.setItem('ds_guest_id', guestId);
     }

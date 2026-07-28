@@ -1,6 +1,15 @@
 import React, { useState } from 'react';
 import './WhatsAppPolls.css';
 
+const sanitizeImageSrc = (url) => {
+  if (typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:image/') || trimmed.startsWith('/')) {
+    return trimmed;
+  }
+  return '';
+};
+
 export function WhatsAppVoterListDrawer({ isOpen, onClose, poll }) {
   const [activeTab, setActiveTab] = useState(0);
 
@@ -67,7 +76,7 @@ export function WhatsAppVoterListDrawer({ isOpen, onClose, poll }) {
                 <div key={voter.userId || idx} className="wa-voter-row">
                   <div className="wa-voter-avatar">
                     {voter.userAvatar ? (
-                      <img src={voter.userAvatar} alt={voter.userName || 'User'} />
+                      <img src={sanitizeImageSrc(voter.userAvatar)} alt={voter.userName || 'User'} />
                     ) : (
                       <span>{(voter.userName || 'U').charAt(0).toUpperCase()}</span>
                     )}
