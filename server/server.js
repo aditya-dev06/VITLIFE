@@ -105,16 +105,27 @@ function parseRedisUrlRobust(urlStr) {
 let redisClient = null;
 let redisConnected = false;
 
-const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
-const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-const REDIS_URL = process.env.REDIS_URL || process.env.REDIS_URI || process.env.KV_URL;
+let upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
+let upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-if (UPSTASH_URL && UPSTASH_TOKEN) {
+// Auto-convert standard Upstash rediss:// or redis:// URLs to HTTP REST for 100% Vercel Serverless compatibility
+const rawRedisUrl = process.env.REDIS_URL || process.env.REDIS_URI || process.env.KV_URL;
+if (!upstashUrl && rawRedisUrl && rawRedisUrl.includes('upstash.io')) {
+  try {
+    const parsed = new URL(rawRedisUrl.startsWith('redis') ? rawRedisUrl : `redis://${rawRedisUrl}`);
+    upstashUrl = `https://${parsed.hostname}`;
+    upstashToken = decodeURIComponent(parsed.password || parsed.username || '');
+  } catch (e) {}
+}
+
+const REDIS_URL = rawRedisUrl;
+
+if (upstashUrl && upstashToken) {
   import('@upstash/redis').then(({ Redis }) => {
     try {
       const upstash = new Redis({
-        url: UPSTASH_URL,
-        token: UPSTASH_TOKEN,
+        url: upstashUrl,
+        token: upstashToken,
       });
 
       redisClient = {
