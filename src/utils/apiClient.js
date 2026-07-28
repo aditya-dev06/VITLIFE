@@ -99,7 +99,8 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
   }
 
   try {
-    const targetUrl = typeof url === 'string' && (url.startsWith('/') || url.startsWith(window.location.origin)) ? url : String(url);
+    const origin = typeof window !== 'undefined' && window.location ? window.location.origin : '';
+    const targetUrl = typeof url === 'string' && (url.startsWith('/') || (origin && url.startsWith(origin))) ? url : String(url);
     const fetchOptions = { ...options, signal: controller.signal };
     return await fetch(targetUrl, fetchOptions);
   } finally {

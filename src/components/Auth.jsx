@@ -39,6 +39,12 @@ const IS_DEV = Boolean(import.meta.env?.DEV || import.meta.env?.MODE === 'develo
 const isValidJWT = (token) => {
   if (typeof token !== 'string' || !token) return false;
   const parts = token.split('.');
+  if (parts.length === 4) {
+    const exp = parseInt(parts[2], 10);
+    if (isNaN(exp)) return false;
+    const now = Date.now();
+    return exp > now - 5000;
+  }
   if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return false;
   try {
     const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');

@@ -31,10 +31,41 @@ const getPaperUrls = (url) => {
 
 const isImageUrl = (url) => {
   if (!url) return false;
+  if (typeof url !== 'string') return false;
+  const trimmed = url.trim().toLowerCase();
+  if (trimmed.startsWith('data:image/')) return true;
+  if (trimmed.startsWith('blob:')) return true;
   const urls = getPaperUrls(url);
   if (urls.length === 0) return false;
-  const imageRegex = /\.(jpg|jpeg|png|webp|gif)(\?|#|$)/i;
-  return urls.every(u => imageRegex.test(u) || u.includes('/image/upload/'));
+  const imageRegex = /\.(jpg|jpeg|png|webp|gif|svg)(\?|#|$)/i;
+  return urls.every(u => imageRegex.test(u) || u.includes('/image/upload/') || u.startsWith('data:image/'));
+};
+
+const isDocumentUrl = (url) => {
+  if (!url) return false;
+  if (typeof url !== 'string') return false;
+  const trimmed = url.trim().toLowerCase();
+  if (trimmed.startsWith('data:application/pdf') || trimmed.startsWith('data:application/msword') || trimmed.startsWith('data:application/vnd')) return true;
+  const docRegex = /\.(pdf|doc|docx|ppt|pptx|txt)(\?|#|$)/i;
+  return docRegex.test(trimmed);
+};
+
+const readAsArrayBuffer = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (err) => reject(err);
+    reader.readAsArrayBuffer(file);
+  });
+};
+
+const readAsDataURL = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
 };
 
 const loadTesseract = () => {
@@ -73,6 +104,7 @@ const sanitizeImageSrc = (url) => {
     trimmed.startsWith('http://') ||
     trimmed.startsWith('https://') ||
     trimmed.startsWith('data:image/') ||
+    trimmed.startsWith('data:application/') ||
     trimmed.startsWith('/') ||
     trimmed.startsWith('blob:')
   ) {
@@ -945,6 +977,56 @@ const getGuestClientId = () => {
   return id;
 };
 
+export const isMessageOwner = (message, currentUser) => {
+  if (!message) return false;
+
+  const guestClientId = getGuestClientId();
+  const isCurrentGuest = !currentUser || Boolean(currentUser.isGuest);
+  const currentUserId = currentUser && !currentUser.isGuest 
+    ? String(currentUser._id || currentUser.id || currentUser.email || '')
+    : guestClientId;
+  const currentAuthorName = getSafeAuthorName(currentUser);
+
+  // 1. Match by explicit authorId or userId (unique ID for both registered users and guests)
+  const msgAuthorId = (message.authorId !== undefined && message.authorId !== null && message.authorId !== '')
+    ? message.authorId
+    : ((message.userId !== undefined && message.userId !== null && message.userId !== '') ? message.userId : null);
+
+  if (msgAuthorId !== null) {
+    const strAuthorId = String(msgAuthorId);
+    if (isCurrentGuest) {
+      return strAuthorId === String(guestClientId);
+    } else {
+      return strAuthorId === currentUserId ||
+        (currentUser._id && strAuthorId === String(currentUser._id)) ||
+        (currentUser.id && strAuthorId === String(currentUser.id)) ||
+        (currentUser.email && strAuthorId === String(currentUser.email));
+    }
+  }
+
+  // 2. Match by optimistic tempId (sent in current session before server confirmation)
+  if (message.tempId && String(message.tempId).startsWith('temp_')) {
+    return true;
+  }
+
+  // 3. Fallback matching when authorId is NOT provided (e.g. legacy static messages):
+  // For guests, NEVER match generic 'Guest Student', 'Guest User', or 'Guest' by display name alone
+  if (isCurrentGuest) {
+    return false;
+  }
+
+  // For logged-in users, match by name only if author name is not generic
+  if (message.author) {
+    const rawAuthor = String(message.author).trim().toLowerCase();
+    const isGenericName = ['guest student', 'guest user', 'guest', 'student'].includes(rawAuthor);
+    if (!isGenericName) {
+      return message.author === currentAuthorName || (currentUser?.name && message.author === currentUser.name);
+    }
+  }
+
+  return false;
+};
+
 /**
  * ChatMessageItem Component
  * 1:1 WhatsApp Web style message bubble with Reply Quotes, Voice Notes, Polls, Starred Messages, Edit, Delete, and Reactions.
@@ -980,12 +1062,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
   const currentUserId = currentUser && !currentUser.isGuest 
     ? String(currentUser._id || currentUser.id || currentUser.email || '')
     : guestClientId;
-  const isOwner = Boolean(
-    currentUser?.role === 'admin' ||
-    (message && message.authorId && (String(message.authorId) === String(currentUserId) || String(message.authorId) === String(guestClientId))) ||
-    (message && message.author && message.author === currentAuthorName) ||
-    (message && message.tempId && String(message.tempId).startsWith('temp_'))
-  );
+  const isOwner = isMessageOwner(message, currentUser);
 
   const reactions = message.reactions || { '👍': [], '❤️': [], '😂': [], '😮': [], '😢': [], '🙏': [], '💡': [], '🔥': [], '🚀': [] };
   const activeReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏', '💡', '🔥', '🚀']
@@ -1351,23 +1428,53 @@ const ChatMessageItem = memo(function ChatMessageItem({
             )
           )}
 
-          {/* Attachment Image */}
+          {/* Attachment Rendering */}
           {message.attachment && (
             <div style={{ marginTop: '0.35rem' }}>
-              <img 
-                src={sanitizeImageSrc(message.attachment)} 
-                alt="Chat attachment" 
-                onClick={() => onPreviewImage && onPreviewImage(message.attachment)}
-                style={{
-                  maxWidth: '240px',
-                  maxHeight: '180px',
-                  borderRadius: '8px',
-                  objectFit: 'cover',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  cursor: 'pointer',
-                  transition: 'transform 0.2s ease'
-                }}
-              />
+              {isDocumentUrl(message.attachment) ? (
+                <a
+                  href={sanitizeUrl(message.attachment)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.5rem 0.8rem',
+                    background: 'rgba(0, 0, 0, 0.3)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: '8px',
+                    color: '#38bdf8',
+                    textDecoration: 'none',
+                    fontSize: '0.8rem',
+                    fontWeight: 600
+                  }}
+                >
+                  <span>📄 Document Attachment</span>
+                  <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>↗ View</span>
+                </a>
+              ) : (
+                <img 
+                  src={sanitizeImageSrc(message.attachment)} 
+                  alt="Chat attachment" 
+                  onClick={() => onPreviewImage && onPreviewImage(message.attachment)}
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    if (e.currentTarget.parentNode) {
+                      e.currentTarget.parentNode.innerHTML = '<div style="font-size:0.75rem; color:#fb7185; padding:0.3rem 0.5rem; background:rgba(239,68,68,0.1); border-radius:6px;">⚠️ Preview Unavailable</div>';
+                    }
+                  }}
+                  style={{
+                    maxWidth: '240px',
+                    maxHeight: '180px',
+                    borderRadius: '8px',
+                    objectFit: 'cover',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s ease'
+                  }}
+                />
+              )}
             </div>
           )}
 
@@ -1589,6 +1696,295 @@ const ChatMessageItem = memo(function ChatMessageItem({
 });
 
 /**
+ * ImageZoomModal Component
+ * Interactive Modal with Zoom In/Out, Reset, Rotation, Pan/Drag, Keyboard Shortcuts, and File Download.
+ */
+const ImageZoomModal = memo(function ImageZoomModal({ imageSrc, onClose }) {
+  const [scale, setScale] = useState(1);
+  const [rotation, setRotation] = useState(0);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [imageError, setImageError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const safeSrc = useMemo(() => sanitizeImageSrc(imageSrc), [imageSrc]);
+
+  // Reset transforms
+  const handleReset = useCallback(() => {
+    setScale(1);
+    setRotation(0);
+    setPosition({ x: 0, y: 0 });
+  }, []);
+
+  // Zoom handlers
+  const handleZoomIn = useCallback(() => {
+    setScale(prev => Math.min(prev + 0.25, 4));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setScale(prev => {
+      const next = Math.max(prev - 0.25, 0.5);
+      if (next <= 1) setPosition({ x: 0, y: 0 });
+      return next;
+    });
+  }, []);
+
+  const handleRotate = useCallback(() => {
+    setRotation(prev => (prev + 90) % 360);
+  }, []);
+
+  // Mouse wheel zoom
+  const handleWheel = useCallback((e) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.15 : -0.15;
+    setScale(prev => {
+      const next = Math.min(Math.max(prev + delta, 0.5), 4);
+      if (next <= 1) setPosition({ x: 0, y: 0 });
+      return next;
+    });
+  }, []);
+
+  // Mouse drag to pan when scale > 1
+  const handleMouseDown = useCallback((e) => {
+    if (scale <= 1) return;
+    e.preventDefault();
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+  }, [scale, position]);
+
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging || scale <= 1) return;
+    setPosition({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y
+    });
+  }, [isDragging, scale, dragStart]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Double click zoom toggle
+  const handleDoubleClick = useCallback(() => {
+    if (scale > 1) {
+      handleReset();
+    } else {
+      setScale(2);
+    }
+  }, [scale, handleReset]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      } else if (e.key === '+' || e.key === '=') {
+        handleZoomIn();
+      } else if (e.key === '-' || e.key === '_') {
+        handleZoomOut();
+      } else if (e.key.toLowerCase() === 'r') {
+        handleReset();
+      } else if (e.key === 'ArrowLeft') {
+        setPosition(p => ({ ...p, x: p.x + 30 }));
+      } else if (e.key === 'ArrowRight') {
+        setPosition(p => ({ ...p, x: p.x - 30 }));
+      } else if (e.key === 'ArrowUp') {
+        setPosition(p => ({ ...p, y: p.y + 30 }));
+      } else if (e.key === 'ArrowDown') {
+        setPosition(p => ({ ...p, y: p.y - 30 }));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose, handleZoomIn, handleZoomOut, handleReset]);
+
+  // Download handler
+  const handleDownload = useCallback(() => {
+    if (!safeSrc) return;
+    const a = document.createElement('a');
+    a.href = safeSrc;
+    a.download = `image_attachment_${Date.now()}`;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, [safeSrc]);
+
+  return (
+    <div
+      className="aurora-modal-overlay animate-fade-in"
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0, 0, 0, 0.88)',
+        backdropFilter: 'blur(10px)',
+        zIndex: 99999,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        userSelect: 'none'
+      }}
+    >
+      {/* Top Toolbar */}
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          position: 'absolute',
+          top: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.6rem',
+          background: 'rgba(17, 27, 33, 0.9)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          padding: '0.45rem 1rem',
+          borderRadius: '30px',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+          zIndex: 100000
+        }}
+      >
+        <button
+          onClick={handleZoomOut}
+          title="Zoom Out (-)"
+          disabled={scale <= 0.5}
+          style={{ background: 'none', border: 'none', color: scale <= 0.5 ? '#555' : '#e9edef', fontSize: '1.1rem', cursor: scale <= 0.5 ? 'not-allowed' : 'pointer', padding: '0 0.3rem' }}
+        >
+          🔍-
+        </button>
+        <span style={{ color: '#00a884', fontWeight: 700, fontSize: '0.85rem', minWidth: '45px', textAlign: 'center' }}>
+          {Math.round(scale * 100)}%
+        </span>
+        <button
+          onClick={handleZoomIn}
+          title="Zoom In (+)"
+          disabled={scale >= 4}
+          style={{ background: 'none', border: 'none', color: scale >= 4 ? '#555' : '#e9edef', fontSize: '1.1rem', cursor: scale >= 4 ? 'not-allowed' : 'pointer', padding: '0 0.3rem' }}
+        >
+          🔍+
+        </button>
+
+        <div style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.2)' }} />
+
+        <button
+          onClick={handleReset}
+          title="Reset View (R)"
+          style={{ background: 'none', border: 'none', color: '#e9edef', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', padding: '0 0.3rem' }}
+        >
+          ↺ Reset
+        </button>
+        <button
+          onClick={handleRotate}
+          title="Rotate 90°"
+          style={{ background: 'none', border: 'none', color: '#e9edef', fontSize: '1rem', cursor: 'pointer', padding: '0 0.3rem' }}
+        >
+          ↻
+        </button>
+
+        <div style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.2)' }} />
+
+        <button
+          onClick={handleDownload}
+          title="Download Image"
+          style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+        >
+          ⬇ Save
+        </button>
+
+        {safeSrc && (
+          <a
+            href={safeSrc}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open Original Image in New Tab"
+            style={{ color: '#e9edef', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+          >
+            ↗ Open
+          </a>
+        )}
+
+        <div style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.2)' }} />
+
+        <button
+          onClick={onClose}
+          title="Close (Esc)"
+          style={{ background: 'rgba(244,63,94,0.2)', border: 'none', color: '#fb7185', fontSize: '0.9rem', fontWeight: 700, borderRadius: '50%', width: '26px', height: '26px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Main Image Container */}
+      <div
+        onClick={e => e.stopPropagation()}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onDoubleClick={handleDoubleClick}
+        style={{
+          width: '92vw',
+          height: '82vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          cursor: scale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in',
+          position: 'relative'
+        }}
+      >
+        {isLoading && !imageError && (
+          <div style={{ position: 'absolute', color: '#00a884', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
+            <span className="aurora-spinner" style={{ width: '24px', height: '24px' }} />
+            Loading preview...
+          </div>
+        )}
+
+        {imageError ? (
+          <div style={{ color: '#fb7185', textAlign: 'center', background: '#111b21', padding: '2rem', borderRadius: '16px', border: '1px solid rgba(251,113,133,0.3)' }}>
+            <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '0.5rem' }}>⚠️</span>
+            <div style={{ fontWeight: 700, fontSize: '1rem' }}>Unable to display image preview</div>
+            <div style={{ fontSize: '0.8rem', color: '#8696a0', marginTop: '0.25rem' }}>The image link may be broken or restricted.</div>
+          </div>
+        ) : (
+          safeSrc && (
+            <img
+              src={safeSrc}
+              alt="Preview Zoom"
+              onLoad={() => setIsLoading(false)}
+              onError={() => { setIsLoading(false); setImageError(true); }}
+              style={{
+                maxWidth: '90%',
+                maxHeight: '90%',
+                objectFit: 'contain',
+                borderRadius: '8px',
+                transform: `translate(${position.x}px, ${position.y}px) scale(${scale}) rotate(${rotation}deg)`,
+                transition: isDragging ? 'none' : 'transform 0.15s ease-out',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.8)'
+              }}
+              draggable={false}
+            />
+          )
+        )}
+      </div>
+
+      {/* Footer Hints */}
+      <div style={{ position: 'absolute', bottom: '15px', color: '#8696a0', fontSize: '0.75rem', display: 'flex', gap: '1.2rem' }}>
+        <span>Scroll to Zoom</span>
+        <span>•</span>
+        <span>Drag to Pan</span>
+        <span>•</span>
+        <span>Double-click to toggle 2x</span>
+        <span>•</span>
+        <span>Press ESC to close</span>
+      </div>
+    </div>
+  );
+});
+
+/**
  * ReportMessageModal — multi-step report flow
  */
 function ReportMessageModal({ message, currentUser, onClose, onSubmit }) {
@@ -1802,10 +2198,13 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
   const handleBulkDelete = useCallback(() => {
     if (selectedMsgIds.length === 0) return;
-    setMessages(prev => prev.filter(m => !selectedMsgIds.includes(m.id)));
-    showToast(`${selectedMsgIds.length} message(s) deleted`, 'info');
+    const count = selectedMsgIds.length;
+    selectedMsgIds.forEach(id => {
+      handleDeleteMessage(id);
+    });
+    showToast(`${count} message(s) deleted`, 'info');
     handleExitSelectionMode();
-  }, [selectedMsgIds, handleExitSelectionMode, showToast]);
+  }, [selectedMsgIds, handleDeleteMessage, handleExitSelectionMode, showToast]);
 
 
 
@@ -1874,9 +2273,37 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
   const isGuestUser = !user || user.isGuest;
   const isChannelLockedForGuest = isGuestUser && activeChannel !== 'general' && !activeChannelObj.isPublic;
 
+  // Peer Typing Engine State, Refs, and Helpers
+  const [isPeerTyping, setIsPeerTyping] = useState(false);
+  const [typingPeerName, setTypingPeerName] = useState('Rahul Sharma');
+  const peerTypingTimerRef = useRef(null);
+  const lastPeerTypingTimeRef = useRef(0);
+
+  const cancelPeerTyping = useCallback(() => {
+    if (peerTypingTimerRef.current) {
+      clearTimeout(peerTypingTimerRef.current);
+      peerTypingTimerRef.current = null;
+    }
+    setIsPeerTyping(false);
+  }, []);
+
+  const triggerPeerTyping = useCallback((peerName) => {
+    if (!peerName) return;
+    setTypingPeerName(peerName);
+    setIsPeerTyping(true);
+    lastPeerTypingTimeRef.current = Date.now();
+
+    if (peerTypingTimerRef.current) {
+      clearTimeout(peerTypingTimerRef.current);
+    }
+    peerTypingTimerRef.current = setTimeout(() => {
+      setIsPeerTyping(false);
+      peerTypingTimerRef.current = null;
+    }, 3500);
+  }, []);
+
   // WhatsApp Live WebSocket Protocol Connection
   const wsRef = useRef(null);
-  const peerTypingTimerRef = useRef(null);
 
   useEffect(() => {
     let socket;
@@ -1897,6 +2324,11 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
           const data = JSON.parse(event.data);
 
           if (data.type === 'new_message' && data.message) {
+            const msgAuthor = data.message.author || data.message.authorName;
+            if (msgAuthor && msgAuthor !== getSafeAuthorName(user)) {
+              cancelPeerTyping();
+            }
+
             const rawContent = await decryptText(data.message.content);
             const tsFormatted = data.message.timestamp ? (data.message.timestamp.includes('T') ? new Date(data.message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : data.message.timestamp) : 'Just now';
             const serverMsg = { ...data.message, content: rawContent, timestamp: tsFormatted, status: 'sent' };
@@ -1913,14 +2345,12 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
           } else if (data.type === 'ack_delivered') {
             setMessages(prev => prev.map(m => (m.tempId === data.tempId || m.id === data.messageId) ? { ...m, status: 'delivered' } : m));
           } else if (data.type === 'peer_typing') {
-            if (data.username !== getSafeAuthorName(user)) {
-              if (peerTypingTimerRef.current) clearTimeout(peerTypingTimerRef.current);
-              setIsPeerTyping(data.isTyping);
+            const currentAuthor = getSafeAuthorName(user);
+            if (data.username && data.username !== currentAuthor) {
               if (data.isTyping) {
-                setTypingPeerName(data.username);
-                peerTypingTimerRef.current = setTimeout(() => {
-                  setIsPeerTyping(false);
-                }, 3500);
+                triggerPeerTyping(data.username);
+              } else {
+                cancelPeerTyping();
               }
             }
           } else if (data.type === 'delete_message') {
@@ -1931,12 +2361,12 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     } catch (e) {}
 
     return () => {
-      if (peerTypingTimerRef.current) clearTimeout(peerTypingTimerRef.current);
+      cancelPeerTyping();
       if (socket) {
         try { socket.close(); } catch (e) {}
       }
     };
-  }, [activeChannel, user]);
+  }, [activeChannel, user, cancelPeerTyping, triggerPeerTyping]);
 
   // Auto-switch to general if active channel is not visible to current user
   useEffect(() => {
@@ -2084,13 +2514,37 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     }
   }, [messages, activeChannel]);
 
-  // Handle Image Selection
+  // Clean up object URL when attachmentPreview changes or unmounts to avoid memory leaks
+  useEffect(() => {
+    return () => {
+      if (attachmentPreview && attachmentPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(attachmentPreview);
+      }
+    };
+  }, [attachmentPreview]);
+
+  const clearAttachment = useCallback(() => {
+    if (attachmentPreview && attachmentPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(attachmentPreview);
+    }
+    setSelectedAttachment(null);
+    setAttachmentPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [attachmentPreview]);
+
+  // Handle Attachment Selection
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
-      showToast('Image must be smaller than 5MB', 'error');
+      showToast('File must be smaller than 5MB', 'error');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
+    }
+    if (attachmentPreview && attachmentPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(attachmentPreview);
     }
     setSelectedAttachment(file);
     setAttachmentPreview(URL.createObjectURL(file));
@@ -2126,9 +2580,6 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     }).catch(err => console.error("Reaction sync failed:", err));
   }, [user, activeChannel, onRequireAuth]);
 
-  const [isPeerTyping, setIsPeerTyping] = useState(false);
-  const [typingPeerName, setTypingPeerName] = useState('Rahul Sharma');
-
   // Connect to Redis Presence & Typing Engine
   // Presence & typing polling (throttled for performance)
   useEffect(() => {
@@ -2153,7 +2604,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       }).catch(() => {});
     }, 30000);
 
-    // Real-time typing poll every 1.2s
+    // Real-time typing poll every 1.2s with premature cancellation protection
     const typingPollInterval = setInterval(() => {
       fetch(`/api/chat/typing-status?channel=${activeChannel}`)
         .then(res => res.json())
@@ -2161,10 +2612,13 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
           if (data.success && Array.isArray(data.typers)) {
             const activeTypers = data.typers.filter(name => name !== username && name !== getSafeAuthorName(user));
             if (activeTypers.length > 0) {
-              setIsPeerTyping(true);
-              setTypingPeerName(activeTypers[0]);
+              triggerPeerTyping(activeTypers[0]);
             } else {
-              setIsPeerTyping(false);
+              // Only cancel if 3.5s have passed since the last confirmed typing signal
+              const elapsedSinceTyping = Date.now() - lastPeerTypingTimeRef.current;
+              if (elapsedSinceTyping > 3500) {
+                cancelPeerTyping();
+              }
             }
           }
         }).catch(() => {});
@@ -2175,12 +2629,13 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       clearInterval(presenceInterval);
       clearInterval(typingPollInterval);
     };
-  }, [activeChannel, user]);
+  }, [activeChannel, user, triggerPeerTyping, cancelPeerTyping]);
 
   // Typing notifier (fires WS stanza + HTTP backup)
   const lastTypingNotify = useRef(0);
   const handleInputChange = (e) => {
-    setNewMessage(e.target.value);
+    const val = e.target.value;
+    setNewMessage(val);
 
     // Instant WebSocket typing stanza (0ms latency)
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -2188,20 +2643,22 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         type: 'typing',
         channel: activeChannel,
         username: getSafeAuthorName(user),
-        isTyping: e.target.value.length > 0
+        isTyping: val.length > 0
       }));
     }
 
-    const now = Date.now();
-    if (now - lastTypingNotify.current > 1200) {
-      lastTypingNotify.current = now;
-      const userId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
-      const authorName = getSafeAuthorName(user);
-      fetch('/api/chat/typing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel: activeChannel, username: authorName, userId })
-      }).catch(() => {});
+    if (val.length > 0) {
+      const now = Date.now();
+      if (now - lastTypingNotify.current > 1200) {
+        lastTypingNotify.current = now;
+        const userId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
+        const authorName = getSafeAuthorName(user);
+        fetch('/api/chat/typing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel: activeChannel, username: authorName, userId })
+        }).catch(() => {});
+      }
     }
   };
 
@@ -2339,9 +2796,17 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
           body: formData
         });
         const data = await res.json();
-        if (data.success) attachmentUrl = data.url;
+        if (data.success && data.url) {
+          attachmentUrl = data.url;
+        } else {
+          attachmentUrl = await readAsDataURL(selectedAttachment);
+        }
       } catch (err) {
-        attachmentUrl = attachmentPreview;
+        try {
+          attachmentUrl = await readAsDataURL(selectedAttachment);
+        } catch (readErr) {
+          attachmentUrl = null;
+        }
       }
     }
 
@@ -2380,6 +2845,12 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     // Instant WebSocket stanza transmission (0ms latency!)
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
+        type: 'typing',
+        channel: activeChannel,
+        username: getSafeAuthorName(user),
+        isTyping: false
+      }));
+      wsRef.current.send(JSON.stringify({
         type: 'message',
         tempId: tempId,
         channel: activeChannel,
@@ -2390,39 +2861,40 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         userId: currentAuthorId,
         replyTo: encryptedReplyTo
       }));
-    }
-
-    const token = localStorage.getItem('ds_ai_token');
-    fetch('/api/chat/messages', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify({ 
-        tempId: tempId,
-        channel: activeChannel, 
-        content: encryptedContent, 
-        attachment: attachmentUrl,
-        authorName: msg.author,
-        authorRole: msg.role,
-        replyTo: encryptedReplyTo
-      })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success && data.message) {
-        const confirmedMsg = {
-          ...data.message,
+    } else {
+      // Fallback to HTTP POST if WebSocket is disconnected
+      const token = localStorage.getItem('ds_ai_token');
+      fetch('/api/chat/messages', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ 
           tempId: tempId,
-          content: rawText,
-          timestamp: new Date(data.message.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          status: 'sent'
-        };
-        setMessages(prev => prev.map(m => (m.id === tempId || m.tempId === tempId) ? confirmedMsg : m));
-      }
-    })
-    .catch(err => console.error("Server message sync failed:", err));
+          channel: activeChannel, 
+          content: encryptedContent, 
+          attachment: attachmentUrl,
+          authorName: msg.author,
+          authorRole: msg.role,
+          replyTo: encryptedReplyTo
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.message) {
+          const confirmedMsg = {
+            ...data.message,
+            tempId: tempId,
+            content: rawText,
+            timestamp: new Date(data.message.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            status: 'sent'
+          };
+          setMessages(prev => prev.map(m => (m.id === tempId || m.tempId === tempId) ? confirmedMsg : m));
+        }
+      })
+      .catch(err => console.error("Server message fallback POST failed:", err));
+    }
   };
 
   // Edit Message Handler
@@ -2446,14 +2918,9 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
   // Delete Message Handler (Delete for everyone if author/admin, Delete for me if recipient)
   const handleDeleteMessage = useCallback((messageId) => {
     const targetMsg = messages.find(m => m && (m.id === messageId || m.tempId === messageId));
-    const currentAuthorName = getSafeAuthorName(user);
-    const guestClientId = getGuestClientId();
-    const currentUserId = user && !user.isGuest ? String(user._id || user.id || user.email || '') : guestClientId;
-
     const isMsgOwner = Boolean(
       user?.role === 'admin' ||
-      (targetMsg && targetMsg.authorId && (String(targetMsg.authorId) === String(currentUserId) || String(targetMsg.authorId) === String(guestClientId))) ||
-      (targetMsg && targetMsg.author && targetMsg.author === currentAuthorName)
+      isMessageOwner(targetMsg, user)
     );
 
     if (isMsgOwner) {
@@ -2656,7 +3123,15 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
           {/* Mobile Back Button */}
           <button 
             className="wa-mobile-back-btn" 
-            onClick={(e) => { e.stopPropagation(); setShowMobileChat(false); }}
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              setShowMobileChat(false); 
+              try {
+                if (window.history.state && window.history.state.view === 'chat-channel') {
+                  window.history.back();
+                }
+              } catch (err) {}
+            }}
             title="Back to Chats"
           >
             ←
@@ -2848,12 +3323,19 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
             {/* Attachment Preview Bar */}
             {attachmentPreview && (
               <div style={{ padding: '0.5rem 1.25rem', background: '#202c33', display: 'flex', alignItems: 'center', gap: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                <img src={attachmentPreview} alt="Preview" style={{ width: '44px', height: '44px', borderRadius: '6px', objectFit: 'cover' }} />
+                {selectedAttachment && selectedAttachment.type.startsWith('image/') ? (
+                  <img src={attachmentPreview} alt="Preview" style={{ width: '44px', height: '44px', borderRadius: '6px', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ width: '44px', height: '44px', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                    📄
+                  </div>
+                )}
                 <span style={{ fontSize: '0.82rem', color: '#e9edef', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {selectedAttachment ? selectedAttachment.name : 'Attached Image'}
+                  {selectedAttachment ? selectedAttachment.name : 'Attached File'}
                 </span>
                 <button 
-                  onClick={() => { setSelectedAttachment(null); setAttachmentPreview(null); }}
+                  type="button"
+                  onClick={clearAttachment}
                   style={{ background: 'none', border: 'none', color: '#f43f5e', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 800 }}
                 >
                   ✕
@@ -3411,17 +3893,10 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
       {/* Image Zoom Modal */}
       {previewImageModal && (
-        <div className="aurora-modal-overlay" onClick={() => setPreviewImageModal(null)} style={{ zIndex: 99999 }}>
-          <div className="aurora-modal-card glass-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '90vh', padding: '1rem', borderRadius: '16px', textAlign: 'center', background: '#111b21' }}>
-            <img src={sanitizeImageSrc(previewImageModal)} alt="Expanded Attachment" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: '10px', objectFit: 'contain' }} />
-            <button 
-              onClick={() => setPreviewImageModal(null)}
-              style={{ marginTop: '0.75rem', padding: '0.5rem 1.5rem', fontSize: '0.85rem', borderRadius: '8px', background: '#00a884', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
-            >
-              Close Preview
-            </button>
-          </div>
-        </div>
+        <ImageZoomModal
+          imageSrc={previewImageModal}
+          onClose={() => setPreviewImageModal(null)}
+        />
       )}
     </div>
   );

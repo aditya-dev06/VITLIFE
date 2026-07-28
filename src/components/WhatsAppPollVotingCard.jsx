@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import './WhatsAppPolls.css';
 
 export function WhatsAppPollVotingCard({
@@ -10,18 +10,24 @@ export function WhatsAppPollVotingCard({
   onCastVote,
   onOpenVoterList,
 }) {
-  if (!poll) return null;
-
-  const question = poll.question || 'Poll';
-  const allowMultipleAnswers = Boolean(poll.allowMultipleAnswers);
-  const options = Array.isArray(poll.options) ? poll.options : [];
-  const votes = Array.isArray(poll.votes) ? poll.votes : [];
+  const safePoll = poll || {};
+  const question = safePoll.question || 'Poll';
+  const allowMultipleAnswers = Boolean(safePoll.allowMultipleAnswers);
+  const options = Array.isArray(safePoll.options) ? safePoll.options : [];
+  const votes = Array.isArray(safePoll.votes) ? safePoll.votes : [];
 
   const userVoteObj = useMemo(() => {
+    if (!currentUserId) return null;
     return votes.find((v) => v && typeof v === 'object' && String(v.userId) === String(currentUserId));
   }, [votes, currentUserId]);
 
+  const [prevUserVoteObj, setPrevUserVoteObj] = useState(userVoteObj);
   const [selectedIndexes, setSelectedIndexes] = useState(() => userVoteObj?.selectedOptionIndexes || []);
+
+  if (userVoteObj !== prevUserVoteObj) {
+    setPrevUserVoteObj(userVoteObj);
+    setSelectedIndexes(userVoteObj?.selectedOptionIndexes || []);
+  }
 
   const { optionVoteCounts, totalVoters, highestVoteCount } = useMemo(() => {
     const counts = options.map(() => 0);
@@ -32,12 +38,14 @@ export function WhatsAppPollVotingCard({
         if (counts[idx] !== undefined) counts[idx] += v;
         total += v;
       } else if (v && typeof v === 'object' && Array.isArray(v.selectedOptionIndexes)) {
-        v.selectedOptionIndexes.forEach((i) => {
-          if (counts[i] !== undefined) {
-            counts[i] += 1;
-          }
-        });
-        total += 1;
+        if (v.selectedOptionIndexes.length > 0) {
+          v.selectedOptionIndexes.forEach((i) => {
+            if (counts[i] !== undefined) {
+              counts[i] += 1;
+            }
+          });
+          total += 1;
+        }
       }
     });
 
@@ -48,6 +56,15 @@ export function WhatsAppPollVotingCard({
       highestVoteCount: maxVotes,
     };
   }, [options, votes]);
+
+  const hasPendingMultiChanges = useMemo(() => {
+    if (!allowMultipleAnswers) return false;
+    const current = userVoteObj?.selectedOptionIndexes || [];
+    if (current.length !== selectedIndexes.length) return true;
+    return !current.every((val) => selectedIndexes.includes(val));
+  }, [allowMultipleAnswers, userVoteObj, selectedIndexes]);
+
+  if (!poll) return null;
 
   const handleToggleOption = (idx) => {
     let updated;
@@ -86,13 +103,6 @@ export function WhatsAppPollVotingCard({
       });
     }
   };
-
-  const hasPendingMultiChanges = useMemo(() => {
-    if (!allowMultipleAnswers) return false;
-    const current = userVoteObj?.selectedOptionIndexes || [];
-    if (current.length !== selectedIndexes.length) return true;
-    return !current.every((val) => selectedIndexes.includes(val));
-  }, [allowMultipleAnswers, userVoteObj, selectedIndexes]);
 
   return (
     <div className="wa-poll-card">

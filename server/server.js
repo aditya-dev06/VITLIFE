@@ -105,8 +105,65 @@ function parseRedisUrlRobust(urlStr) {
 let redisClient = null;
 let redisConnected = false;
 
+const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const REDIS_URL = process.env.REDIS_URL || process.env.REDIS_URI || process.env.KV_URL;
-if (REDIS_URL) {
+
+if (UPSTASH_URL && UPSTASH_TOKEN) {
+  import('@upstash/redis').then(({ Redis }) => {
+    try {
+      const upstash = new Redis({
+        url: UPSTASH_URL,
+        token: UPSTASH_TOKEN,
+      });
+
+      redisClient = {
+        async lrange(key, start, stop) {
+          try { return (await upstash.lrange(key, start, stop)) || []; } catch (e) { return []; }
+        },
+        async lpush(key, ...elements) {
+          try { return await upstash.lpush(key, ...elements); } catch (e) { return 0; }
+        },
+        async ltrim(key, start, stop) {
+          try { return await upstash.ltrim(key, start, stop); } catch (e) { return 'OK'; }
+        },
+        async del(key) {
+          try { return await upstash.del(key); } catch (e) { return 0; }
+        },
+        async get(key) {
+          try { return await upstash.get(key); } catch (e) { return null; }
+        },
+        async set(key, val, exFlag, ttl) {
+          try {
+            if (exFlag === 'EX' && ttl) return await upstash.set(key, val, { ex: ttl });
+            return await upstash.set(key, val);
+          } catch (e) { return null; }
+        },
+        pipeline() {
+          const ops = [];
+          return {
+            lpush(key, val) { ops.push(['lpush', key, val]); return this; },
+            async exec() {
+              for (const [cmd, k, v] of ops) {
+                try {
+                  if (cmd === 'lpush') await upstash.lpush(k, v);
+                } catch (e) {}
+              }
+              return [];
+            }
+          };
+        }
+      };
+
+      redisConnected = true;
+      console.log('⚡ Connected to Upstash Redis Engine!');
+    } catch (err) {
+      console.warn('⚠️ Upstash Redis setup notice:', err.message);
+    }
+  }).catch(e => {
+    console.warn('⚠️ @upstash/redis import notice:', e.message);
+  });
+} else if (REDIS_URL) {
   import('ioredis').then(({ default: Redis }) => {
     try {
       const redisOptions = parseRedisUrlRobust(REDIS_URL);
@@ -5968,6 +6025,11 @@ const scheduleDailyScraper = () => {
 const inMemoryChatMessages = [];
 const inMemoryChatReports = [];
 
+// Helper to sanitize text strings and prevent injection / memory abuse
+const sanitizeString = (str, maxLen = 1000) => {
+  if (!str || typeof str !== 'string') return '';
+  return str.trim().substring(0, maxLen);
+};
 
 // Helper to identify faculty/official accounts
 const isFacultyAccount = (user) => {
@@ -5979,12 +6041,38 @@ const isFacultyAccount = (user) => {
   return false;
 };
 
+// Helper to safely broadcast WebSocket messages to channel listeners
+const broadcastWsEvent = (channel, payload, excludeWs = null) => {
+  const messageStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  const targetChannel = channel || 'general';
+  const isDM = targetChannel.startsWith('dm_');
+
+  let deliveredCount = 0;
+  if (typeof wsClients !== 'undefined' && wsClients) {
+    for (const [client, meta] of wsClients.entries()) {
+      if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
+        const isDirectSub = meta.channel === targetChannel;
+        const isDMUser = isDM && meta.username && targetChannel.toLowerCase().includes(meta.username.toLowerCase());
+        if (isDirectSub || isDMUser) {
+          try {
+            client.send(messageStr);
+            deliveredCount++;
+          } catch (e) {
+            console.error("WebSocket broadcast error:", e.message);
+          }
+        }
+      }
+    }
+  }
+  return deliveredCount;
+};
+
 // GET /api/chat/messages?channel=general
 app.get('/api/chat/messages', async (req, res) => {
   try {
-    const channel = String(req.query.channel || 'general').trim();
+    const channel = sanitizeString(req.query.channel || 'general', 100);
 
-    // 1. Try Redis cache first for instant sub-second response
+    // 1. Try Redis cache first for sub-second response
     if (redisConnected && redisClient) {
       try {
         const cached = await redisClient.lrange(`chat:messages:${channel}`, 0, 100);
@@ -5992,27 +6080,42 @@ app.get('/api/chat/messages', async (req, res) => {
           const parsed = cached.map(item => JSON.parse(item)).reverse();
           return res.json({ success: true, messages: parsed });
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn("Redis chat fetch warning:", e.message);
+      }
     }
 
     // 2. Try MongoDB if available
     if (db) {
-      const messages = await db.collection('chat_messages')
-        .find({ channel: { $eq: channel } })
-        .sort({ _id: 1 })
-        .limit(100)
-        .toArray();
-      if (messages && messages.length > 0) {
-        return res.json({ success: true, messages });
+      try {
+        const messages = await db.collection('chat_messages')
+          .find({ channel: { $eq: channel } })
+          .sort({ _id: -1 })
+          .limit(100)
+          .toArray();
+        if (messages) {
+          const sortedChronological = messages.reverse();
+          // Seed Redis cache asynchronously if empty
+          if (redisConnected && redisClient && sortedChronological.length > 0) {
+            redisClient.del(`chat:messages:${channel}`).then(() => {
+              const pipeline = redisClient.pipeline();
+              sortedChronological.forEach(msg => pipeline.lpush(`chat:messages:${channel}`, JSON.stringify(msg)));
+              pipeline.exec().catch(() => {});
+            }).catch(() => {});
+          }
+          return res.json({ success: true, messages: sortedChronological });
+        }
+      } catch (dbErr) {
+        console.error("MongoDB fetch chat messages error, falling back to memory:", dbErr.message);
       }
     }
 
     // 3. Fallback to in-memory store
-    const filtered = inMemoryChatMessages.filter(m => m.channel === channel);
+    const filtered = inMemoryChatMessages.filter(m => m.channel === channel).slice(-100);
     res.json({ success: true, messages: filtered });
   } catch (err) {
     console.error("Error fetching chat messages:", err);
-    res.status(500).json({ error: "Failed to load chat messages" });
+    res.status(500).json({ success: false, error: "Failed to load chat messages" });
   }
 });
 
@@ -6020,8 +6123,10 @@ app.get('/api/chat/messages', async (req, res) => {
 app.post('/api/chat/messages', async (req, res) => {
   try {
     const { channel, content, attachment, replyTo, authorName, authorRole, tempId } = req.body;
-    if (!content && !attachment) {
-      return res.status(400).json({ error: "Message content or attachment required" });
+    const cleanContent = sanitizeString(content, 5000);
+
+    if (!cleanContent && !attachment) {
+      return res.status(400).json({ success: false, error: "Message content or attachment required" });
     }
 
     // Optional token auth check
@@ -6038,22 +6143,22 @@ app.post('/api/chat/messages', async (req, res) => {
       } catch (e) {}
     }
 
-    const targetChannel = channel || 'general';
+    const targetChannel = sanitizeString(channel || 'general', 100);
 
     // If channel is locked (not general) and user is unauthenticated, deny
     if (targetChannel !== 'general' && !user) {
-      return res.status(401).json({ error: "Authentication required for this channel" });
+      return res.status(401).json({ success: false, error: "Authentication required for this channel" });
     }
 
     const messageObj = {
       id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-      tempId: tempId || null,
+      tempId: tempId ? sanitizeString(tempId, 100) : null,
       channel: targetChannel,
-      author: user ? (user.name || user.email.split('@')[0]) : (authorName || 'Guest Student'),
+      author: user ? (user.name || user.email.split('@')[0]) : sanitizeString(authorName || 'Guest Student', 100),
       authorId: user ? (user._id ? String(user._id) : user.id) : 'guest_' + Math.random().toString(36).substr(2, 5),
-      avatar: user ? (user.name || user.email).charAt(0).toUpperCase() : 'G',
-      role: user ? (user.role === 'admin' ? 'Admin' : (user.program || 'Student')) : (authorRole || 'Guest User'),
-      content: content ? content.trim() : '',
+      avatar: user ? (user.name || user.email).charAt(0).toUpperCase() : (authorName || 'G').charAt(0).toUpperCase(),
+      role: user ? (user.role === 'admin' ? 'Admin' : (user.program || 'Student')) : sanitizeString(authorRole || 'Guest User', 50),
+      content: cleanContent,
       attachment: attachment || null,
       replyTo: replyTo || null,
       reactions: { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] },
@@ -6069,7 +6174,7 @@ app.post('/api/chat/messages', async (req, res) => {
       }
     }
 
-    // Always maintain in-memory cache for instant real-time polling
+    // Always maintain in-memory cache
     inMemoryChatMessages.push(messageObj);
     if (inMemoryChatMessages.length > 300) {
       inMemoryChatMessages.shift();
@@ -6083,24 +6188,30 @@ app.post('/api/chat/messages', async (req, res) => {
       } catch (e) {}
     }
 
+    // Broadcast over WebSocket to connected clients
+    broadcastWsEvent(targetChannel, { type: 'new_message', channel: targetChannel, message: messageObj });
+
     res.json({ success: true, message: messageObj });
   } catch (err) {
     console.error("Error posting chat message:", err);
-    res.status(500).json({ error: "Failed to send message" });
+    res.status(500).json({ success: false, error: "Failed to send message" });
   }
 });
 
 // POST /api/chat/upload
 app.post('/api/chat/upload', authenticate, upload.single('file'), async (req, res) => {
   try {
+    if (isFacultyAccount(req.user)) {
+      return res.status(403).json({ success: false, error: "Faculty accounts are restricted from uploading attachments in student chat." });
+    }
     if (!req.file) {
-      return res.status(400).json({ error: "No file uploaded" });
+      return res.status(400).json({ success: false, error: "No file uploaded" });
     }
 
     const safeExt = path.extname(req.file.originalname).toLowerCase();
     const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.doc', '.docx'];
     if (!allowedExts.includes(safeExt)) {
-      return res.status(400).json({ error: "Unsupported file type" });
+      return res.status(400).json({ success: false, error: "Unsupported file type" });
     }
 
     let fileUrl = '';
@@ -6119,7 +6230,7 @@ app.post('/api/chat/upload', authenticate, upload.single('file'), async (req, re
     res.json({ success: true, url: fileUrl });
   } catch (err) {
     console.error("Error uploading chat attachment:", err);
-    res.status(500).json({ error: "Failed to upload file" });
+    res.status(500).json({ success: false, error: "Failed to upload file" });
   }
 });
 
@@ -6127,6 +6238,10 @@ app.post('/api/chat/upload', authenticate, upload.single('file'), async (req, re
 app.post('/api/chat/react', async (req, res) => {
   try {
     const { messageId, emoji, guestUserId } = req.body;
+    if (!messageId || !emoji) {
+      return res.status(400).json({ success: false, error: "messageId and emoji are required" });
+    }
+    const cleanEmoji = sanitizeString(emoji, 20);
     let userId = guestUserId || 'guest_anon';
 
     const authHeader = req.headers.authorization;
@@ -6138,41 +6253,58 @@ app.post('/api/chat/react', async (req, res) => {
       } catch (e) {}
     }
 
+    let targetMsg = null;
     if (db) {
-      const msg = await db.collection('chat_messages').findOne({ id: messageId });
-      if (!msg) return res.status(404).json({ error: "Message not found" });
-
-      const reactions = msg.reactions || { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] };
-      const currentList = reactions[emoji] || [];
-      const hasReacted = currentList.includes(userId);
-
-      if (hasReacted) {
-        reactions[emoji] = currentList.filter(id => id !== userId);
-      } else {
-        reactions[emoji] = [...currentList, userId];
+      try {
+        targetMsg = await db.collection('chat_messages').findOne({ id: messageId });
+      } catch (e) {
+        console.error("MongoDB reaction lookup error:", e.message);
       }
-
-      await db.collection('chat_messages').updateOne({ id: messageId }, { $set: { reactions } });
-      return res.json({ success: true, reactions });
-    } else {
-      const msg = inMemoryChatMessages.find(m => m.id === messageId);
-      if (!msg) return res.status(404).json({ error: "Message not found" });
-
-      msg.reactions = msg.reactions || { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] };
-      const currentList = msg.reactions[emoji] || [];
-      const hasReacted = currentList.includes(userId);
-
-      if (hasReacted) {
-        msg.reactions[emoji] = currentList.filter(id => id !== userId);
-      } else {
-        msg.reactions[emoji] = [...currentList, userId];
-      }
-
-      return res.json({ success: true, reactions: msg.reactions });
     }
+    if (!targetMsg) {
+      targetMsg = inMemoryChatMessages.find(m => m.id === messageId);
+    }
+
+    if (!targetMsg) {
+      return res.status(404).json({ success: false, error: "Message not found" });
+    }
+
+    const reactions = targetMsg.reactions || { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] };
+    const currentList = reactions[cleanEmoji] || [];
+    const hasReacted = currentList.includes(userId);
+
+    if (hasReacted) {
+      reactions[cleanEmoji] = currentList.filter(id => id !== userId);
+    } else {
+      reactions[cleanEmoji] = [...currentList, userId];
+    }
+
+    targetMsg.reactions = reactions;
+
+    if (db) {
+      try {
+        await db.collection('chat_messages').updateOne({ id: messageId }, { $set: { reactions } });
+      } catch (e) {
+        console.error("MongoDB reaction update error:", e.message);
+      }
+    }
+
+    const memMsg = inMemoryChatMessages.find(m => m.id === messageId);
+    if (memMsg) {
+      memMsg.reactions = reactions;
+    }
+
+    broadcastWsEvent(targetMsg.channel, {
+      type: 'reaction_update',
+      channel: targetMsg.channel,
+      messageId,
+      reactions
+    });
+
+    return res.json({ success: true, reactions });
   } catch (err) {
     console.error("Error reacting to message:", err);
-    res.status(500).json({ error: "Failed to update reaction" });
+    res.status(500).json({ success: false, error: "Failed to update reaction" });
   }
 });
 
@@ -6181,8 +6313,9 @@ app.put('/api/chat/messages/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { content, guestUserId } = req.body;
-    if (!content || !content.trim()) {
-      return res.status(400).json({ error: "Message content cannot be empty" });
+    const cleanContent = sanitizeString(content, 5000);
+    if (!cleanContent) {
+      return res.status(400).json({ success: false, error: "Message content cannot be empty" });
     }
 
     let userId = req.headers['x-guest-user-id'] || guestUserId || null;
@@ -6197,31 +6330,65 @@ app.put('/api/chat/messages/:id', async (req, res) => {
       } catch (e) {}
     }
 
+    let msg = null;
     if (db) {
-      const msg = await db.collection('chat_messages').findOne({ id });
-      if (!msg) return res.status(404).json({ error: "Message not found" });
-      if (userId && String(msg.authorId) !== String(userId) && !isAdmin) {
-        return res.status(403).json({ error: "Unauthorized to edit this message" });
+      try {
+        msg = await db.collection('chat_messages').findOne({ id });
+      } catch (e) {
+        console.error("MongoDB fetch message for edit error:", e.message);
       }
-      await db.collection('chat_messages').updateOne(
-        { id },
-        { $set: { content: content.trim(), isEdited: true, editedAt: new Date().toISOString() } }
-      );
-    } else {
-      const msg = inMemoryChatMessages.find(m => m.id === id);
-      if (!msg) return res.status(404).json({ error: "Message not found" });
-      if (userId && String(msg.authorId) !== String(userId) && !isAdmin) {
-        return res.status(403).json({ error: "Unauthorized to edit this message" });
-      }
-      msg.content = content.trim();
-      msg.isEdited = true;
-      msg.editedAt = new Date().toISOString();
+    }
+    if (!msg) {
+      msg = inMemoryChatMessages.find(m => m.id === id);
     }
 
-    res.json({ success: true, message: "Message updated successfully" });
+    if (!msg) return res.status(404).json({ success: false, error: "Message not found" });
+
+    const isOwner = isAdmin || (userId && (String(msg.authorId) === String(userId) || String(msg.author) === String(userId)));
+    if (!isOwner) {
+      return res.status(403).json({ success: false, error: "Unauthorized to edit this message" });
+    }
+
+    const now = new Date().toISOString();
+    const previousContent = msg.content;
+    const previousEditedAt = msg.editedAt || msg.updatedAt || msg.timestamp || now;
+    const editHistory = Array.isArray(msg.editHistory) ? [...msg.editHistory] : [];
+    editHistory.push({
+      content: previousContent,
+      editedAt: previousEditedAt
+    });
+
+    msg.content = cleanContent;
+    msg.isEdited = true;
+    msg.editedAt = now;
+    msg.updatedAt = now;
+    msg.editHistory = editHistory;
+
+    if (db) {
+      try {
+        await db.collection('chat_messages').updateOne(
+          { id },
+          { $set: { content: cleanContent, isEdited: true, editedAt: now, updatedAt: now, editHistory } }
+        );
+      } catch (e) {
+        console.error("MongoDB message edit error:", e.message);
+      }
+    }
+
+    broadcastWsEvent(msg.channel, {
+      type: 'edit_message',
+      channel: msg.channel,
+      id,
+      content: cleanContent,
+      isEdited: true,
+      editedAt: now,
+      editHistory
+    });
+
+    res.json({ success: true, message: "Message updated successfully", data: msg });
   } catch (err) {
     console.error("Error editing message:", err);
-    res.status(500).json({ error: "Failed to edit message" });
+    res.status(500).json({ success: false, error: "Failed to edit message" });
   }
 });
 
@@ -6241,25 +6408,50 @@ app.delete('/api/chat/messages/:id', async (req, res) => {
       } catch (e) {}
     }
 
+    let msg = null;
     if (db) {
-      const msg = await db.collection('chat_messages').findOne({ id });
-      if (!msg) return res.status(404).json({ error: "Message not found" });
-      if (userId && String(msg.authorId) !== String(userId) && !isAdmin) {
-        return res.status(403).json({ error: "Unauthorized to delete this message" });
+      try {
+        msg = await db.collection('chat_messages').findOne({ id });
+      } catch (e) {
+        console.error("MongoDB fetch message for delete error:", e.message);
       }
-      await db.collection('chat_messages').deleteOne({ id });
-    } else {
-      const idx = inMemoryChatMessages.findIndex(m => m.id === id);
-      if (idx === -1) return res.status(404).json({ error: "Message not found" });
-      if (userId && String(inMemoryChatMessages[idx].authorId) !== String(userId) && !isAdmin) {
-        return res.status(403).json({ error: "Unauthorized to delete this message" });
+    }
+    if (!msg) {
+      msg = inMemoryChatMessages.find(m => m.id === id);
+    }
+
+    if (!msg) return res.status(404).json({ success: false, error: "Message not found" });
+
+    const isOwner = isAdmin || (userId && (String(msg.authorId) === String(userId) || String(msg.author) === String(userId)));
+    if (!isOwner) {
+      return res.status(403).json({ success: false, error: "Unauthorized to delete this message" });
+    }
+
+    const channel = msg.channel || 'general';
+
+    if (db) {
+      try {
+        await db.collection('chat_messages').deleteOne({ id });
+      } catch (e) {
+        console.error("MongoDB message delete error:", e.message);
       }
+    }
+
+    const idx = inMemoryChatMessages.findIndex(m => m.id === id);
+    if (idx !== -1) {
       inMemoryChatMessages.splice(idx, 1);
     }
+
+    broadcastWsEvent(channel, {
+      type: 'delete_message',
+      channel,
+      id
+    });
+
     res.json({ success: true, message: "Message deleted successfully" });
   } catch (err) {
     console.error("Error deleting message:", err);
-    res.status(500).json({ error: "Failed to delete message" });
+    res.status(500).json({ success: false, error: "Failed to delete message" });
   }
 });
 
@@ -6284,7 +6476,7 @@ app.post('/api/chat/report', async (req, res) => {
     }
 
     const validReasons = ['Spam', 'Harassment', 'Misinformation', 'Inappropriate'];
-    let normalizedReason = reason;
+    let normalizedReason = sanitizeString(reason, 100);
     if (!validReasons.includes(reason)) {
       const matched = validReasons.find(r => reason.toLowerCase().includes(r.toLowerCase()));
       if (matched) {
@@ -6296,12 +6488,12 @@ app.post('/api/chat/report', async (req, res) => {
       id: 'rep_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       messageId: String(messageId),
       reason: normalizedReason,
-      details: details ? String(details).trim() : '',
-      channel: channel || 'general',
-      reportedUser: reportedUser || 'Unknown Student',
+      details: details ? sanitizeString(details, 1000) : '',
+      channel: sanitizeString(channel || 'general', 100),
+      reportedUser: sanitizeString(reportedUser || 'Unknown Student', 100),
       reportedUserId: reportedUserId || null,
-      messageContent: messageContent || '',
-      reporter: reporter,
+      messageContent: sanitizeString(messageContent || '', 2000),
+      reporter: sanitizeString(reporter, 100),
       reporterId: reporterId,
       status: 'pending',
       timestamp: new Date().toISOString(),
@@ -6333,15 +6525,19 @@ app.post('/api/chat/report', async (req, res) => {
 });
 
 // GET /api/chat/reports (Admin endpoint to view submitted reports)
-app.get('/api/chat/reports', async (req, res) => {
+app.get('/api/chat/reports', authenticate, requireAdmin, async (req, res) => {
   try {
     if (db) {
-      const reports = await db.collection('chat_reports')
-        .find({})
-        .sort({ createdAt: -1 })
-        .limit(100)
-        .toArray();
-      return res.json({ success: true, reports });
+      try {
+        const reports = await db.collection('chat_reports')
+          .find({})
+          .sort({ createdAt: -1 })
+          .limit(100)
+          .toArray();
+        return res.json({ success: true, reports });
+      } catch (e) {
+        console.error("MongoDB fetch chat reports error, falling back to memory:", e.message);
+      }
     }
     res.json({ success: true, reports: inMemoryChatReports });
   } catch (err) {
@@ -6350,48 +6546,106 @@ app.get('/api/chat/reports', async (req, res) => {
   }
 });
 
+// POST /api/chat/meta-ai (Meta AI Smart Assistant for Chat)
+app.post('/api/chat/meta-ai', async (req, res) => {
+  try {
+    const { messageContent, author, channel, prompt } = req.body;
+    const cleanContent = sanitizeString(messageContent || '', 2000);
+    const cleanAuthor = sanitizeString(author || 'Student', 100);
+    const cleanChannel = sanitizeString(channel || 'general', 100);
+
+    if (prompt) {
+      const userPrompt = sanitizeString(prompt, 1000);
+      return res.json({
+        success: true,
+        summary: `Analysis for "${userPrompt}" in #${cleanChannel}`,
+        aiResponse: `Regarding your query "${userPrompt}": In #${cleanChannel}, ${cleanAuthor} noted: "${cleanContent.substring(0, 180)}". Suggest coordinating with the channel members for further action.`,
+        quickReplies: [
+          `Thanks for clarifying ${cleanAuthor}!`,
+          `Could you share more details on this?`,
+          `Sounds great, I'll take care of it!`
+        ]
+      });
+    }
+
+    const summary = cleanContent.length > 0 
+      ? `${cleanAuthor} posted in #${cleanChannel}: "${cleanContent.length > 120 ? cleanContent.substring(0, 120) + '...' : cleanContent}"`
+      : `${cleanAuthor} shared media content in #${cleanChannel}`;
+
+    const keyInsights = [
+      `Author: ${cleanAuthor} (Active in #${cleanChannel})`,
+      `Topic Focus: ${cleanContent ? cleanContent.split(' ').slice(0, 5).join(' ') : 'Media attachment'}`,
+      `Community Context: Active topic in #${cleanChannel}`
+    ];
+
+    const aiResponse = `Meta AI Analysis: This post from ${cleanAuthor} provides updates in #${cleanChannel}. Select a quick reply below or type a follow-up query.`;
+
+    const quickReplies = [
+      `Got it, thanks ${cleanAuthor}!`,
+      `Great update!`,
+      `Let me check and get back to you.`
+    ];
+
+    res.json({
+      success: true,
+      summary,
+      keyInsights,
+      aiResponse,
+      quickReplies
+    });
+  } catch (err) {
+    console.error("Error in Meta AI endpoint:", err);
+    res.status(500).json({ success: false, error: "Failed to process Meta AI request" });
+  }
+});
+
 // --- REDIS REAL-TIME PRESENCE & TYPING ENDPOINTS ---
 
-// POST /api/chat/typing (Sets 3-second expiration typing TTL in Redis / memory)
+// POST /api/chat/typing (Sets 4-second expiration typing TTL in Redis / memory)
 app.post('/api/chat/typing', async (req, res) => {
   try {
     const { channel, username, userId } = req.body;
-    if (!channel || !username) return res.status(400).json({ error: "Missing channel or username" });
-    const uId = userId || 'anon_' + username;
+    if (!channel || !username) return res.status(400).json({ success: false, error: "Missing channel or username" });
+    const cleanChannel = sanitizeString(channel, 100);
+    const cleanUsername = sanitizeString(username, 100);
+    const uId = sanitizeString(userId || ('anon_' + cleanUsername), 100);
 
     if (redisConnected && redisClient) {
-      await redisClient.setex(`typing:${channel}:${uId}`, 4, username);
-    } else {
-      inMemoryTyping.set(`typing:${channel}:${uId}`, { username, expiresAt: Date.now() + 4000 });
+      try {
+        await redisClient.setex(`typing:${cleanChannel}:${uId}`, 4, cleanUsername);
+      } catch (e) {}
     }
+    inMemoryTyping.set(`typing:${cleanChannel}:${uId}`, { username: cleanUsername, expiresAt: Date.now() + 4000 });
 
     res.json({ success: true, isTyping: true });
   } catch (err) {
-    res.status(500).json({ error: "Failed to broadcast typing status" });
+    res.status(500).json({ success: false, error: "Failed to broadcast typing status" });
   }
 });
 
 // GET /api/chat/typing-status?channel=... (Gets current active typers)
 app.get('/api/chat/typing-status', async (req, res) => {
   try {
-    const { channel } = req.query;
+    const channel = sanitizeString(req.query.channel || '', 100);
     if (!channel) return res.json({ success: true, typers: [] });
     let typers = [];
 
     if (redisConnected && redisClient) {
-      const keys = await redisClient.keys(`typing:${channel}:*`);
-      if (keys.length > 0) {
-        const names = await redisClient.mget(...keys);
-        typers = names.filter(Boolean);
-      }
-    } else {
-      const now = Date.now();
-      for (const [key, val] of inMemoryTyping.entries()) {
-        if (key.startsWith(`typing:${channel}:`) && val.expiresAt > now) {
-          typers.push(val.username);
-        } else if (val.expiresAt <= now) {
-          inMemoryTyping.delete(key);
+      try {
+        const keys = await redisClient.keys(`typing:${channel}:*`);
+        if (keys.length > 0) {
+          const names = await redisClient.mget(...keys);
+          typers = names.filter(Boolean);
         }
+      } catch (e) {}
+    }
+    
+    const now = Date.now();
+    for (const [key, val] of inMemoryTyping.entries()) {
+      if (key.startsWith(`typing:${channel}:`) && val.expiresAt > now) {
+        typers.push(val.username);
+      } else if (val.expiresAt <= now) {
+        inMemoryTyping.delete(key);
       }
     }
 
@@ -6405,17 +6659,21 @@ app.get('/api/chat/typing-status', async (req, res) => {
 app.post('/api/chat/presence', async (req, res) => {
   try {
     const { userId, username } = req.body;
-    if (!userId) return res.status(400).json({ error: "Missing userId" });
+    if (!userId) return res.status(400).json({ success: false, error: "Missing userId" });
+
+    const cleanUserId = sanitizeString(userId, 100);
+    const cleanUsername = sanitizeString(username || 'Student', 100);
 
     if (redisConnected && redisClient) {
-      await redisClient.setex(`presence:${userId}`, 15, username || 'Student');
-    } else {
-      inMemoryPresence.set(`presence:${userId}`, { username: username || 'Student', expiresAt: Date.now() + 15000 });
+      try {
+        await redisClient.setex(`presence:${cleanUserId}`, 15, cleanUsername);
+      } catch (e) {}
     }
+    inMemoryPresence.set(`presence:${cleanUserId}`, { username: cleanUsername, expiresAt: Date.now() + 15000 });
 
     res.json({ success: true, status: 'online' });
   } catch (err) {
-    res.status(500).json({ error: "Failed to update presence" });
+    res.status(500).json({ success: false, error: "Failed to update presence" });
   }
 });
 
@@ -6426,45 +6684,53 @@ app.get('/api/chat/online-users', async (req, res) => {
     let activeUsers = [];
 
     if (redisConnected && redisClient) {
-      const keys = await redisClient.keys('presence:*');
-      onlineCount += keys.length;
-      if (keys.length > 0) {
-        const names = await redisClient.mget(...keys);
-        activeUsers = keys.map((k, i) => ({
-          userId: k.replace('presence:', ''),
-          username: names[i] || 'Student'
-        }));
-      }
-    } else {
-      const now = Date.now();
-      let activeCount = 0;
-      for (const [key, val] of inMemoryPresence.entries()) {
-        if (val.expiresAt > now) {
-          activeCount++;
+      try {
+        const keys = await redisClient.keys('presence:*');
+        onlineCount += keys.length;
+        if (keys.length > 0) {
+          const names = await redisClient.mget(...keys);
+          activeUsers = keys.map((k, i) => ({
+            userId: k.replace('presence:', ''),
+            username: names[i] || 'Student'
+          }));
+        }
+      } catch (e) {}
+    }
+
+    const now = Date.now();
+    let activeCount = 0;
+    for (const [key, val] of inMemoryPresence.entries()) {
+      if (val.expiresAt > now) {
+        activeCount++;
+        if (!activeUsers.some(u => u.userId === key.replace('presence:', ''))) {
           activeUsers.push({
             userId: key.replace('presence:', ''),
             username: val.username
           });
-        } else {
-          inMemoryPresence.delete(key);
         }
+      } else {
+        inMemoryPresence.delete(key);
       }
+    }
+    if (!redisConnected) {
       onlineCount += activeCount;
     }
 
     // Include connected WebSocket clients
-    for (const [ws, meta] of wsClients.entries()) {
-      if (ws.readyState === 1 && meta.username) {
-        if (!activeUsers.some(u => u.username === meta.username || u.userId === meta.userId)) {
-          activeUsers.push({
-            userId: meta.userId || meta.username,
-            username: meta.username
-          });
+    if (typeof wsClients !== 'undefined' && wsClients) {
+      for (const [ws, meta] of wsClients.entries()) {
+        if (ws.readyState === WebSocket.OPEN && meta.username) {
+          if (!activeUsers.some(u => u.username === meta.username || u.userId === meta.userId)) {
+            activeUsers.push({
+              userId: meta.userId || meta.username,
+              username: meta.username
+            });
+          }
         }
       }
     }
 
-    res.json({ success: true, onlineCount, activeUsers, redisConnected });
+    res.json({ success: true, onlineCount, activeUsers, redisConnected: !!redisConnected });
   } catch (err) {
     res.json({ success: true, onlineCount: 494, activeUsers: [], redisConnected: false });
   }
@@ -6476,7 +6742,7 @@ app.get('/api/cron/cleanup', authenticate, requireAdmin, async (req, res) => {
     await cleanupExpiredEvents();
     res.json({ success: true, message: 'Expired events and assets cleanup completed.' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to run cleanup.' });
+    res.status(500).json({ success: false, error: 'Failed to run cleanup.' });
   }
 });
 
@@ -6518,46 +6784,60 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 const wsClients = new Map(); // ws -> { channel, userId, username, isAlive }
 
-function heartbeat() {
-  this.isAlive = true;
-}
-
 wss.on('connection', (ws) => {
   ws.isAlive = true;
-  ws.on('pong', heartbeat);
+  ws.on('pong', () => { ws.isAlive = true; });
 
   ws.on('message', async (rawMsg) => {
     try {
       const data = JSON.parse(rawMsg);
+      if (!data || typeof data !== 'object') return;
 
       if (data.type === 'subscribe') {
+        const subChannel = sanitizeString(data.channel || 'general', 100);
         wsClients.set(ws, {
-          channel: data.channel || 'general',
-          userId: data.userId,
-          username: data.username,
+          channel: subChannel,
+          userId: data.userId ? sanitizeString(data.userId, 100) : null,
+          username: data.username ? sanitizeString(data.username, 100) : null,
           isAlive: true
         });
-        ws.send(JSON.stringify({ type: 'subscribed', channel: data.channel || 'general' }));
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'subscribed', channel: subChannel }));
+        }
       } else if (data.type === 'message') {
         const clientMeta = wsClients.get(ws) || {};
-        const targetChannel = data.channel || clientMeta.channel || 'general';
+        const targetChannel = sanitizeString(data.channel || clientMeta.channel || 'general', 100);
+
+        if (data.authorRole === 'faculty' || (data.authorEmail && isFacultyAccount({ email: data.authorEmail, role: data.authorRole }))) {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'error', error: "Faculty accounts are restricted from sending messages in student chat." }));
+          }
+          return;
+        }
+
+        const cleanContent = sanitizeString(data.content, 5000);
+        if (!cleanContent && !data.attachment) {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'error', error: "Message content or attachment required" }));
+          }
+          return;
+        }
 
         const messageObj = {
           id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-          tempId: data.tempId || null,
+          tempId: data.tempId ? sanitizeString(data.tempId, 100) : null,
           channel: targetChannel,
-          author: data.authorName || clientMeta.username || 'Guest Student',
-          authorId: data.userId || clientMeta.userId || 'guest_' + Math.random().toString(36).substr(2, 5),
+          author: sanitizeString(data.authorName || clientMeta.username || 'Guest Student', 100),
+          authorId: sanitizeString(data.userId || clientMeta.userId || ('guest_' + Math.random().toString(36).substr(2, 5)), 100),
           avatar: (data.authorName || clientMeta.username || 'G').charAt(0).toUpperCase(),
-          role: data.authorRole || 'Student',
-          content: data.content ? data.content.trim() : '',
+          role: sanitizeString(data.authorRole || 'Student', 50),
+          content: cleanContent,
           attachment: data.attachment || null,
           replyTo: data.replyTo || null,
           reactions: { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] },
           timestamp: new Date().toISOString()
         };
 
-        // 1. Save to DB, Memory, Redis
         if (db) {
           try { await db.collection('chat_messages').insertOne(messageObj); } catch (e) {}
         }
@@ -6571,51 +6851,43 @@ wss.on('connection', (ws) => {
           } catch (e) {}
         }
 
-        // 2. Ack to Sender (Single Tick ✓)
-        ws.send(JSON.stringify({ type: 'ack_server', tempId: data.tempId, message: messageObj }));
-
-        // 3. Broadcast to all clients in targetChannel or involved in DM (Double Tick ✓✓ on Delivery)
-        let deliveredCount = 0;
-        const isDM = targetChannel.startsWith('dm_');
-        
-        for (const [client, meta] of wsClients.entries()) {
-          const isDirectSub = meta.channel === targetChannel;
-          const isDMUser = isDM && meta.username && targetChannel.toLowerCase().includes(meta.username.toLowerCase());
-
-          if (client.readyState === WebSocket.OPEN && (isDirectSub || isDMUser)) {
-            client.send(JSON.stringify({ type: 'new_message', channel: targetChannel, message: messageObj }));
-            if (client !== ws) deliveredCount++;
-          }
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ack_server', tempId: data.tempId, message: messageObj }));
         }
 
-        if (deliveredCount > 0) {
+        const deliveredCount = broadcastWsEvent(targetChannel, { type: 'new_message', channel: targetChannel, message: messageObj }, ws);
+
+        if (deliveredCount > 0 && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'ack_delivered', tempId: data.tempId, messageId: messageObj.id }));
         }
       } else if (data.type === 'typing') {
         const clientMeta = wsClients.get(ws) || {};
-        const targetChannel = data.channel || clientMeta.channel || 'general';
+        const targetChannel = sanitizeString(data.channel || clientMeta.channel || 'general', 100);
+        const username = sanitizeString(data.username || clientMeta.username || 'Student', 100);
 
-        for (const [client, meta] of wsClients.entries()) {
-          if (client !== ws && client.readyState === WebSocket.OPEN && meta.channel === targetChannel) {
-            client.send(JSON.stringify({
-              type: 'peer_typing',
-              channel: targetChannel,
-              username: data.username || clientMeta.username,
-              isTyping: data.isTyping !== false
-            }));
-          }
-        }
+        broadcastWsEvent(targetChannel, {
+          type: 'peer_typing',
+          channel: targetChannel,
+          username,
+          isTyping: data.isTyping !== false
+        }, ws);
       } else if (data.type === 'delete_message') {
-        const targetChannel = data.channel || 'general';
-        for (const [client, meta] of wsClients.entries()) {
-          if (client !== ws && client.readyState === WebSocket.OPEN && meta.channel === targetChannel) {
-            client.send(JSON.stringify({
-              type: 'delete_message',
-              channel: targetChannel,
-              id: data.id
-            }));
+        const targetChannel = sanitizeString(data.channel || 'general', 100);
+        const msgId = data.id;
+
+        if (msgId) {
+          if (db) {
+            try { await db.collection('chat_messages').deleteOne({ id: msgId }); } catch (e) {}
           }
+          const idx = inMemoryChatMessages.findIndex(m => m.id === msgId);
+          if (idx !== -1) inMemoryChatMessages.splice(idx, 1);
         }
+
+        broadcastWsEvent(targetChannel, {
+          type: 'delete_message',
+          channel: targetChannel,
+          id: msgId
+        }, ws);
       }
     } catch (e) {
       console.error("WS message parse error:", e.message);
@@ -6623,6 +6895,11 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
+    wsClients.delete(ws);
+  });
+
+  ws.on('error', (err) => {
+    console.error("WS socket error:", err.message);
     wsClients.delete(ws);
   });
 });

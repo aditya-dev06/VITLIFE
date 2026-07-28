@@ -7258,27 +7258,28 @@ a {
 
 /* WhatsApp Bouncing Typing Dots Animation */
 .wa-typing-indicator-dots {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 2px;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 4px 2px !important;
 }
 
 .wa-typing-indicator-dots .wa-typing-dot {
-  width: 7px;
-  height: 7px;
-  background-color: #00a884;
-  border-radius: 50%;
-  display: inline-block;
-  animation: waDotBounce 1.3s infinite ease-in-out both;
+  width: 7px !important;
+  height: 7px !important;
+  background-color: #00a884 !important;
+  border-radius: 50% !important;
+  display: inline-block !important;
+  animation: waDotBounce 1.3s infinite ease-in-out both !important;
+  will-change: transform, opacity !important;
 }
 
 .wa-typing-indicator-dots .wa-typing-dot.delay-1 {
-  animation-delay: 0.2s;
+  animation-delay: 0.2s !important;
 }
 
 .wa-typing-indicator-dots .wa-typing-dot.delay-2 {
-  animation-delay: 0.4s;
+  animation-delay: 0.4s !important;
 }
 
 @keyframes waDotBounce {
@@ -7299,8 +7300,8 @@ a {
   padding: 0 !important;
   margin: 0 !important;
   width: 100vw !important;
-  height: 100dvh !important;
   height: 100vh !important;
+  height: 100dvh !important;
   position: fixed !important;
   top: 0 !important;
   left: 0 !important;
@@ -7327,12 +7328,15 @@ a {
   box-shadow: none !important;
 }
 
-/* Global scrollbar hiding for chat */
+/* Global scrollbar hiding for chat & community lists */
 .wa-chat-messages-area,
 .wa-sidebar,
 .wa-chat-panel,
 .wa-container,
-.community-container {
+.community-container,
+.wa-chat-list,
+.paper-files-list,
+.chat-messages-scroll-area {
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
 }
@@ -7341,7 +7345,10 @@ a {
 .wa-sidebar::-webkit-scrollbar,
 .wa-chat-panel::-webkit-scrollbar,
 .wa-container::-webkit-scrollbar,
-.community-container::-webkit-scrollbar {
+.community-container::-webkit-scrollbar,
+.wa-chat-list::-webkit-scrollbar,
+.paper-files-list::-webkit-scrollbar,
+.chat-messages-scroll-area::-webkit-scrollbar {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
@@ -7378,9 +7385,10 @@ a {
     border-radius: 20px !important;
   }
   .wa-container {
-    height: calc(100dvh - 125px) !important;
     height: calc(100vh - 125px) !important;
+    height: calc(100dvh - 125px) !important;
     min-height: calc(100vh - 125px) !important;
+    min-height: calc(100dvh - 125px) !important;
     width: 100% !important;
     border-radius: 0 !important;
     border: none !important;
@@ -7391,8 +7399,9 @@ a {
   }
   
   .chats-mode-active .wa-container {
-    height: 100dvh !important;
     height: 100vh !important;
+    height: 100dvh !important;
+    min-height: 100vh !important;
     min-height: 100dvh !important;
   }
   
@@ -7566,6 +7575,7 @@ a {
   /* Message input pill */
   .wa-input-field {
     flex: 1 !important;
+    min-width: 0 !important;
     border-radius: 24px !important;
     padding: 0.7rem 1rem !important;
     font-size: 0.92rem !important;
