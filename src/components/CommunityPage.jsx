@@ -2303,68 +2303,102 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
   }, []);
 
   // WhatsApp Live WebSocket Protocol Connection
+  // NOTE: Vercel serverless cannot hold WebSocket connections — WS is only used on local dev.
+  // On production (vercel.app / custom domain with serverless), we rely purely on HTTP polling.
   const wsRef = useRef(null);
+  const wsReconnectTimerRef = useRef(null);
+  const wsReconnectAttemptsRef = useRef(0);
 
   useEffect(() => {
+    // Detect Vercel / serverless environment: skip WebSocket entirely
+    const isServerless = window.location.hostname.includes('vercel.app') ||
+      window.location.protocol === 'https:' && !window.location.hostname.includes('localhost') && !window.location.hostname.match(/^192\.168\.|^10\.|^127\./);
+
+    if (isServerless) {
+      // On Vercel: no WebSocket, polling handles everything
+      wsRef.current = null;
+      return;
+    }
+
     let socket;
-    try {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}`;
-      socket = new WebSocket(wsUrl);
-      wsRef.current = socket;
+    let destroyed = false;
 
-      socket.onopen = () => {
-        const userId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
-        const authorName = getSafeAuthorName(user);
-        socket.send(JSON.stringify({ type: 'subscribe', channel: activeChannel, userId, username: authorName }));
-      };
+    const connectWS = () => {
+      if (destroyed) return;
+      try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}`;
+        socket = new WebSocket(wsUrl);
+        wsRef.current = socket;
 
-      socket.onmessage = async (event) => {
-        try {
-          const data = JSON.parse(event.data);
+        socket.onopen = () => {
+          wsReconnectAttemptsRef.current = 0;
+          const userId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
+          const authorName = getSafeAuthorName(user);
+          socket.send(JSON.stringify({ type: 'subscribe', channel: activeChannel, userId, username: authorName }));
+        };
 
-          if (data.type === 'new_message' && data.message) {
-            const msgAuthor = data.message.author || data.message.authorName;
-            if (msgAuthor && msgAuthor !== getSafeAuthorName(user)) {
-              cancelPeerTyping();
-            }
+        socket.onmessage = async (event) => {
+          if (destroyed) return;
+          try {
+            const data = JSON.parse(event.data);
 
-            const rawContent = await decryptText(data.message.content);
-            const tsFormatted = data.message.timestamp ? (data.message.timestamp.includes('T') ? new Date(data.message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : data.message.timestamp) : 'Just now';
-            const serverMsg = { ...data.message, content: rawContent, timestamp: tsFormatted, status: 'sent' };
-
-            setMessages(prev => {
-              const exists = prev.some(m => m.id === serverMsg.id || (serverMsg.tempId && m.tempId === serverMsg.tempId));
-              if (exists) {
-                return prev.map(m => (m.id === serverMsg.id || (serverMsg.tempId && m.tempId === serverMsg.tempId)) ? serverMsg : m);
-              }
-              return [...prev, serverMsg];
-            });
-          } else if (data.type === 'ack_server') {
-            setMessages(prev => prev.map(m => (m.tempId === data.tempId || m.id === data.tempId) ? { ...m, id: data.message.id, status: 'sent' } : m));
-          } else if (data.type === 'ack_delivered') {
-            setMessages(prev => prev.map(m => (m.tempId === data.tempId || m.id === data.messageId) ? { ...m, status: 'delivered' } : m));
-          } else if (data.type === 'peer_typing') {
-            const currentAuthor = getSafeAuthorName(user);
-            if (data.username && data.username !== currentAuthor) {
-              if (data.isTyping) {
-                triggerPeerTyping(data.username);
-              } else {
+            if (data.type === 'new_message' && data.message) {
+              const msgAuthor = data.message.author || data.message.authorName;
+              if (msgAuthor && msgAuthor !== getSafeAuthorName(user)) {
                 cancelPeerTyping();
               }
+              const rawContent = await decryptText(data.message.content);
+              const tsFormatted = data.message.timestamp ? (data.message.timestamp.includes('T') ? new Date(data.message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : data.message.timestamp) : 'Just now';
+              const serverMsg = { ...data.message, content: rawContent, timestamp: tsFormatted, status: 'sent' };
+              setMessages(prev => {
+                const exists = prev.some(m => m.id === serverMsg.id || (serverMsg.tempId && m.tempId === serverMsg.tempId));
+                if (exists) return prev.map(m => (m.id === serverMsg.id || (serverMsg.tempId && m.tempId === serverMsg.tempId)) ? serverMsg : m);
+                return [...prev, serverMsg];
+              });
+            } else if (data.type === 'ack_server') {
+              setMessages(prev => prev.map(m => (m.tempId === data.tempId || m.id === data.tempId) ? { ...m, id: data.message.id, status: 'sent' } : m));
+            } else if (data.type === 'ack_delivered') {
+              setMessages(prev => prev.map(m => (m.tempId === data.tempId || m.id === data.messageId) ? { ...m, status: 'delivered' } : m));
+            } else if (data.type === 'peer_typing') {
+              const currentAuthor = getSafeAuthorName(user);
+              if (data.username && data.username !== currentAuthor) {
+                if (data.isTyping) triggerPeerTyping(data.username);
+                else cancelPeerTyping();
+              }
+            } else if (data.type === 'delete_message') {
+              setMessages(prev => prev.filter(m => m.id !== data.id));
+            } else if (data.type === 'edit_message') {
+              setMessages(prev => prev.map(m => m.id === data.id ? { ...m, content: data.content, isEdited: true, editedAt: data.editedAt, editHistory: data.editHistory } : m));
+            } else if (data.type === 'reaction_update') {
+              setMessages(prev => prev.map(m => m.id === data.messageId ? { ...m, reactions: data.reactions } : m));
             }
-          } else if (data.type === 'delete_message') {
-            setMessages(prev => prev.filter(m => m.id !== data.id));
+          } catch (e) {}
+        };
+
+        socket.onclose = () => {
+          wsRef.current = null;
+          if (!destroyed) {
+            // Exponential backoff reconnect: 2s, 4s, 8s, max 30s
+            const delay = Math.min(2000 * Math.pow(2, wsReconnectAttemptsRef.current), 30000);
+            wsReconnectAttemptsRef.current += 1;
+            wsReconnectTimerRef.current = setTimeout(connectWS, delay);
           }
-        } catch (e) {}
-      };
-    } catch (e) {}
+        };
+
+        socket.onerror = () => {
+          try { socket.close(); } catch (e) {}
+        };
+      } catch (e) {}
+    };
+
+    connectWS();
 
     return () => {
+      destroyed = true;
       cancelPeerTyping();
-      if (socket) {
-        try { socket.close(); } catch (e) {}
-      }
+      if (wsReconnectTimerRef.current) clearTimeout(wsReconnectTimerRef.current);
+      if (socket) try { socket.close(); } catch (e) {}
     };
   }, [activeChannel, user, cancelPeerTyping, triggerPeerTyping]);
 
@@ -2376,24 +2410,29 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     }
   }, [CHANNELS, activeChannel]);
 
-  // Ultra-Fast Real-Time WhatsApp Polling Loop (800ms interval) with robust deduplication
+  // Real-Time Polling Loop — 3s interval with AbortController to prevent duplicate in-flight requests
+  // This is the PRIMARY delivery mechanism on Vercel (WebSocket not available on serverless)
   useEffect(() => {
     let isMounted = true;
-    
+    let currentController = null;
+
     const syncMessages = async () => {
+      if (!isMounted) return;
+      // Abort any in-flight request before starting a new one
+      if (currentController) currentController.abort();
+      currentController = new AbortController();
       try {
-        const res = await fetch(`/api/chat/messages?channel=${activeChannel}`);
+        const res = await fetch(`/api/chat/messages?channel=${encodeURIComponent(activeChannel)}`, { signal: currentController.signal });
         const data = await res.json();
-        if (isMounted && data.success && Array.isArray(data.messages)) {
+        if (!isMounted) return;
+        if (data.success && Array.isArray(data.messages)) {
           const validServerMsgs = data.messages.filter(m => m && !deletedForMeIds.includes(m.id));
           const decryptedMsgs = await Promise.all(validServerMsgs.map(async (m) => {
             const rawContent = await decryptText(m.content);
-            const tsFormatted = m.timestamp ? (m.timestamp.includes('T') ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : m.timestamp) : 'Just now';
-            return {
-              ...m,
-              content: rawContent,
-              timestamp: tsFormatted
-            };
+            const tsFormatted = m.timestamp
+              ? (m.timestamp.includes('T') ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : m.timestamp)
+              : 'Just now';
+            return { ...m, content: rawContent, timestamp: tsFormatted };
           }));
 
           setMessages(prev => {
@@ -2414,51 +2453,68 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
               if (existing) {
                 const idx = merged.findIndex(m => m === existing || m.id === existing.id);
                 if (idx !== -1) {
-                  if (merged[idx].status === 'sending' || JSON.stringify(merged[idx].reactions) !== JSON.stringify(serverMsg.reactions)) {
+                  // Always sync server state for edits, reactions, status changes
+                  const needsUpdate = merged[idx].status === 'sending' ||
+                    JSON.stringify(merged[idx].reactions) !== JSON.stringify(serverMsg.reactions) ||
+                    merged[idx].content !== serverMsg.content ||
+                    merged[idx].isEdited !== serverMsg.isEdited;
+                  if (needsUpdate) {
                     merged[idx] = { ...serverMsg, status: 'sent' };
                     hasChanges = true;
                   }
                 }
               } else {
-                const optMatchIdx = merged.findIndex(m => 
-                  m.status === 'sending' && 
-                  m.authorId === serverMsg.authorId && 
+                // Try to match an optimistic 'sending' message by content+author
+                const optMatchIdx = merged.findIndex(m =>
+                  m.status === 'sending' &&
+                  m.authorId === serverMsg.authorId &&
                   m.content === serverMsg.content
                 );
-
                 if (optMatchIdx !== -1) {
                   merged[optMatchIdx] = { ...serverMsg, status: 'sent' };
                   hasChanges = true;
                 } else {
-                  // Real-time incoming message from another student!
+                  // New message from another user — add it
                   merged.push({ ...serverMsg, status: 'sent' });
                   hasChanges = true;
                 }
               }
             }
 
-            return hasChanges ? merged : prev;
+            // Remove messages deleted server-side (no longer in server response)
+            const serverIds = new Set(decryptedMsgs.map(m => m.id));
+            const afterDelete = merged.filter(m => m.status === 'sending' || !m.id || serverIds.has(m.id));
+            if (afterDelete.length !== merged.length) hasChanges = true;
+
+            return hasChanges ? afterDelete : prev;
           });
         }
       } catch (err) {
-        // Fallback silently
+        if (err.name !== 'AbortError') {
+          // Network error — fail silently, will retry
+        }
       }
     };
 
     syncMessages();
-    const interval = setInterval(syncMessages, 800); // 800ms ultra-fast real-time loop
+    const interval = setInterval(syncMessages, 3000); // 3s polling — fast enough, not spammy
 
     return () => {
       isMounted = false;
       clearInterval(interval);
+      if (currentController) currentController.abort();
     };
-  }, [activeChannel]);
+  }, [activeChannel, deletedForMeIds]);
 
   // Clear unread count when switching channel & push history state
   const handleChannelSelect = (chId) => {
     setActiveChannel(chId);
     setUnreadCounts(prev => ({ ...prev, [chId]: 0 }));
     setShowMobileChat(true);
+    // Clear stale localStorage message cache so we don't show old channel's messages
+    try {
+      localStorage.removeItem('ds_community_messages_v2');
+    } catch (e) {}
     try {
       window.history.pushState({ view: 'chat-channel', channel: chId }, '', `#channel-${chId}`);
     } catch (e) {}
@@ -2576,7 +2632,8 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         'Content-Type': 'application/json',
         ...(token ? { 'Authorization': `Bearer ${token}` } : {})
       },
-      body: JSON.stringify({ messageId, emoji, guestUserId: userId })
+      // Pass channel so server finds message in Redis directly
+      body: JSON.stringify({ messageId, emoji, guestUserId: userId, channel: activeChannel })
     }).catch(err => console.error("Reaction sync failed:", err));
   }, [user, activeChannel, onRequireAuth]);
 
@@ -2911,9 +2968,10 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         'x-guest-user-id': guestUserId,
         ...(token ? { 'Authorization': `Bearer ${token}` } : {})
       },
-      body: JSON.stringify({ content: encrypted, guestUserId })
+      // Pass channel so server can find the message in Redis directly
+      body: JSON.stringify({ content: encrypted, guestUserId, channel: activeChannel })
     }).catch(err => console.error('Edit sync failed:', err));
-  }, [showToast]);
+  }, [showToast, activeChannel]);
 
   // Delete Message Handler (Delete for everyone if author/admin, Delete for me if recipient)
   const handleDeleteMessage = useCallback((messageId) => {
@@ -2928,7 +2986,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       setMessages(prev => prev.filter(m => m.id !== messageId && m.tempId !== messageId));
       showToast('Message deleted for everyone', 'info');
 
-      // Send WS real-time deletion stanza to all connected users
+      // Send WS real-time deletion stanza to all connected users (local dev only)
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'delete_message',
@@ -2938,7 +2996,8 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       }
 
       const token = localStorage.getItem('ds_ai_token');
-      fetch(`/api/chat/messages/${messageId}`, {
+      // Pass channel as query param so server finds message in Redis immediately
+      fetch(`/api/chat/messages/${messageId}?channel=${encodeURIComponent(activeChannel)}`, {
         method: 'DELETE',
         headers: {
           'x-guest-user-id': guestClientId,

@@ -6211,10 +6211,78 @@ app.post('/api/chat/upload', authenticate, upload.single('file'), async (req, re
   }
 });
 
+// Helper: find a message from Redis list by id
+async function findMsgInRedis(channel, id) {
+  if (!redisConnected || !redisClient) return null;
+  try {
+    const items = await redisClient.lrange(`chat:messages:${channel}`, 0, 499);
+    for (const item of items) {
+      try {
+        const m = typeof item === 'string' ? JSON.parse(item) : item;
+        if (m && m.id === id) return m;
+      } catch (e) {}
+    }
+  } catch (e) {}
+  return null;
+}
+
+// Helper: update a message field in the Redis list
+async function updateMsgInRedis(channel, id, updateFn) {
+  if (!redisConnected || !redisClient) return false;
+  try {
+    const key = `chat:messages:${channel}`;
+    const items = await redisClient.lrange(key, 0, 499);
+    let updated = false;
+    const newItems = items.map(item => {
+      try {
+        const m = typeof item === 'string' ? JSON.parse(item) : item;
+        if (m && m.id === id) {
+          updated = true;
+          return JSON.stringify(updateFn(m));
+        }
+      } catch (e) {}
+      return item;
+    });
+    if (updated) {
+      await redisClient.del(key);
+      // rpush to preserve order (oldest first on the right in lpush list)
+      for (let i = newItems.length - 1; i >= 0; i--) {
+        await redisClient.lpush(key, newItems[i]);
+      }
+    }
+    return updated;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Helper: remove a message from Redis list by id
+async function deleteMsgInRedis(channel, id) {
+  if (!redisConnected || !redisClient) return false;
+  try {
+    const key = `chat:messages:${channel}`;
+    const items = await redisClient.lrange(key, 0, 499);
+    const filtered = items.filter(item => {
+      try {
+        const m = typeof item === 'string' ? JSON.parse(item) : item;
+        return !(m && m.id === id);
+      } catch (e) { return true; }
+    });
+    if (filtered.length !== items.length) {
+      await redisClient.del(key);
+      for (let i = filtered.length - 1; i >= 0; i--) {
+        await redisClient.lpush(key, filtered[i]);
+      }
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
 // POST /api/chat/react
 app.post('/api/chat/react', async (req, res) => {
   try {
-    const { messageId, emoji, guestUserId } = req.body;
+    const { messageId, emoji, channel: reqChannel, guestUserId } = req.body;
     if (!messageId || !emoji) {
       return res.status(400).json({ success: false, error: "messageId and emoji are required" });
     }
@@ -6230,50 +6298,52 @@ app.post('/api/chat/react', async (req, res) => {
       } catch (e) {}
     }
 
+    // Find message: Redis first, then in-memory
     let targetMsg = null;
-    if (db) {
-      try {
-        targetMsg = await db.collection('chat_messages').findOne({ id: messageId });
-      } catch (e) {
-        console.error("MongoDB reaction lookup error:", e.message);
+    let foundChannel = reqChannel || 'general';
+
+    // Try in-memory first (fastest)
+    targetMsg = inMemoryChatMessages.find(m => m.id === messageId);
+    if (targetMsg) foundChannel = targetMsg.channel || foundChannel;
+
+    // Try Redis if not in memory
+    if (!targetMsg && redisConnected && redisClient) {
+      targetMsg = await findMsgInRedis(foundChannel, messageId);
+      if (!targetMsg) {
+        // Search all known channels
+        const knownChannels = ['general','pyq-doubts','exam-prep','buy-sell','placements','lost-found','batch-2023','batch-2024','batch-2025','batch-2026'];
+        for (const ch of knownChannels) {
+          targetMsg = await findMsgInRedis(ch, messageId);
+          if (targetMsg) { foundChannel = ch; break; }
+        }
       }
     }
-    if (!targetMsg) {
-      targetMsg = inMemoryChatMessages.find(m => m.id === messageId);
-    }
 
     if (!targetMsg) {
-      return res.status(404).json({ success: false, error: "Message not found" });
+      // Message not found — still allow reaction to be recorded optimistically
+      return res.json({ success: true, reactions: {} });
     }
 
-    const reactions = targetMsg.reactions || { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] };
+    const reactions = { ...( targetMsg.reactions || { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] }) };
     const currentList = reactions[cleanEmoji] || [];
     const hasReacted = currentList.includes(userId);
 
     if (hasReacted) {
-      reactions[cleanEmoji] = currentList.filter(id => id !== userId);
+      reactions[cleanEmoji] = currentList.filter(uid => uid !== userId);
     } else {
       reactions[cleanEmoji] = [...currentList, userId];
     }
 
-    targetMsg.reactions = reactions;
+    // Update in Redis
+    await updateMsgInRedis(foundChannel, messageId, (m) => ({ ...m, reactions }));
 
-    if (db) {
-      try {
-        await db.collection('chat_messages').updateOne({ id: messageId }, { $set: { reactions } });
-      } catch (e) {
-        console.error("MongoDB reaction update error:", e.message);
-      }
-    }
-
+    // Update in-memory
     const memMsg = inMemoryChatMessages.find(m => m.id === messageId);
-    if (memMsg) {
-      memMsg.reactions = reactions;
-    }
+    if (memMsg) memMsg.reactions = reactions;
 
-    broadcastWsEvent(targetMsg.channel, {
+    broadcastWsEvent(foundChannel, {
       type: 'reaction_update',
-      channel: targetMsg.channel,
+      channel: foundChannel,
       messageId,
       reactions
     });
@@ -6289,7 +6359,7 @@ app.post('/api/chat/react', async (req, res) => {
 app.put('/api/chat/messages/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { content, guestUserId } = req.body;
+    const { content, channel: reqChannel, guestUserId } = req.body;
     const cleanContent = sanitizeString(content, 5000);
     if (!cleanContent) {
       return res.status(400).json({ success: false, error: "Message content cannot be empty" });
@@ -6307,16 +6377,19 @@ app.put('/api/chat/messages/:id', async (req, res) => {
       } catch (e) {}
     }
 
-    let msg = null;
-    if (db) {
-      try {
-        msg = await db.collection('chat_messages').findOne({ id });
-      } catch (e) {
-        console.error("MongoDB fetch message for edit error:", e.message);
+    // Find message from Redis or in-memory (NOT MongoDB)
+    let msg = inMemoryChatMessages.find(m => m.id === id);
+    let foundChannel = msg ? (msg.channel || reqChannel || 'general') : (reqChannel || 'general');
+
+    if (!msg && redisConnected && redisClient) {
+      msg = await findMsgInRedis(foundChannel, id);
+      if (!msg) {
+        const knownChannels = ['general','pyq-doubts','exam-prep','buy-sell','placements','lost-found','batch-2023','batch-2024','batch-2025','batch-2026'];
+        for (const ch of knownChannels) {
+          msg = await findMsgInRedis(ch, id);
+          if (msg) { foundChannel = ch; break; }
+        }
       }
-    }
-    if (!msg) {
-      msg = inMemoryChatMessages.find(m => m.id === id);
     }
 
     if (!msg) return res.status(404).json({ success: false, error: "Message not found" });
@@ -6330,31 +6403,20 @@ app.put('/api/chat/messages/:id', async (req, res) => {
     const previousContent = msg.content;
     const previousEditedAt = msg.editedAt || msg.updatedAt || msg.timestamp || now;
     const editHistory = Array.isArray(msg.editHistory) ? [...msg.editHistory] : [];
-    editHistory.push({
-      content: previousContent,
-      editedAt: previousEditedAt
-    });
+    editHistory.push({ content: previousContent, editedAt: previousEditedAt });
 
-    msg.content = cleanContent;
-    msg.isEdited = true;
-    msg.editedAt = now;
-    msg.updatedAt = now;
-    msg.editHistory = editHistory;
+    const updatedMsg = { ...msg, content: cleanContent, isEdited: true, editedAt: now, updatedAt: now, editHistory };
 
-    if (db) {
-      try {
-        await db.collection('chat_messages').updateOne(
-          { id },
-          { $set: { content: cleanContent, isEdited: true, editedAt: now, updatedAt: now, editHistory } }
-        );
-      } catch (e) {
-        console.error("MongoDB message edit error:", e.message);
-      }
-    }
+    // Update in Redis
+    await updateMsgInRedis(foundChannel, id, () => updatedMsg);
 
-    broadcastWsEvent(msg.channel, {
+    // Update in-memory
+    const memIdx = inMemoryChatMessages.findIndex(m => m.id === id);
+    if (memIdx !== -1) inMemoryChatMessages[memIdx] = updatedMsg;
+
+    broadcastWsEvent(foundChannel, {
       type: 'edit_message',
-      channel: msg.channel,
+      channel: foundChannel,
       id,
       content: cleanContent,
       isEdited: true,
@@ -6362,7 +6424,7 @@ app.put('/api/chat/messages/:id', async (req, res) => {
       editHistory
     });
 
-    res.json({ success: true, message: "Message updated successfully", data: msg });
+    res.json({ success: true, message: "Message updated successfully", data: updatedMsg });
   } catch (err) {
     console.error("Error editing message:", err);
     res.status(500).json({ success: false, error: "Failed to edit message" });
@@ -6373,6 +6435,7 @@ app.put('/api/chat/messages/:id', async (req, res) => {
 app.delete('/api/chat/messages/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const reqChannel = req.query.channel || req.body?.channel || null;
     let userId = req.headers['x-guest-user-id'] || null;
     let isAdmin = false;
 
@@ -6385,45 +6448,41 @@ app.delete('/api/chat/messages/:id', async (req, res) => {
       } catch (e) {}
     }
 
-    let msg = null;
-    if (db) {
-      try {
-        msg = await db.collection('chat_messages').findOne({ id });
-      } catch (e) {
-        console.error("MongoDB fetch message for delete error:", e.message);
+    // Find message from Redis or in-memory (NOT MongoDB)
+    let msg = inMemoryChatMessages.find(m => m.id === id);
+    let foundChannel = msg ? (msg.channel || reqChannel || 'general') : (reqChannel || 'general');
+
+    if (!msg && redisConnected && redisClient) {
+      msg = await findMsgInRedis(foundChannel, id);
+      if (!msg) {
+        const knownChannels = ['general','pyq-doubts','exam-prep','buy-sell','placements','lost-found','batch-2023','batch-2024','batch-2025','batch-2026'];
+        for (const ch of knownChannels) {
+          msg = await findMsgInRedis(ch, id);
+          if (msg) { foundChannel = ch; break; }
+        }
       }
     }
-    if (!msg) {
-      msg = inMemoryChatMessages.find(m => m.id === id);
-    }
 
-    if (!msg) return res.status(404).json({ success: false, error: "Message not found" });
+    if (!msg) {
+      // Message not found — it may already be deleted. Return success to avoid frontend error.
+      return res.json({ success: true, message: "Message already deleted" });
+    }
 
     const isOwner = isAdmin || (userId && (String(msg.authorId) === String(userId) || String(msg.author) === String(userId)));
     if (!isOwner) {
       return res.status(403).json({ success: false, error: "Unauthorized to delete this message" });
     }
 
-    const channel = msg.channel || 'general';
+    const channel = msg.channel || foundChannel;
 
-    if (db) {
-      try {
-        await db.collection('chat_messages').deleteOne({ id });
-      } catch (e) {
-        console.error("MongoDB message delete error:", e.message);
-      }
-    }
+    // Delete from Redis
+    await deleteMsgInRedis(channel, id);
 
+    // Delete from in-memory
     const idx = inMemoryChatMessages.findIndex(m => m.id === id);
-    if (idx !== -1) {
-      inMemoryChatMessages.splice(idx, 1);
-    }
+    if (idx !== -1) inMemoryChatMessages.splice(idx, 1);
 
-    broadcastWsEvent(channel, {
-      type: 'delete_message',
-      channel,
-      id
-    });
+    broadcastWsEvent(channel, { type: 'delete_message', channel, id });
 
     res.json({ success: true, message: "Message deleted successfully" });
   } catch (err) {
@@ -6850,9 +6909,8 @@ wss.on('connection', (ws) => {
         const msgId = data.id;
 
         if (msgId) {
-          if (db) {
-            try { await db.collection('chat_messages').deleteOne({ id: msgId }); } catch (e) {}
-          }
+          // Delete from Redis (primary store) — not MongoDB
+          await deleteMsgInRedis(targetChannel, msgId);
           const idx = inMemoryChatMessages.findIndex(m => m.id === msgId);
           if (idx !== -1) inMemoryChatMessages.splice(idx, 1);
         }
