@@ -17,6 +17,7 @@ import { rateLimit } from 'express-rate-limit';
 import { v2 as cloudinary } from 'cloudinary';
 // Redis is dynamically imported below only when REDIS_URL is set
 import { parseEmailToCardPayload, scanCollegeInboxAndIngest } from './services/emailPipeline.js';
+import Pusher from 'pusher';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,6 +40,32 @@ if (fs.existsSync(envPath)) {
     }
   });
 }
+
+// --- PUSHER REAL-TIME ENGINE ---
+// Credentials are loaded from env vars only — never hardcoded.
+let pusherServer = null;
+if (process.env.PUSHER_APP_ID && process.env.PUSHER_KEY && process.env.PUSHER_SECRET) {
+  pusherServer = new Pusher({
+    appId: process.env.PUSHER_APP_ID,
+    key: process.env.PUSHER_KEY,
+    secret: process.env.PUSHER_SECRET,
+    cluster: process.env.PUSHER_CLUSTER || 'ap2',
+    useTLS: true
+  });
+  console.log('✅ Pusher real-time engine connected (cluster:', process.env.PUSHER_CLUSTER || 'ap2', ')');
+} else {
+  console.warn('⚠️  Pusher env vars missing — real-time push disabled, polling only.');
+}
+
+// Safe Pusher trigger — fire-and-forget, never throws
+const pusherTrigger = (channel, event, data) => {
+  if (!pusherServer) return;
+  // Pusher channel names: alphanumeric, dash, underscore only, max 200 chars
+  const safeChannel = ('chat-' + channel).replace(/[^a-zA-Z0-9\-_]/g, '-').substring(0, 200);
+  pusherServer.trigger(safeChannel, event, data).catch(err => {
+    console.error('Pusher trigger error:', err.message);
+  });
+};
 
 function parseRedisUrlRobust(urlStr) {
   if (!urlStr) return null;
@@ -4389,8 +4416,9 @@ app.get('/api/papers', optionalAuthenticate, async (req, res) => {
 
     if (dbConnectingPromise) await dbConnectingPromise;
     if (db) {
-      const statusQuery = { $or: [{ status: 'approved' }, { status: { $exists: false } }] };
-      if (userEmail) statusQuery.$or.push({ uploadedBy: userEmail, status: 'pending' });
+      const statusQuery = userEmail 
+        ? { $or: [{ status: 'approved' }, { uploadedBy: userEmail, status: 'pending' }] }
+        : { status: 'approved' };
       
       const filters = [statusQuery];
       if (department) filters.push({ department });
@@ -6052,12 +6080,21 @@ const isFacultyAccount = (user) => {
   return false;
 };
 
-// Helper to safely broadcast WebSocket messages to channel listeners
+// Helper to broadcast chat events via:
+//   1. Pusher (primary — works on Vercel serverless, real-time for all users)
+//   2. Local WebSocket (secondary — works on localhost dev server only)
 const broadcastWsEvent = (channel, payload, excludeWs = null) => {
   const messageStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
   const targetChannel = channel || 'general';
   const isDM = targetChannel.startsWith('dm_');
+  const data = typeof payload === 'string' ? JSON.parse(payload) : payload;
 
+  // 1. Pusher — fires for ALL users regardless of environment (Vercel + local)
+  if (data && data.type) {
+    pusherTrigger(targetChannel, data.type, data);
+  }
+
+  // 2. Local WebSocket — only reaches users connected to same process (localhost)
   let deliveredCount = 0;
   if (typeof wsClients !== 'undefined' && wsClients) {
     for (const [client, meta] of wsClients.entries()) {
