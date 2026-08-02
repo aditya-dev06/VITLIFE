@@ -6916,23 +6916,34 @@ app.post('/api/chat/meta-ai', async (req, res) => {
 
 // --- REDIS REAL-TIME PRESENCE & TYPING ENDPOINTS ---
 
-// POST /api/chat/typing (Sets 4-second expiration typing TTL in Redis / memory)
+// POST /api/chat/typing (Instant real-time typing broadcast over Pusher & WebSocket)
 app.post('/api/chat/typing', async (req, res) => {
   try {
-    const { channel, username, userId } = req.body;
+    const { channel, username, userId, isTyping = true } = req.body;
     if (!channel || !username) return res.status(400).json({ success: false, error: "Missing channel or username" });
     const cleanChannel = sanitizeString(channel, 100);
     const cleanUsername = sanitizeString(username, 100);
     const uId = sanitizeString(userId || ('anon_' + cleanUsername), 100);
 
-    if (redisConnected && redisClient) {
-      try {
-        await redisClient.setex(`typing:${cleanChannel}:${uId}`, 4, cleanUsername);
-      } catch (e) {}
+    if (isTyping) {
+      if (redisConnected && redisClient) {
+        try {
+          await redisClient.setex(`typing:${cleanChannel}:${uId}`, 4, cleanUsername);
+        } catch (e) {}
+      }
+      inMemoryTyping.set(`typing:${cleanChannel}:${uId}`, { username: cleanUsername, expiresAt: Date.now() + 4000 });
+    } else {
+      if (redisConnected && redisClient) {
+        try { await redisClient.del(`typing:${cleanChannel}:${uId}`); } catch (e) {}
+      }
+      inMemoryTyping.delete(`typing:${cleanChannel}:${uId}`);
     }
-    inMemoryTyping.set(`typing:${cleanChannel}:${uId}`, { username: cleanUsername, expiresAt: Date.now() + 4000 });
 
-    res.json({ success: true, isTyping: true });
+    // Instant real-time broadcast to all peers via Pusher & WebSocket (0ms delay like WhatsApp)
+    pusherTrigger(cleanChannel, 'peer_typing', { channel: cleanChannel, username: cleanUsername, isTyping: Boolean(isTyping) });
+    broadcastWsEvent(cleanChannel, { type: 'peer_typing', channel: cleanChannel, username: cleanUsername, isTyping: Boolean(isTyping) });
+
+    res.json({ success: true, isTyping: Boolean(isTyping) });
   } catch (err) {
     res.status(500).json({ success: false, error: "Failed to broadcast typing status" });
   }

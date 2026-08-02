@@ -2645,25 +2645,32 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     };
   }, [activeChannel, user, triggerPeerTyping, cancelPeerTyping]);
 
-  // Typing notifier (fires WS stanza + HTTP backup)
+  // Typing notifier (fires instant HTTP + WS stanzas with 400ms throttle)
   const lastTypingNotify = useRef(0);
   const handleInputChange = (e) => {
     const val = e.target.value;
     setNewMessage(val);
 
-    // Instant WebSocket typing stanza (0ms latency)
+    const userId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
+    const authorName = getSafeAuthorName(user);
+
     if (val.length > 0) {
       const now = Date.now();
-      if (now - lastTypingNotify.current > 3500) {
+      if (now - lastTypingNotify.current > 400) {
         lastTypingNotify.current = now;
-        const userId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
-        const authorName = getSafeAuthorName(user);
         fetch('/api/chat/typing', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ channel: activeChannel, username: authorName, userId })
+          body: JSON.stringify({ channel: activeChannel, username: authorName, userId, isTyping: true })
         }).catch(() => {});
       }
+    } else {
+      lastTypingNotify.current = 0;
+      fetch('/api/chat/typing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: activeChannel, username: authorName, userId, isTyping: false })
+      }).catch(() => {});
     }
   };
 
