@@ -7017,16 +7017,14 @@ app.post('/api/chat/presence', async (req, res) => {
   }
 });
 
-// GET /api/chat/online-users
+// GET /api/chat/online-users (Real active online presence and real total registered user count)
 app.get('/api/chat/online-users', async (req, res) => {
   try {
-    let onlineCount = 494; // Base online student counter
     let activeUsers = [];
 
     if (redisConnected && redisClient) {
       try {
         const keys = await redisClient.keys('presence:*');
-        onlineCount += keys.length;
         if (keys.length > 0) {
           const names = await redisClient.mget(...keys);
           activeUsers = keys.map((k, i) => ({
@@ -7038,10 +7036,8 @@ app.get('/api/chat/online-users', async (req, res) => {
     }
 
     const now = Date.now();
-    let activeCount = 0;
     for (const [key, val] of inMemoryPresence.entries()) {
       if (val.expiresAt > now) {
-        activeCount++;
         if (!activeUsers.some(u => u.userId === key.replace('presence:', ''))) {
           activeUsers.push({
             userId: key.replace('presence:', ''),
@@ -7052,14 +7048,11 @@ app.get('/api/chat/online-users', async (req, res) => {
         inMemoryPresence.delete(key);
       }
     }
-    if (!redisConnected) {
-      onlineCount += activeCount;
-    }
 
     // Include connected WebSocket clients
     if (typeof wsClients !== 'undefined' && wsClients) {
       for (const [ws, meta] of wsClients.entries()) {
-        if (ws.readyState === WebSocket.OPEN && meta.username) {
+        if (ws.readyState === 1 && meta.username) {
           if (!activeUsers.some(u => u.username === meta.username || u.userId === meta.userId)) {
             activeUsers.push({
               userId: meta.userId || meta.username,
@@ -7070,9 +7063,35 @@ app.get('/api/chat/online-users', async (req, res) => {
       }
     }
 
-    res.json({ success: true, onlineCount, activeUsers, redisConnected: !!redisConnected });
+    const realOnlineCount = activeUsers.length > 0 ? activeUsers.length : 1;
+
+    // Calculate real total registered user count from MongoDB / file
+    let totalMembers = 0;
+    if (dbConnectingPromise) await dbConnectingPromise;
+    if (db) {
+      try {
+        totalMembers = await db.collection('users').countDocuments();
+      } catch (err) {}
+    }
+
+    if (!totalMembers) {
+      try {
+        const fileUsers = await getUsers();
+        totalMembers = Array.isArray(fileUsers) ? fileUsers.length : Object.keys(fileUsers || {}).length;
+      } catch (e) {}
+    }
+
+    if (!totalMembers) totalMembers = Math.max(realOnlineCount, 1);
+
+    res.json({
+      success: true,
+      onlineCount: realOnlineCount,
+      totalMembers,
+      activeUsers,
+      redisConnected: !!redisConnected
+    });
   } catch (err) {
-    res.json({ success: true, onlineCount: 494, activeUsers: [], redisConnected: false });
+    res.json({ success: true, onlineCount: 1, totalMembers: 1, activeUsers: [], redisConnected: false });
   }
 });
 

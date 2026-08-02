@@ -2028,6 +2028,27 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     }
   });
 
+  const [onlineStats, setOnlineStats] = useState({ onlineCount: 1, totalMembers: 1 });
+
+  useEffect(() => {
+    const fetchStats = () => {
+      fetch('/api/chat/online-users')
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.success) {
+            setOnlineStats({
+              onlineCount: data.onlineCount || 1,
+              totalMembers: data.totalMembers || 1
+            });
+          }
+        })
+        .catch(() => {});
+    };
+    fetchStats();
+    const interval = setInterval(fetchStats, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
   const [chatSearch, setChatSearch] = useState('');
   const [debouncedChatSearch, setDebouncedChatSearch] = useState('');
   const [newMessage, setNewMessage] = useState('');
@@ -3154,11 +3175,14 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   `🟢 ${typingPeerName} is typing...`
                 ) : (
                   <>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>online • 494 members</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {onlineStats.onlineCount} online • {onlineStats.totalMembers} {onlineStats.totalMembers === 1 ? 'member' : 'members'}
+                    </span>
                     <span style={{ color: '#00a884', background: 'rgba(0,168,132,0.12)', padding: '1px 5px', borderRadius: '4px', fontSize: '0.62rem', fontWeight: 600, flexShrink: 0 }}>🔒 E2EE</span>
                   </>
                 )}
               </div>
+
             </div>
           </div>
 
@@ -3910,8 +3934,8 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
             <p style={{ fontSize: '0.85rem', color: '#8696a0', margin: '0 0 1rem 0' }}>
               {activeChannelObj.desc}
             </p>
-            <div style={{ background: '#202c33', borderRadius: '10px', padding: '0.85rem', textStyle: 'left', fontSize: '0.82rem', color: '#aebac1' }}>
-              <div>👥 494 Members (VIT Bhopal)</div>
+            <div style={{ background: '#202c33', borderRadius: '10px', padding: '0.85rem', textAlign: 'left', fontSize: '0.82rem', color: '#aebac1' }}>
+              <div>👥 {onlineStats.totalMembers} {onlineStats.totalMembers === 1 ? 'Member' : 'Members'} ({onlineStats.onlineCount} Active Online)</div>
               <div style={{ marginTop: '0.35rem' }}>⚡ Real-time Peer Discussion</div>
               <div style={{ marginTop: '0.35rem' }}>📄 PYQ & Notes attachments supported</div>
             </div>
