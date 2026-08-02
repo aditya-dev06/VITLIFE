@@ -2126,23 +2126,27 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       isMessageOwner(targetMsg, user)
     );
 
+    const idsToDelete = [messageId];
+    if (targetMsg?.id) idsToDelete.push(targetMsg.id);
+    if (targetMsg?.tempId) idsToDelete.push(targetMsg.tempId);
+
     if (isMsgOwner) {
       // Deleting OUR message completely for everyone
-      setMessages(prev => prev.filter(m => m.id !== messageId && m.tempId !== messageId));
+      setMessages(prev => prev.filter(m => !idsToDelete.includes(m.id) && !idsToDelete.includes(m.tempId)));
       showToast('Message deleted for everyone', 'info');
 
-      // Send WS real-time deletion stanza to all connected users (local dev only)
+      // Send WS real-time deletion stanza to all connected users
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'delete_message',
           channel: activeChannel,
-          id: messageId
+          id: targetMsg?.id || messageId
         }));
       }
 
       const token = localStorage.getItem('ds_ai_token');
-      // Pass channel as query param so server finds message in Redis immediately
-      fetch(`/api/chat/messages/${messageId}?channel=${encodeURIComponent(activeChannel)}`, {
+      const targetId = targetMsg?.id || messageId;
+      fetch(`/api/chat/messages/${targetId}?channel=${encodeURIComponent(activeChannel)}`, {
         method: 'DELETE',
         headers: {
           'x-guest-user-id': guestClientId,
@@ -2152,11 +2156,11 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     } else {
       // Deleting OTHER user's message ONLY from my view
       setDeletedForMeIds(prev => {
-        const next = Array.from(new Set([...prev, messageId]));
+        const next = Array.from(new Set([...prev, ...idsToDelete]));
         try { localStorage.setItem('ds_deleted_for_me_ids', JSON.stringify(next)); } catch (e) {}
         return next;
       });
-      setMessages(prev => prev.filter(m => m.id !== messageId));
+      setMessages(prev => prev.filter(m => !idsToDelete.includes(m.id) && !idsToDelete.includes(m.tempId)));
       showToast('Message deleted for you', 'info');
     }
   }, [messages, user, showToast, activeChannel, guestClientId]);

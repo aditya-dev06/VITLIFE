@@ -6650,9 +6650,11 @@ app.put('/api/chat/messages/:id', async (req, res) => {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       try {
-        const decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
-        userId = String(decoded._id || decoded.id || decoded.email);
-        isAdmin = decoded.role === 'admin';
+        const decoded = await verifyToken(authHeader.split(' ')[1]);
+        if (decoded) {
+          userId = String(decoded._id || decoded.id || decoded.email);
+          isAdmin = decoded.role === 'admin';
+        }
       } catch (e) {}
     }
 
@@ -6702,6 +6704,15 @@ app.put('/api/chat/messages/:id', async (req, res) => {
       editedAt: now,
       editHistory
     });
+    pusherTrigger(foundChannel, 'edit_message', {
+      type: 'edit_message',
+      channel: foundChannel,
+      id,
+      content: cleanContent,
+      isEdited: true,
+      editedAt: now,
+      editHistory
+    });
 
     res.json({ success: true, message: "Message updated successfully", data: updatedMsg });
   } catch (err) {
@@ -6721,9 +6732,11 @@ app.delete('/api/chat/messages/:id', async (req, res) => {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       try {
-        const decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
-        userId = String(decoded._id || decoded.id || decoded.email);
-        isAdmin = decoded.role === 'admin';
+        const decoded = await verifyToken(authHeader.split(' ')[1]);
+        if (decoded) {
+          userId = String(decoded._id || decoded.id || decoded.email);
+          isAdmin = decoded.role === 'admin';
+        }
       } catch (e) {}
     }
 
@@ -6762,6 +6775,7 @@ app.delete('/api/chat/messages/:id', async (req, res) => {
     if (idx !== -1) inMemoryChatMessages.splice(idx, 1);
 
     broadcastWsEvent(channel, { type: 'delete_message', channel, id });
+    pusherTrigger(channel, 'delete_message', { type: 'delete_message', channel, id });
 
     res.json({ success: true, message: "Message deleted successfully" });
   } catch (err) {
