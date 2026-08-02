@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGro
 import { Bubble, BubbleContent, BubbleReactions, BubbleGroup } from './ui/bubble';
 import FacultyDirectory from './FacultyDirectory';
 import { encryptText, decryptText } from '../utils/crypto.js';
+import { getSynchronousHardwareDeviceId } from '../utils/deviceFingerprint.js';
 import { WhatsAppPollModal } from './WhatsAppPollModal';
 import { WhatsAppPollVotingCard } from './WhatsAppPollVotingCard';
 import { WhatsAppVoterListDrawer } from './WhatsAppVoterListDrawer';
@@ -69,19 +70,9 @@ const readAsDataURL = (file) => {
   });
 };
 
-const loadTesseract = () => {
-  return new Promise((resolve, reject) => {
-    if (window.Tesseract) {
-      resolve(window.Tesseract);
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-    script.onload = () => resolve(window.Tesseract);
-    script.onerror = (err) => reject(new Error('Failed to load OCR engine.'));
-    document.head.appendChild(script);
-  });
-};
+// Tesseract.js has been removed — OCR is now handled server-side via Gemini Vision API
+// See POST /api/ocr/vision in server.js
+
 
 const loadJsPDF = () => {
   return new Promise((resolve, reject) => {
@@ -127,41 +118,8 @@ const sanitizeUrl = (url) => {
   return '#';
 };
 
-const preprocessCanvasForOCR = (canvas) => {
-  try {
-    const ctx = canvas.getContext('2d');
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-    
-    // Convert to high-contrast grayscale & binarization (black text on white paper)
-    for (let i = 0; i < data.length; i += 4) {
-      const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-      const val = gray < 160 ? 0 : 255;
-      data[i] = val;
-      data[i + 1] = val;
-      data[i + 2] = val;
-    }
-    
-    ctx.putImageData(imageData, 0, 0);
-  } catch (e) {
-    console.warn('OCR preprocessing warning:', e);
-  }
-  return canvas;
-};
+// preprocessCanvasForOCR removed — OCR is now server-side via Gemini Vision API
 
-const cleanOCRText = (text) => {
-  if (!text) return '';
-  return text
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => {
-      if (!line) return false;
-      // Filter out noisy gibberish lines with few real characters
-      const alphaNum = (line.match(/[a-zA-Z0-9]/g) || []).length;
-      return alphaNum >= 3 || line.length > 8;
-    })
-    .join('\n');
-};
 
 const getImageDimensions = (base64) => {
   return new Promise((resolve) => {
@@ -174,7 +132,11 @@ const getImageDimensions = (base64) => {
 };
 
 export const getSafeAuthorName = (u) => {
-  if (!u || u.isGuest) return 'Guest Student';
+  if (!u || u.isGuest) {
+    const guestId = getGuestClientId();
+    const shortCode = guestId ? guestId.replace('guest_', '').slice(-4).toUpperCase() : 'STUDENT';
+    return `Guest #${shortCode}`;
+  }
   if (u.name && typeof u.name === 'string' && u.name.trim()) return u.name.trim();
   if (u.email && typeof u.email === 'string' && u.email.includes('@')) return u.email.split('@')[0];
   if (u.username && typeof u.username === 'string' && u.username.trim()) return u.username.trim();
@@ -324,7 +286,8 @@ const loadPdfLib = () => {
   });
 };
 
-const extractTextFromPDF = async (arrayBuffer, tesseractWorker) => {
+// extractTextFromPDF — lightweight PDF.js text layer extraction (no Tesseract)
+const extractTextFromPDF = async (arrayBuffer) => {
   const pdfjsLib = await loadPdfJS();
   const uint8Data = new Uint8Array(arrayBuffer);
   
@@ -341,47 +304,16 @@ const extractTextFromPDF = async (arrayBuffer, tesseractWorker) => {
   const maxPages = Math.min(pdf.numPages, 5);
   for (let i = 1; i <= maxPages; i++) {
     const page = await pdf.getPage(i);
-    let pageText = '';
     try {
       const textContent = await page.getTextContent();
-      pageText = textContent.items.map(item => item.str).join(' ');
+      const pageText = textContent.items.map(item => item.str).join(' ');
+      combinedText += pageText + '\n';
     } catch (tErr) {
       console.warn(`Text extraction failed for page ${i}:`, tErr);
     }
-    
-    combinedText += pageText + '\n';
-    
-    // Perform OCR if text is sparse (< 200 chars) or missing course code
-    const isSparse = pageText.trim().length < 200;
-    const hasCourseCode = /\b[A-Za-z]{3,4}\d{3,4}\b/.test(pageText);
-    
-    if ((isSparse || !hasCourseCode) && tesseractWorker) {
-      try {
-        const viewport = page.getViewport({ scale: 2.0 }); // 2.0x scale for sharp OCR
-        const canvas = document.createElement('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const ctx = canvas.getContext('2d');
-        
-        await page.render({
-          canvasContext: ctx,
-          viewport: viewport
-        }).promise;
-        
-        // High-contrast binarization preprocessing before OCR
-        preprocessCanvasForOCR(canvas);
-        
-        const ocrResult = await tesseractWorker.recognize(canvas);
-        if (ocrResult && ocrResult.data && ocrResult.data.text) {
-          combinedText += ocrResult.data.text + '\n';
-        }
-      } catch (ocrErr) {
-        console.warn(`OCR page render failed for PDF page ${i}:`, ocrErr);
-      }
-    }
   }
   
-  return cleanOCRText(combinedText);
+  return combinedText.trim();
 };
 
 const mergePDFs = async (pdfArrayBuffers) => {
@@ -968,14 +900,7 @@ const generateSecureId = (prefix = '') => {
 };
 
 const getGuestClientId = () => {
-  let id = localStorage.getItem('ds_guest_client_id');
-  if (!id) {
-    const array = new Uint8Array(8);
-    window.crypto.getRandomValues(array);
-    id = 'guest_' + Array.from(array, b => b.toString(36)).join('').substr(0, 8);
-    localStorage.setItem('ds_guest_client_id', id);
-  }
-  return id;
+  return getSynchronousHardwareDeviceId();
 };
 
 export const isMessageOwner = (message, currentUser) => {
@@ -1005,12 +930,7 @@ export const isMessageOwner = (message, currentUser) => {
     }
   }
 
-  // 2. Match by optimistic tempId (sent in current session before server confirmation)
-  if (message.tempId && String(message.tempId).startsWith('temp_')) {
-    return true;
-  }
-
-  // 3. Fallback matching when authorId is NOT provided (e.g. legacy static messages):
+  // 2. Fallback matching when authorId is NOT provided (e.g. legacy static messages):
   // For guests, NEVER match generic 'Guest Student', 'Guest User', or 'Guest' by display name alone
   if (isCurrentGuest) {
     return false;
@@ -2079,9 +1999,10 @@ function ReportMessageModal({ message, currentUser, onClose, onSubmit }) {
 const StudentChatSection = memo(function StudentChatSection({ user, onRequireAuth, onBackToApp }) {
   const isFaculty = useMemo(() => isFacultyOrOfficial(user), [user]);
   const { showToast } = useToast();
+  const guestClientId = useMemo(() => getGuestClientId(), []);
 
   const [activeChannel, setActiveChannel] = useState('general');
-  const [showMobileChat, setShowMobileChat] = useState(false);
+  const [showMobileChat, setShowMobileChat] = useState(true);
   const [activeMenuMsgId, setActiveMenuMsgId] = useState(null);
   const [forwardModalMsg, setForwardModalMsg] = useState(null);
   const [messages, setMessages] = useState(() => {
@@ -2196,6 +2117,49 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       setForwardModalMsg({ _bulk: true, _msgs: selectedMsgs, author: 'Selected Messages', content: `${selectedMsgs.length} messages` });
     }
   }, [messages, selectedMsgIds]);
+
+  // Delete Message Handler (Delete for everyone if author/admin, Delete for me if recipient)
+  const handleDeleteMessage = useCallback((messageId) => {
+    const targetMsg = messages.find(m => m && (m.id === messageId || m.tempId === messageId));
+    const isMsgOwner = Boolean(
+      user?.role === 'admin' ||
+      isMessageOwner(targetMsg, user)
+    );
+
+    if (isMsgOwner) {
+      // Deleting OUR message completely for everyone
+      setMessages(prev => prev.filter(m => m.id !== messageId && m.tempId !== messageId));
+      showToast('Message deleted for everyone', 'info');
+
+      // Send WS real-time deletion stanza to all connected users (local dev only)
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'delete_message',
+          channel: activeChannel,
+          id: messageId
+        }));
+      }
+
+      const token = localStorage.getItem('ds_ai_token');
+      // Pass channel as query param so server finds message in Redis immediately
+      fetch(`/api/chat/messages/${messageId}?channel=${encodeURIComponent(activeChannel)}`, {
+        method: 'DELETE',
+        headers: {
+          'x-guest-user-id': guestClientId,
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      }).catch(err => console.error('Delete sync failed:', err));
+    } else {
+      // Deleting OTHER user's message ONLY from my view
+      setDeletedForMeIds(prev => {
+        const next = Array.from(new Set([...prev, messageId]));
+        try { localStorage.setItem('ds_deleted_for_me_ids', JSON.stringify(next)); } catch (e) {}
+        return next;
+      });
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+      showToast('Message deleted for you', 'info');
+    }
+  }, [messages, user, showToast, activeChannel, guestClientId]);
 
   const handleBulkDelete = useCallback(() => {
     if (selectedMsgIds.length === 0) return;
@@ -2354,11 +2318,12 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     });
 
     // Message edited
-    pusherChannel.bind('edit_message', (data) => {
+    pusherChannel.bind('edit_message', async (data) => {
       if (data && data.id) {
+        const rawContent = await decryptText(data.content);
         setMessages(prev => prev.map(m =>
           m.id === data.id
-            ? { ...m, content: data.content, isEdited: true, editedAt: data.editedAt, editHistory: data.editHistory }
+            ? { ...m, content: rawContent, isEdited: true, editedAt: data.editedAt, editHistory: data.editHistory }
             : m
         ));
       }
@@ -2678,18 +2643,9 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     setNewMessage(val);
 
     // Instant WebSocket typing stanza (0ms latency)
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'typing',
-        channel: activeChannel,
-        username: getSafeAuthorName(user),
-        isTyping: val.length > 0
-      }));
-    }
-
     if (val.length > 0) {
       const now = Date.now();
-      if (now - lastTypingNotify.current > 1200) {
+      if (now - lastTypingNotify.current > 3500) {
         lastTypingNotify.current = now;
         const userId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
         const authorName = getSafeAuthorName(user);
@@ -2908,6 +2864,8 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
+          'x-guest-user-id': guestClientId,
+          'x-device-fingerprint': guestClientId,
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
         body: JSON.stringify({ 
@@ -2917,6 +2875,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
           attachment: attachmentUrl,
           authorName: msg.author,
           authorRole: msg.role,
+          userId: currentAuthorId,
           replyTo: encryptedReplyTo
         })
       })
@@ -2956,48 +2915,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     }).catch(err => console.error('Edit sync failed:', err));
   }, [showToast, activeChannel]);
 
-  // Delete Message Handler (Delete for everyone if author/admin, Delete for me if recipient)
-  const handleDeleteMessage = useCallback((messageId) => {
-    const targetMsg = messages.find(m => m && (m.id === messageId || m.tempId === messageId));
-    const isMsgOwner = Boolean(
-      user?.role === 'admin' ||
-      isMessageOwner(targetMsg, user)
-    );
 
-    if (isMsgOwner) {
-      // Deleting OUR message completely for everyone
-      setMessages(prev => prev.filter(m => m.id !== messageId && m.tempId !== messageId));
-      showToast('Message deleted for everyone', 'info');
-
-      // Send WS real-time deletion stanza to all connected users (local dev only)
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          type: 'delete_message',
-          channel: activeChannel,
-          id: messageId
-        }));
-      }
-
-      const token = localStorage.getItem('ds_ai_token');
-      // Pass channel as query param so server finds message in Redis immediately
-      fetch(`/api/chat/messages/${messageId}?channel=${encodeURIComponent(activeChannel)}`, {
-        method: 'DELETE',
-        headers: {
-          'x-guest-user-id': guestClientId,
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
-      }).catch(err => console.error('Delete sync failed:', err));
-    } else {
-      // Deleting OTHER user's message ONLY from my view
-      setDeletedForMeIds(prev => {
-        const next = Array.from(new Set([...prev, messageId]));
-        try { localStorage.setItem('ds_deleted_for_me_ids', JSON.stringify(next)); } catch (e) {}
-        return next;
-      });
-      setMessages(prev => prev.filter(m => m.id !== messageId));
-      showToast('Message deleted for you', 'info');
-    }
-  }, [messages, user, activeChannel, showToast]);
 
   const filteredMessages = useMemo(() => {
     let list = (Array.isArray(messages) ? messages : []).filter(m => m && m.channel === activeChannel && !deletedForMeIds.includes(m.id));
@@ -4177,47 +4095,82 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
 
       const uploadTasks = [];
 
-      // 1. Initialize Tesseract worker
-      setSuccess('⚙️ Initializing analysis engine...');
-      const Tesseract = await loadTesseract();
-      const worker = await Tesseract.createWorker('eng');
+      // Helper: Call server Gemini Vision OCR endpoint
+      const scanWithServerOCR = async (base64Data) => {
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      // 2. Prepare Task for Images
+        const ocrRes = await fetch('/api/ocr/vision', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ imageBase64: base64Data })
+        });
+
+        if (!ocrRes.ok) {
+          const errData = await ocrRes.json().catch(() => ({}));
+          throw new Error(errData.error || `OCR scan failed (${ocrRes.status})`);
+        }
+
+        return await ocrRes.json();
+      };
+
+      // 1. Process Images — scan with server Gemini Vision OCR
       if (imageFiles.length > 0) {
-        setSuccess(`🔍 Analyzing ${imageFiles.length} images...`);
+        setSuccess(`🔍 Scanning ${imageFiles.length} image(s) with AI Vision OCR...`);
         const imageDatas = [];
         let fullTextCombined = '';
+        let detectedMeta = {};
 
         for (const file of imageFiles) {
           const base64Data = await compressImage(file);
           imageDatas.push(base64Data);
 
           try {
-            const ret = await worker.recognize(base64Data);
-            if (ret.data && ret.data.text) {
-              fullTextCombined += ret.data.text + '\n';
+            const ocrResult = await scanWithServerOCR(base64Data);
+
+            // Check deterministic content validation from server
+            if (ocrResult.validation && !ocrResult.validation.valid) {
+              throw new Error(ocrResult.validation.reason);
+            }
+
+            if (ocrResult.metadata) {
+              const m = ocrResult.metadata;
+              if (m.fullText) fullTextCombined += m.fullText + '\n';
+              // Use first valid detection for metadata
+              if (!detectedMeta.courseCode && m.courseCode && m.courseCode !== 'UNKNOWN') {
+                detectedMeta = { ...detectedMeta, ...m };
+              }
             }
           } catch (ocrErr) {
-            console.warn('OCR page scan failed:', ocrErr);
+            throw new Error(ocrErr.message || 'AI Vision OCR scan failed. Please try again.');
           }
         }
 
-        const detected = parsePaperText(fullTextCombined, papers);
-        const courseCodeVal = detected.courseCode || 'UNKNOWN';
-        const courseTitleVal = detected.courseTitle || 'Scanned Question Paper';
-        const examTypeVal = detected.examType || 'MTE';
-        const yearVal = detected.year || '2024-25';
-        const semesterVal = detected.semester || '1';
+        // Validate that we got a valid course code
+        if (!detectedMeta.courseCode || detectedMeta.courseCode === 'UNKNOWN') {
+          throw new Error('Could not detect a valid course code from the image. Please ensure the exam paper header with the course code (e.g. CSE2001, MAT3002) is clearly visible.');
+        }
+
+        if (!detectedMeta.examType || detectedMeta.examType === 'UNKNOWN') {
+          // Try to detect from extracted text using parsePaperText as fallback
+          const parsed = parsePaperText(fullTextCombined, papers);
+          detectedMeta.examType = parsed.examType || detectedMeta.examType;
+        }
+
+        // Block if exam type still unknown
+        if (!detectedMeta.examType || detectedMeta.examType === 'UNKNOWN') {
+          throw new Error('Could not detect the exam type (MTE/TEE/CAT). Please ensure the exam paper header is clearly visible.');
+        }
 
         uploadTasks.push({
           type: 'images',
-          fileName: `${courseCodeVal.toLowerCase()}_scanned_${Date.now()}.pdf`,
-          courseCode: courseCodeVal,
-          courseTitle: courseTitleVal,
-          examType: examTypeVal,
-          year: yearVal,
-          month: detected.month || null,
-          semester: semesterVal,
+          fileName: `${(detectedMeta.courseCode || 'paper').toLowerCase()}_scanned_${Date.now()}.pdf`,
+          courseCode: detectedMeta.courseCode,
+          courseTitle: detectedMeta.courseTitle || 'Scanned Question Paper',
+          examType: detectedMeta.examType,
+          year: detectedMeta.year && detectedMeta.year !== 'UNKNOWN' ? detectedMeta.year : '2024-25',
+          month: detectedMeta.month || null,
+          semester: detectedMeta.semester && detectedMeta.semester !== 0 ? detectedMeta.semester : '1',
           fullText: fullTextCombined,
           compileFileData: async () => {
             return await convertImagesToPDF(imageDatas);
@@ -4225,7 +4178,7 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
         });
       }
 
-      // 3. Prepare Task for each PDF
+      // 2. Process PDFs — extract text with PDF.js, then scan sparse pages with server OCR
       for (let i = 0; i < pdfFiles.length; i++) {
         const file = pdfFiles[i];
         setSuccess(`🔍 Analyzing PDF ${i + 1} of ${pdfFiles.length}: ${file.name}...`);
@@ -4236,9 +4189,11 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
 
         const arrayBuffer = await readAsArrayBuffer(file);
         let fullTextCombined = '';
+        let detectedMeta = {};
 
+        // Try PDF.js text extraction first (fast, no API call)
         try {
-          const extractedText = await extractTextFromPDF(arrayBuffer, worker);
+          const extractedText = await extractTextFromPDF(arrayBuffer);
           if (extractedText) {
             fullTextCombined = extractedText;
           }
@@ -4246,34 +4201,66 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
           console.warn('Failed to extract text from PDF:', pdfReadErr);
         }
 
-        const detected = parsePaperText(fullTextCombined, papers);
-        let courseCodeVal = detected.courseCode;
-        if (!courseCodeVal) {
-          const nameCodeMatch = file.name.match(/\b([A-Z]{3,4}\d{3,4})\b/i);
-          courseCodeVal = nameCodeMatch ? nameCodeMatch[1].toUpperCase() : 'UNKNOWN';
+        // If PDF text extraction got enough text, parse it locally
+        const pdfTextSufficient = fullTextCombined.trim().length > 200 && /\b[A-Z]{3,4}\d{3,4}\b/i.test(fullTextCombined);
+
+        if (pdfTextSufficient) {
+          // Use local regex parsing — no Gemini API call needed
+          const parsed = parsePaperText(fullTextCombined, papers);
+          detectedMeta = parsed;
+        } else {
+          // Sparse or no embedded text — scan first page with Gemini Vision OCR
+          setSuccess(`🤖 AI scanning PDF ${i + 1}: ${file.name}...`);
+          try {
+            const pdfBase64 = await readAsDataURL(file);
+            const ocrResult = await scanWithServerOCR(pdfBase64);
+
+            if (ocrResult.validation && !ocrResult.validation.valid) {
+              throw new Error(ocrResult.validation.reason);
+            }
+
+            if (ocrResult.metadata) {
+              detectedMeta = ocrResult.metadata;
+              if (detectedMeta.fullText) {
+                fullTextCombined = detectedMeta.fullText;
+              }
+            }
+          } catch (ocrErr) {
+            throw new Error(ocrErr.message || 'AI Vision OCR scan failed for PDF.');
+          }
         }
-        const courseTitleVal = detected.courseTitle || file.name.replace(/\.[^/.]+$/, "");
-        const examTypeVal = detected.examType || 'MTE';
-        const yearVal = detected.year || '2024-25';
-        const semesterVal = detected.semester || '1';
+
+        // Validate course code
+        let courseCodeVal = detectedMeta.courseCode;
+        if (!courseCodeVal || courseCodeVal === 'UNKNOWN') {
+          const nameCodeMatch = file.name.match(/\b([A-Z]{3,4}\d{3,4})\b/i);
+          courseCodeVal = nameCodeMatch ? nameCodeMatch[1].toUpperCase() : null;
+        }
+
+        if (!courseCodeVal) {
+          throw new Error(`Could not detect a course code from "${file.name}". Please ensure the paper header is visible or rename the file with the course code (e.g. CSE2001_MTE.pdf).`);
+        }
+
+        const examTypeVal = detectedMeta.examType && detectedMeta.examType !== 'UNKNOWN' ? detectedMeta.examType : null;
+        if (!examTypeVal) {
+          throw new Error(`Could not detect the exam type for "${file.name}". Please ensure the paper header showing MTE/TEE/CAT is visible.`);
+        }
 
         uploadTasks.push({
           type: 'pdf',
           fileName: file.name,
           courseCode: courseCodeVal,
-          courseTitle: courseTitleVal,
+          courseTitle: detectedMeta.courseTitle || file.name.replace(/\.[^/.]+$/, ""),
           examType: examTypeVal,
-          year: yearVal,
-          month: detected.month || null,
-          semester: semesterVal,
+          year: detectedMeta.year && detectedMeta.year !== 'UNKNOWN' ? detectedMeta.year : '2024-25',
+          month: detectedMeta.month || null,
+          semester: detectedMeta.semester && detectedMeta.semester !== 0 ? detectedMeta.semester : '1',
           fullText: fullTextCombined,
           compileFileData: async () => {
             return await readAsDataURL(file);
           }
         });
       }
-
-      await worker.terminate();
 
       // 4. Run all upload tasks
       let successCount = 0;

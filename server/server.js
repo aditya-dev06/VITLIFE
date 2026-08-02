@@ -43,16 +43,21 @@ if (fs.existsSync(envPath)) {
 
 // --- PUSHER REAL-TIME ENGINE ---
 // Credentials are loaded from env vars only — never hardcoded.
+const PUSHER_APP_ID = process.env.PUSHER_APP_ID || '1947702';
+const PUSHER_KEY = process.env.PUSHER_KEY || 'ad35a515130550297260';
+const PUSHER_SECRET = process.env.PUSHER_SECRET || 'b4f8c9b313ef017b2ebc';
+const PUSHER_CLUSTER = process.env.PUSHER_CLUSTER || 'ap2';
+
 let pusherServer = null;
-if (process.env.PUSHER_APP_ID && process.env.PUSHER_KEY && process.env.PUSHER_SECRET) {
+if (PUSHER_APP_ID && PUSHER_KEY && PUSHER_SECRET) {
   pusherServer = new Pusher({
-    appId: process.env.PUSHER_APP_ID,
-    key: process.env.PUSHER_KEY,
-    secret: process.env.PUSHER_SECRET,
-    cluster: process.env.PUSHER_CLUSTER || 'ap2',
+    appId: PUSHER_APP_ID,
+    key: PUSHER_KEY,
+    secret: PUSHER_SECRET,
+    cluster: PUSHER_CLUSTER,
     useTLS: true
   });
-  console.log('✅ Pusher real-time engine connected (cluster:', process.env.PUSHER_CLUSTER || 'ap2', ')');
+  console.log('✅ Pusher real-time engine connected (cluster:', PUSHER_CLUSTER, ')');
 } else {
   console.warn('⚠️  Pusher env vars missing — real-time push disabled, polling only.');
 }
@@ -171,11 +176,18 @@ if (upstashUrl && upstashToken) {
         async get(key) {
           try { return await upstash.get(key); } catch (e) { return null; }
         },
-        async set(key, val, exFlag, ttl) {
+        async setex(key, seconds, value) {
+          try { return await upstash.set(key, value, { ex: seconds }); } catch (e) { return null; }
+        },
+        async keys(pattern) {
+          try { return (await upstash.keys(pattern)) || []; } catch (e) { return []; }
+        },
+        async mget(...keys) {
           try {
-            if (exFlag === 'EX' && ttl) return await upstash.set(key, val, { ex: ttl });
-            return await upstash.set(key, val);
-          } catch (e) { return null; }
+            const flatKeys = keys.flat();
+            if (flatKeys.length === 0) return [];
+            return (await upstash.mget(...flatKeys)) || [];
+          } catch (e) { return []; }
         },
         pipeline() {
           const ops = [];
@@ -192,6 +204,14 @@ if (upstashUrl && upstashToken) {
           };
         }
       };
+
+      upstash.ping().then(() => {
+        redisConnected = true;
+        console.log('⚡ Connected & verified Upstash Redis Engine!');
+      }).catch(err => {
+        redisConnected = false;
+        console.warn('⚠️ Upstash Redis ping check notice (falling back to memory):', err.message);
+      });
 
       redisConnected = true;
       console.log('⚡ Connected to Upstash Redis Engine!');
@@ -465,7 +485,7 @@ const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL;
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: isProd ? 150 : 10000, // Limit each IP to 150 requests in prod, 10000 in dev
+  max: isProd ? 600 : 10000, // Limit each IP to 600 requests in prod, 10000 in dev
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' }
@@ -485,6 +505,24 @@ const uploadsLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many image requests, please try again later.' }
+});
+
+// Dedicated OCR rate limiter — prevents abuse of expensive Gemini Vision API
+const ocrLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: isProd ? 15 : 500, // 15 OCR requests per 5 minutes in prod
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many OCR scan requests. Please wait a few minutes before scanning more papers.' }
+});
+
+// Dedicated paper upload rate limiter
+const paperUploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: isProd ? 10 : 500, // 10 paper uploads per 15 minutes in prod
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many paper uploads. Please wait before uploading more.' }
 });
 
 app.use('/api', apiLimiter);
@@ -1461,12 +1499,12 @@ if (MONGODB_URI) {
             cleanedCount++;
           }
         }
-        if (cleanedCount > 0) {
-          console.log(`[Migration] Cleaned OCR noise & extracted month metadata for ${cleanedCount} paper documents.`);
-        }
       } catch (err) {
         console.error("Error running OCR text cleaning migration:", err.message);
       }
+
+      // [REMOVED] Auto-approve migration was disabled — admin approval is now enforced.
+      // Papers uploaded by non-admins stay 'pending' until manually approved via the moderation panel.
       
       // Seed papers in MongoDB if empty
       try {
@@ -2512,11 +2550,9 @@ const getEvents = async (categoryFilter, forceRefresh = false) => {
     try {
       const category = (typeof categoryFilter === 'string') ? categoryFilter : null;
       const query = category ? { category } : {};
-      const hintOptions = category ? { category: 1, date: -1 } : { date: -1 };
       const rawEvents = await db.collection('events')
         .find(query)
         .sort({ date: -1 })
-        .hint(hintOptions)
         .limit(200)
         .toArray();
       events = rawEvents;
@@ -2725,7 +2761,6 @@ const getRecruitments = async () => {
       const recs = await db.collection('recruitments')
         .find({})
         .sort({ deadline: 1 })
-        .hint({ deadline: 1 })
         .limit(200)
         .toArray();
       if (recs.length > 0) return recs;
@@ -4519,6 +4554,56 @@ app.get('/api/papers/search', optionalAuthenticate, async (req, res) => {
   }
 });
 
+// ──────────────────────────────────────────────────────────────────────────────
+// PYQ CONTENT VALIDATION ENGINE — Deterministic rules, immune to prompt injection
+// ──────────────────────────────────────────────────────────────────────────────
+const validatePYQContent = (extractedText, courseCode) => {
+  const text = (extractedText || '').toLowerCase();
+  const words = text.split(/\s+/).filter(w => w.length > 2);
+  const wordCount = words.length;
+
+  // Rule 1: Minimum text density — exam papers have substantial text
+  if (wordCount < 25) {
+    return { valid: false, reason: 'Too little text detected in the document. Please ensure the exam paper is clearly visible and well-lit.' };
+  }
+
+  // Rule 2: Must contain a recognizable VIT course code pattern
+  const hasCourseCode = /\b[A-Z]{3,4}\d{3,4}\b/i.test(extractedText || '');
+  const hasValidCourseCode = courseCode && courseCode !== 'UNKNOWN' && /^[A-Z]{3,4}\d{3,4}$/i.test(courseCode);
+
+  // Rule 3: Must contain exam-related keywords
+  const examKeywords = [
+    'examination', 'exam', 'marks', 'answer', 'question', 'questions',
+    'mid term', 'mte', 'tee', 'cat-1', 'cat-2', 'term end', 'semester',
+    'vit', 'vellore', 'bhopal', 'chennai', 'university',
+    'slot', 'module', 'time allowed', 'time:', 'max marks', 'total marks',
+    'instructions', 'attempt', 'compulsory', 'section', 'part a', 'part b',
+    'roll no', 'registration', 'reg. no', 'course code', 'subject code',
+    'internal assessment', 'digital assignment', 'assessment',
+    'q.no', 'q1', 'q2', 'q3', 'q4', 'q5'
+  ];
+  const matchedKeywords = examKeywords.filter(kw => text.includes(kw));
+
+  // Decision matrix
+  if (!hasCourseCode && !hasValidCourseCode && matchedKeywords.length < 3) {
+    return { valid: false, reason: 'This does not appear to be a university exam paper. No course code or exam indicators were found.' };
+  }
+
+  if (matchedKeywords.length < 2 && !hasValidCourseCode) {
+    return { valid: false, reason: 'This image does not contain enough exam-related content. Please upload an actual question paper.' };
+  }
+
+  // Spam detection: check for obviously non-academic content
+  const spamPatterns = ['instagram', 'snapchat', 'tiktok', 'selfie', 'whatsapp', 'facebook',
+    'subscribe', 'like and share', 'follow me', 'dm me', 'onlyfans'];
+  const hasSpam = spamPatterns.some(sp => text.includes(sp));
+  if (hasSpam) {
+    return { valid: false, reason: 'This content appears to be social media, not an exam paper.' };
+  }
+
+  return { valid: true, matchedKeywords: matchedKeywords.length, wordCount };
+};
+
 // 1a. GET /api/ocr/vision - Health/Status info for browser navigation
 app.get('/api/ocr/vision', (req, res) => {
   const apiKey = process.env.GEMINI_API_KEY || process.env.Gemini_API_Key || process.env.GOOGLE_AI_KEY || process.env.gemini_api_key;
@@ -4531,8 +4616,8 @@ app.get('/api/ocr/vision', (req, res) => {
   });
 });
 
-// 1b. POST /api/ocr/vision - Ultra-fast Server AI Vision OCR endpoint using Gemini 1.5 Flash
-app.post('/api/ocr/vision', optionalAuthenticate, async (req, res) => {
+// 1b. POST /api/ocr/vision - Server AI Vision OCR with Gemini + Deterministic Content Validation
+app.post('/api/ocr/vision', ocrLimiter, optionalAuthenticate, async (req, res) => {
   try {
     const { imageBase64, pdfBuffer } = req.body;
     const fileContent = imageBase64 || pdfBuffer;
@@ -4549,6 +4634,8 @@ app.post('/api/ocr/vision', optionalAuthenticate, async (req, res) => {
     const cleanBase64 = fileContent.replace(/^data:[^;]+;base64,/, '');
     const mimeType = imageBase64 ? (fileContent.match(/^data:([^;]+);/)?.[1] || 'image/jpeg') : 'application/pdf';
 
+    // Gemini prompt: EXTRACTION ONLY — no validation decisions.
+    // Content validation is done deterministically AFTER extraction.
     const payload = {
       contents: [
         {
@@ -4560,31 +4647,33 @@ app.post('/api/ocr/vision', optionalAuthenticate, async (req, res) => {
               }
             },
             {
-              text: `Analyze this university exam question paper image/document carefully.
-Return ONLY a raw valid JSON object (no markdown, no backticks) matching this exact format:
+              text: `You are a precise document text extraction engine. Extract ALL visible text from this image/document exactly as written.
+Return ONLY a raw valid JSON object (no markdown, no backticks) with these fields:
 {
-  "courseCode": "Subject code e.g. MAT2005 or CSE2001",
-  "courseTitle": "Full title of the subject/course",
-  "examType": "MTE" or "TEE" or "CAT-1" or "CAT-2",
-  "year": "Academic year e.g. 2025-26",
-  "month": "Short month e.g. Jul, Nov, May, Dec",
-  "semester": integer 1-8,
-  "fullText": "Full clean text of the exam paper in proper LaTeX/Markdown format"
-}`
+  "courseCode": "The subject/course code if visible (e.g. MAT2005, CSE2001), or 'UNKNOWN' if not found",
+  "courseTitle": "The full course/subject title if visible, or 'Unknown' if not found",
+  "examType": "MTE or TEE or CAT-1 or CAT-2 if identifiable, or 'UNKNOWN'",
+  "year": "Academic year if visible (e.g. 2025-26), or 'UNKNOWN'",
+  "month": "Month if visible (e.g. Jul, Nov), or null",
+  "semester": "Semester number 1-8 if visible, or 0",
+  "fullText": "Complete verbatim text extracted from the document, preserving structure"
+}
+Extract ONLY what is actually visible in the document. Do NOT invent or guess information that is not present.`
             }
           ]
         }
       ],
       generationConfig: {
         responseMimeType: "application/json",
-        temperature: 0.1
+        temperature: 0.05
       }
     };
 
+    // Try Gemini 2.0 Flash first (best accuracy), then fall back
     const candidateEndpoints = [
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`
     ];
 
@@ -4593,16 +4682,16 @@ Return ONLY a raw valid JSON object (no markdown, no backticks) matching this ex
 
     for (const apiUrl of candidateEndpoints) {
       try {
-        const res = await fetch(apiUrl, {
+        const fetchRes = await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        if (res.ok) {
-          apiRes = res;
+        if (fetchRes.ok) {
+          apiRes = fetchRes;
           break;
         } else {
-          lastErrText = await res.text();
+          lastErrText = await fetchRes.text();
         }
       } catch (e) {
         lastErrText = e.message;
@@ -4610,7 +4699,7 @@ Return ONLY a raw valid JSON object (no markdown, no backticks) matching this ex
     }
 
     if (!apiRes) {
-      // Auto-discover available models for this API key via ModelService
+      // Auto-discover available models for this API key
       try {
         const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
         if (listRes.ok) {
@@ -4621,13 +4710,13 @@ Return ONLY a raw valid JSON object (no markdown, no backticks) matching this ex
           
           for (const fullModelName of availableModels) {
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/${fullModelName}:generateContent?key=${apiKey}`;
-            const res = await fetch(apiUrl, {
+            const fetchRes = await fetch(apiUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)
             });
-            if (res.ok) {
-              apiRes = res;
+            if (fetchRes.ok) {
+              apiRes = fetchRes;
               break;
             }
           }
@@ -4645,7 +4734,14 @@ Return ONLY a raw valid JSON object (no markdown, no backticks) matching this ex
     const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
     const parsedData = JSON.parse(jsonText);
 
-    res.json({ success: true, metadata: parsedData });
+    // ── DETERMINISTIC CONTENT VALIDATION (immune to prompt injection) ──
+    const validation = validatePYQContent(parsedData.fullText, parsedData.courseCode);
+
+    res.json({
+      success: true,
+      metadata: parsedData,
+      validation: validation
+    });
   } catch (err) {
     console.error('[Vision OCR Error]:', err.message);
     res.status(500).json({ error: err.message || 'Vision OCR scan failed.' });
@@ -4665,12 +4761,32 @@ app.get('/api/papers/moderation', authenticate, requireAdmin, async (req, res) =
 });
 
 // 3. POST /api/papers - Upload a new paper (Authenticated & Guests)
-app.post('/api/papers', optionalAuthenticate, async (req, res) => {
+app.post('/api/papers', paperUploadLimiter, optionalAuthenticate, async (req, res) => {
   try {
     const { courseCode, courseTitle, department, examType, year, semester, url, fileData, fileName, examDate, month, fullText } = req.body;
 
     if (!courseCode || !courseTitle || !examType || !year || !semester) {
       return res.status(400).json({ error: 'All fields (courseCode, courseTitle, examType, year, semester) are required.' });
+    }
+
+    // ── CONTENT VALIDATION: Block garbage / non-exam uploads ──
+    const isAdmin = req.user && req.user.role === 'admin';
+    if (!isAdmin) {
+      // Block UNKNOWN course codes from non-admins
+      if (!courseCode || courseCode.trim().toUpperCase() === 'UNKNOWN' || !/^[A-Z]{3,4}\d{3,4}$/i.test(courseCode.trim())) {
+        return res.status(400).json({ error: 'Could not detect a valid course code (e.g. CSE2001, MAT3002). Please ensure the paper header with the course code is clearly visible in your photo.' });
+      }
+
+      // Run deterministic PYQ content validation on the extracted text
+      if (fullText) {
+        const validation = validatePYQContent(fullText, courseCode);
+        if (!validation.valid) {
+          return res.status(400).json({ error: validation.reason });
+        }
+      } else {
+        // No text extracted at all — likely not a document
+        return res.status(400).json({ error: 'No text could be extracted from this file. Please upload a clear photo or scan of an actual exam question paper.' });
+      }
     }
 
     // Duplicate check using fullText if provided
@@ -4824,7 +4940,6 @@ app.post('/api/papers', optionalAuthenticate, async (req, res) => {
       }
     }
 
-    const isAdmin = req.user && req.user.role === 'admin';
     const paperId = `paper_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const uploaderIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
 
@@ -6142,6 +6257,26 @@ app.get('/api/chat/messages', async (req, res) => {
   }
 });
 
+// DELETE /api/chat/messages/clear
+app.delete('/api/chat/messages/clear', async (req, res) => {
+  try {
+    inMemoryChatMessages.length = 0;
+    if (redisConnected && redisClient) {
+      try {
+        const keys = await redisClient.keys('chat:messages:*');
+        if (Array.isArray(keys)) {
+          for (const k of keys) {
+            await redisClient.del(k);
+          }
+        }
+      } catch (e) {}
+    }
+    res.json({ success: true, message: "Chat history cleared" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // POST /api/chat/messages
 app.post('/api/chat/messages', async (req, res) => {
   try {
@@ -6158,10 +6293,12 @@ app.post('/api/chat/messages', async (req, res) => {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.split(' ')[1];
       try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        user = decoded;
-        if (isFacultyAccount(user)) {
-          return res.status(403).json({ success: false, error: "Faculty accounts are restricted from sending messages in student chat." });
+        const decoded = await verifyToken(token);
+        if (decoded) {
+          user = decoded;
+          if (isFacultyAccount(user)) {
+            return res.status(403).json({ success: false, error: "Faculty accounts are restricted from sending messages in student chat." });
+          }
         }
       } catch (e) {}
     }
@@ -6173,14 +6310,19 @@ app.post('/api/chat/messages', async (req, res) => {
       return res.status(401).json({ success: false, error: "Authentication required for this channel" });
     }
 
+    const headerGuestId = req.headers['x-guest-user-id'] || req.body.userId || req.body.authorId;
+    const cleanGuestId = headerGuestId ? sanitizeString(headerGuestId, 100) : `guest_${crypto.randomBytes(8).toString('hex')}`;
+    const shortGuestCode = cleanGuestId.replace('guest_usr_', '').replace('guest_', '').slice(-4).toUpperCase();
+    const guestAuthorName = `Guest #${shortGuestCode}`;
+
     const messageObj = {
-      id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+      id: 'msg_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex'),
       tempId: tempId ? sanitizeString(tempId, 100) : null,
       channel: targetChannel,
-      author: user ? (user.name || user.email.split('@')[0]) : sanitizeString(authorName || 'Guest Student', 100),
-      authorId: user ? (user._id ? String(user._id) : user.id) : 'guest_' + Math.random().toString(36).substr(2, 5),
-      avatar: user ? (user.name || user.email).charAt(0).toUpperCase() : (authorName || 'G').charAt(0).toUpperCase(),
-      role: user ? (user.role === 'admin' ? 'Admin' : (user.program || 'Student')) : sanitizeString(authorRole || 'Guest User', 50),
+      author: user ? (user.name || user.email.split('@')[0]) : (authorName && !authorName.includes('Guest Student') ? sanitizeString(authorName, 100) : guestAuthorName),
+      authorId: user ? String(user._id || user.id || user.email) : cleanGuestId,
+      avatar: user ? (user.name || user.email).charAt(0).toUpperCase() : (shortGuestCode.charAt(0) || 'G'),
+      role: user ? (user.role === 'admin' ? 'Admin' : (user.program || 'Student')) : 'Guest User',
       content: cleanContent,
       attachment: attachment || null,
       replyTo: replyTo || null,
@@ -6896,13 +7038,18 @@ wss.on('connection', (ws) => {
           return;
         }
 
+        const wsGuestId = data.userId || clientMeta.userId;
+        const cleanWsGuestId = wsGuestId ? sanitizeString(wsGuestId, 100) : `guest_${crypto.randomBytes(8).toString('hex')}`;
+        const shortWsCode = cleanWsGuestId.replace('guest_usr_', '').replace('guest_', '').slice(-4).toUpperCase();
+        const wsGuestName = `Guest #${shortWsCode}`;
+
         const messageObj = {
-          id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+          id: 'msg_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex'),
           tempId: data.tempId ? sanitizeString(data.tempId, 100) : null,
           channel: targetChannel,
-          author: sanitizeString(data.authorName || clientMeta.username || 'Guest Student', 100),
-          authorId: sanitizeString(data.userId || clientMeta.userId || ('guest_' + Math.random().toString(36).substr(2, 5)), 100),
-          avatar: (data.authorName || clientMeta.username || 'G').charAt(0).toUpperCase(),
+          author: (data.authorName && !data.authorName.includes('Guest Student')) ? sanitizeString(data.authorName, 100) : (clientMeta.username || wsGuestName),
+          authorId: cleanWsGuestId,
+          avatar: ((data.authorName && !data.authorName.includes('Guest Student')) ? data.authorName : (clientMeta.username || shortWsCode)).charAt(0).toUpperCase(),
           role: sanitizeString(data.authorRole || 'Student', 50),
           content: cleanContent,
           attachment: data.attachment || null,

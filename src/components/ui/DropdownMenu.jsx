@@ -40,12 +40,21 @@ export const DropdownMenu = ({ children, open: controlledOpen, onOpenChange }) =
       }
     };
 
+    // Close on any click/pointerdown outside
+    const timer = setTimeout(() => {
+      document.addEventListener('pointerdown', handleGlobalClose);
+      document.addEventListener('click', handleGlobalClose);
+    }, 10);
+
     window.addEventListener('scroll', handleGlobalClose, true);
     window.addEventListener('resize', handleGlobalClose);
     window.addEventListener('keydown', handleKeyDown);
     document.addEventListener('focusin', handleFocusIn);
 
     return () => {
+      clearTimeout(timer);
+      document.removeEventListener('pointerdown', handleGlobalClose);
+      document.removeEventListener('click', handleGlobalClose);
       window.removeEventListener('scroll', handleGlobalClose, true);
       window.removeEventListener('resize', handleGlobalClose);
       window.removeEventListener('keydown', handleKeyDown);
@@ -120,33 +129,12 @@ export const DropdownMenuContent = forwardRef(({ className = '', align = 'end', 
 
     const MARGIN = 8; // px gap from trigger + screen edge
 
-    // Vertical: open upward if not enough room below
-    const spaceBelow = vh - triggerRect.bottom - MARGIN;
-    const spaceAbove = triggerRect.top - MARGIN;
-    const openUp = spaceBelow < menuH && spaceAbove >= menuH;
+    // WhatsApp Web Desktop style: position action menu at top-right side of chat window
+    const top = 64;
+    const right = 24;
+    const maxHeight = vh - 130;
 
-    let top, bottom;
-    if (openUp) {
-      bottom = vh - triggerRect.top + MARGIN;
-    } else {
-      top = triggerRect.bottom + MARGIN;
-    }
-
-    // Horizontal alignment, clamp to viewport
-    let left, right;
-    if (align === 'end') {
-      // Align right edge of menu with right edge of trigger
-      const desiredRight = vw - triggerRect.right;
-      right = Math.max(MARGIN, desiredRight);
-      // Check it doesn't overflow left
-      const leftEdge = vw - right - menuW;
-      if (leftEdge < MARGIN) right = Math.max(MARGIN, vw - menuW - MARGIN);
-    } else {
-      // Align left edge of menu with left edge of trigger
-      left = Math.max(MARGIN, Math.min(triggerRect.left, vw - menuW - MARGIN));
-    }
-
-    setPosition({ top, bottom, left, right, openUp });
+    setPosition({ top, right, maxHeight });
   }, [open, triggerRect, align]);
 
   if (!open) return null;
@@ -156,14 +144,19 @@ export const DropdownMenuContent = forwardRef(({ className = '', align = 'end', 
     position: 'fixed',
     zIndex: 99999,
     visibility: position ? 'visible' : 'hidden',
+    scrollbarWidth: 'none',
+    msOverflowStyle: 'none',
     ...style,
   };
 
   if (position) {
     if (position.top !== undefined) baseStyle.top = `${position.top}px`;
-    if (position.bottom !== undefined) baseStyle.bottom = `${position.bottom}px`;
     if (position.left !== undefined) baseStyle.left = `${position.left}px`;
     if (position.right !== undefined) baseStyle.right = `${position.right}px`;
+    if (position.maxHeight !== undefined) {
+      baseStyle.maxHeight = `${position.maxHeight}px`;
+      baseStyle.overflowY = 'auto';
+    }
   } else if (triggerRect) {
     // Offscreen pre-render for measurement
     baseStyle.top = '-9999px';
@@ -174,10 +167,8 @@ export const DropdownMenuContent = forwardRef(({ className = '', align = 'end', 
     <>
       <div
         style={{ position: 'fixed', inset: 0, zIndex: 99998, cursor: 'default' }}
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen(false);
-        }}
+        onClick={() => setOpen(false)}
+        onPointerDown={() => setOpen(false)}
       />
       <div
         ref={(node) => {

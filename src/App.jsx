@@ -71,8 +71,13 @@ function App() {
   const [token, setToken] = useState(localStorage.getItem('ds_ai_token'));
   const [user, setUser] = useState(() => {
     try {
-      const cached = localStorage.getItem('ds_ai_user') || localStorage.getItem('ds_guest_user');
-      return cached ? JSON.parse(cached) : null;
+      const storedToken = localStorage.getItem('ds_ai_token');
+      if (storedToken) {
+        const cachedUser = localStorage.getItem('ds_ai_user');
+        return cachedUser ? JSON.parse(cachedUser) : null;
+      }
+      const cachedGuest = localStorage.getItem('ds_guest_user');
+      return cachedGuest ? JSON.parse(cachedGuest) : null;
     } catch (e) {
       return null;
     }
@@ -436,8 +441,20 @@ function App() {
         }));
         setSkills(mappedSkills);
       } else if (res.status === 401 || res.status === 403) {
-        // Token invalid/expired - log out
-        handleLogout();
+        const data = await res.json().catch(() => ({}));
+        if (data.sessionRevoked || data.invalidToken) {
+          handleLogout();
+        } else {
+          // Cold start or transient auth error - keep cached user profile
+          const cachedUser = localStorage.getItem('ds_ai_user');
+          if (cachedUser) {
+            try {
+              const profile = JSON.parse(cachedUser);
+              setUser(profile);
+              setXpPoints(profile.xpPoints || 0);
+            } catch (e) {}
+          }
+        }
       } else {
         // Temporary server/network error - try fallback to cached profile
         const cachedUser = localStorage.getItem('ds_ai_user');
