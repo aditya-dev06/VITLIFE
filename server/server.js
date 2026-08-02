@@ -42,10 +42,10 @@ if (fs.existsSync(envPath)) {
 }
 
 // --- PUSHER REAL-TIME ENGINE ---
-// Credentials are loaded from env vars only — never hardcoded.
+// Credentials MUST be set via environment variables — no fallback defaults for secret.
 const PUSHER_APP_ID = process.env.PUSHER_APP_ID || '1947702';
 const PUSHER_KEY = process.env.PUSHER_KEY || 'ad35a515130550297260';
-const PUSHER_SECRET = process.env.PUSHER_SECRET || 'b4f8c9b313ef017b2ebc';
+const PUSHER_SECRET = process.env.PUSHER_SECRET; // NO fallback — must be set in env
 const PUSHER_CLUSTER = process.env.PUSHER_CLUSTER || 'ap2';
 
 let pusherServer = null;
@@ -4433,6 +4433,15 @@ app.get('/api/mess-menu', (req, res) => {
 
 // ================= STUDENT PAPERS (PYQ) ROUTES =================
 
+// Security helper: removes private fields from paper objects before public API responses
+const sanitizePaper = (p) => {
+  if (!p) return p;
+  const safe = { ...p };
+  delete safe.uploaderIp;
+  delete safe.fullText; // can be large and contains internal OCR data
+  return safe;
+};
+
 // 1. GET /api/papers - Get approved papers (and pending papers uploaded by the current user) with optional department filter
 app.get('/api/papers', optionalAuthenticate, async (req, res) => {
   try {
@@ -4459,8 +4468,9 @@ app.get('/api/papers', optionalAuthenticate, async (req, res) => {
       if (department) filters.push({ department });
       const dbQuery = { $and: filters };
 
+      // Exclude private fields from public response via MongoDB projection
       const papers = await db.collection('papers')
-        .find(dbQuery)
+        .find(dbQuery, { projection: { uploaderIp: 0, fullText: 0 } })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum)
@@ -4478,7 +4488,7 @@ app.get('/api/papers', optionalAuthenticate, async (req, res) => {
     }
     
     const total = list.length;
-    list = list.slice(skip, skip + limitNum);
+    list = list.slice(skip, skip + limitNum).map(sanitizePaper);
 
     res.json({ success: true, papers: list, total, page: pageNum, pages: Math.ceil(total / limitNum) });
   } catch (error) {
@@ -4520,8 +4530,9 @@ app.get('/api/papers/search', optionalAuthenticate, async (req, res) => {
       if (department) filters.push({ department });
       const dbQuery = { $and: filters };
 
+      // Exclude private fields from public response via MongoDB projection
       const papers = await db.collection('papers')
-        .find(dbQuery)
+        .find(dbQuery, { projection: { uploaderIp: 0, fullText: 0 } })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum)
@@ -4545,7 +4556,7 @@ app.get('/api/papers/search', optionalAuthenticate, async (req, res) => {
     );
     
     const total = list.length;
-    list = list.slice(skip, skip + limitNum);
+    list = list.slice(skip, skip + limitNum).map(sanitizePaper);
 
     res.json({ success: true, papers: list, total, page: pageNum, pages: Math.ceil(total / limitNum) });
   } catch (error) {
@@ -6257,8 +6268,26 @@ app.get('/api/chat/messages', async (req, res) => {
   }
 });
 
-// DELETE /api/chat/messages/clear
-app.delete('/api/chat/messages/clear', async (req, res) => {
+// Rate limiter for chat messages — 30 messages per minute per IP
+const chatMessageLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { success: false, error: 'Too many messages. Please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Rate limiter for reactions — 60 per minute per IP
+const chatReactLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { success: false, error: 'Too many reactions. Please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// DELETE /api/chat/messages/clear — CRITICAL: must be admin-only
+app.delete('/api/chat/messages/clear', authenticate, requireAdmin, async (req, res) => {
   try {
     inMemoryChatMessages.length = 0;
     if (redisConnected && redisClient) {
@@ -6271,6 +6300,7 @@ app.delete('/api/chat/messages/clear', async (req, res) => {
         }
       } catch (e) {}
     }
+    await logActivity(req.user.email, 'clear_all_chat_messages', req);
     res.json({ success: true, message: "Chat history cleared" });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -6278,13 +6308,13 @@ app.delete('/api/chat/messages/clear', async (req, res) => {
 });
 
 // POST /api/chat/messages
-app.post('/api/chat/messages', async (req, res) => {
+app.post('/api/chat/messages', chatMessageLimiter, async (req, res) => {
   try {
-    const { channel, content, attachment, replyTo, authorName, authorRole, tempId } = req.body;
+    const { channel, content, attachment, poll, replyTo, authorName, authorRole, tempId } = req.body;
     const cleanContent = sanitizeString(content, 5000);
 
-    if (!cleanContent && !attachment) {
-      return res.status(400).json({ success: false, error: "Message content or attachment required" });
+    if (!cleanContent && !attachment && !poll) {
+      return res.status(400).json({ success: false, error: "Message content, attachment, or poll required" });
     }
 
     // Optional token auth check
@@ -6323,8 +6353,9 @@ app.post('/api/chat/messages', async (req, res) => {
       authorId: user ? String(user._id || user.id || user.email) : cleanGuestId,
       avatar: user ? (user.name || user.email).charAt(0).toUpperCase() : (shortGuestCode.charAt(0) || 'G'),
       role: user ? (user.role === 'admin' ? 'Admin' : (user.program || 'Student')) : 'Guest User',
-      content: cleanContent,
+      content: cleanContent || (poll ? `📊 Poll: ${poll.question || ''}` : ''),
       attachment: attachment || null,
+      poll: poll || null,
       replyTo: replyTo || null,
       reactions: { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] },
       timestamp: new Date().toISOString()
@@ -6346,11 +6377,80 @@ app.post('/api/chat/messages', async (req, res) => {
 
     // Broadcast over WebSocket to connected clients
     broadcastWsEvent(targetChannel, { type: 'new_message', channel: targetChannel, message: messageObj });
+    pusherTrigger(targetChannel, 'new_message', { type: 'new_message', channel: targetChannel, message: messageObj });
 
     res.json({ success: true, message: messageObj });
   } catch (err) {
     console.error("Error posting chat message:", err);
     res.status(500).json({ success: false, error: "Failed to send message" });
+  }
+});
+
+// POST /api/chat/poll-vote (Submit vote on a poll message)
+app.post('/api/chat/poll-vote', async (req, res) => {
+  try {
+    const { messageId, channel: reqChannel, voteData } = req.body;
+    if (!messageId || !voteData) {
+      return res.status(400).json({ success: false, error: "messageId and voteData are required" });
+    }
+
+    let foundChannel = reqChannel || 'general';
+    let targetMsg = inMemoryChatMessages.find(m => m.id === messageId);
+    if (targetMsg) foundChannel = targetMsg.channel || foundChannel;
+
+    if (!targetMsg && redisConnected && redisClient) {
+      targetMsg = await findMsgInRedis(foundChannel, messageId);
+      if (!targetMsg) {
+        const knownChannels = ['general','pyq-doubts','exam-prep','buy-sell','placements','lost-found','batch-2023','batch-2024','batch-2025','batch-2026'];
+        for (const ch of knownChannels) {
+          targetMsg = await findMsgInRedis(ch, messageId);
+          if (targetMsg) { foundChannel = ch; break; }
+        }
+      }
+    }
+
+    if (!targetMsg || !targetMsg.poll) {
+      return res.status(404).json({ success: false, error: "Poll message not found" });
+    }
+
+    let updatedVotes;
+    if (typeof voteData === 'number') {
+      const votes = Array.isArray(targetMsg.poll.votes) ? [...targetMsg.poll.votes] : [0, 0];
+      votes[voteData] = (votes[voteData] || 0) + 1;
+      updatedVotes = votes;
+    } else {
+      const existingVotes = (Array.isArray(targetMsg.poll.votes) ? targetMsg.poll.votes : []).filter(v => typeof v === 'object' && String(v.userId) !== String(voteData.userId));
+      updatedVotes = voteData.selectedOptionIndexes?.length > 0
+        ? [...existingVotes, voteData]
+        : existingVotes;
+    }
+
+    const updatedPoll = { ...targetMsg.poll, votes: updatedVotes };
+
+    // Update in Redis
+    await updateMsgInRedis(foundChannel, messageId, (m) => ({ ...m, poll: updatedPoll }));
+
+    // Update in-memory
+    const memMsg = inMemoryChatMessages.find(m => m.id === messageId);
+    if (memMsg) memMsg.poll = updatedPoll;
+
+    broadcastWsEvent(foundChannel, {
+      type: 'poll_vote',
+      channel: foundChannel,
+      messageId,
+      poll: updatedPoll
+    });
+    pusherTrigger(foundChannel, 'poll_vote', {
+      type: 'poll_vote',
+      channel: foundChannel,
+      messageId,
+      poll: updatedPoll
+    });
+
+    return res.json({ success: true, poll: updatedPoll });
+  } catch (err) {
+    console.error("Error casting poll vote:", err);
+    res.status(500).json({ success: false, error: "Failed to submit vote" });
   }
 });
 
@@ -6459,7 +6559,7 @@ async function deleteMsgInRedis(channel, id) {
 }
 
 // POST /api/chat/react
-app.post('/api/chat/react', async (req, res) => {
+app.post('/api/chat/react', chatReactLimiter, async (req, res) => {
   try {
     const { messageId, emoji, channel: reqChannel, guestUserId } = req.body;
     if (!messageId || !emoji) {
