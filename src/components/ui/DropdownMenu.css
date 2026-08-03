@@ -44,8 +44,10 @@
 
 /* Floating Content Menu Container (Exact WhatsApp Web Match) */
 .dropdown-menu-content {
-  min-width: 250px;
-  max-width: 270px;
+  min-width: 200px;
+  max-width: 245px;
+  width: 220px;
+  max-height: calc(100vh - 100px);
   padding: 0.4rem;
   background: #233138; /* Exact WhatsApp Web Dark Background */
   backdrop-filter: blur(16px);
@@ -55,8 +57,9 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.3);
   animation: dropdownFadeScale 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   transform-origin: top right;
-  overflow: hidden;
-  scrollbar-width: none;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  scrollbar-width: thin;
   -ms-overflow-style: none;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
@@ -199,4 +202,39 @@
   height: 1px;
   background: rgba(255, 255, 255, 0.08);
   margin: 4px 0;
+}
+
+/* ── Light Mode Overrides for Dropdown Menu ── */
+.light-theme .dropdown-menu-content,
+.light .dropdown-menu-content {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 12px 30px -5px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.04) !important;
+  color: #0f172a !important;
+}
+
+.light-theme .dropdown-menu-item,
+.light .dropdown-menu-item {
+  color: #0f172a !important;
+}
+
+.light-theme .dropdown-menu-item:hover,
+.light .dropdown-menu-item:hover {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+.light-theme .dropdown-menu-icon,
+.light .dropdown-menu-icon {
+  color: #64748b !important;
+}
+
+.light-theme .dropdown-menu-item:hover .dropdown-menu-icon,
+.light .dropdown-menu-item:hover .dropdown-menu-icon {
+  color: #0f172a !important;
+}
+
+.light-theme .dropdown-menu-separator,
+.light .dropdown-menu-separator {
+  background: #e2e8f0 !important;
 }

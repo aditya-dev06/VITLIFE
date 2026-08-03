@@ -9,7 +9,13 @@ import { ToastProvider } from './components/ui/ToastProvider.jsx'
 const Analytics = lazy(() => import('@vercel/analytics/react').then(m => ({ default: m.Analytics })).catch(() => ({ default: () => null })))
 const SpeedInsights = lazy(() => import('@vercel/speed-insights/react').then(m => ({ default: m.SpeedInsights })).catch(() => ({ default: () => null })))
 
-createRoot(document.getElementById('root')).render(
+let root = window.__react_root__;
+if (!root) {
+  root = createRoot(document.getElementById('root'));
+  window.__react_root__ = root;
+}
+
+root.render(
   <StrictMode>
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">

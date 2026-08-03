@@ -180,3 +180,51 @@
   cursor: not-allowed;
 }
 .fwd-btn-send:not(:disabled):hover { opacity: 0.9; }
+
+/* ── Light Mode Overrides ── */
+.light-theme .fwd-modal,
+.light .fwd-modal {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 20px 50px -10px rgba(15, 23, 42, 0.16) !important;
+}
+
+.light-theme .fwd-header,
+.light .fwd-header {
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.light-theme .fwd-title,
+.light .fwd-title,
+.light-theme .fwd-ch-label,
+.light .fwd-ch-label {
+  color: #0f172a !important;
+}
+
+.light-theme .fwd-preview,
+.light .fwd-preview {
+  background: #f8fafc !important;
+  border-left-color: #4f46e5 !important;
+}
+
+.light-theme .fwd-channel-row:hover,
+.light .fwd-channel-row:hover {
+  background: #f1f5f9 !important;
+}
+
+.light-theme .fwd-selected,
+.light .fwd-selected {
+  background: rgba(79, 70, 229, 0.08) !important;
+}
+
+.light-theme .fwd-footer,
+.light .fwd-footer {
+  border-top: 1px solid #e2e8f0 !important;
+}
+
+.light-theme .fwd-btn-send,
+.light .fwd-btn-send {
+  background: #4f46e5 !important;
+  color: #ffffff !important;
+}

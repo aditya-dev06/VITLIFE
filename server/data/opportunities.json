@@ -1,6 +1,6 @@
 {
-  "lastUpdated": "2026-08-02 12:10:26",
-  "count": 68,
+  "lastUpdated": "2026-08-04 00:02:19",
+  "count": 46,
   "opportunities": [
     {
       "id": "c1",
@@ -264,7 +264,7 @@
       "type": "hackathon",
       "organization": "XPRIZE",
       "link": "https://xprize.devpost.com/",
-      "deadline": "May 19 - Aug 17, 2026 (16 days left)",
+      "deadline": "May 19 - Aug 17, 2026 (14 days left)",
       "matchScore": 85,
       "description": "Themes: Machine Learning/AI, Education, Productivity. Host: XPRIZE",
       "tags": [
@@ -280,7 +280,7 @@
       "type": "hackathon",
       "organization": "RevenueCat",
       "link": "https://revenuecat-shipaton-2026.devpost.com/",
-      "deadline": "Jul 31 - Oct 01, 2026 (2 months left)",
+      "deadline": "Jul 31 - Oct 01, 2026 (about 2 months left)",
       "matchScore": 75,
       "description": "Themes: Design, Gaming, Mobile. Host: RevenueCat",
       "tags": [
@@ -288,37 +288,6 @@
         "Remote",
         "Design",
         "Gaming"
-      ]
-    },
-    {
-      "id": "devpost-29613",
-      "title": "CockroachDB \u00d7 AWS Hackathon - Build with Agentic Memory",
-      "type": "hackathon",
-      "organization": "Cockroach Labs",
-      "link": "https://cockroachdb-ai.devpost.com/",
-      "deadline": "Jun 30 - Aug 18, 2026 (17 days left)",
-      "matchScore": 85,
-      "description": "Themes: Machine Learning/AI, Databases, DevOps. Host: Cockroach Labs",
-      "tags": [
-        "Hackathon",
-        "Remote",
-        "Machine Learning/AI",
-        "Databases"
-      ]
-    },
-    {
-      "id": "devpost-30218",
-      "title": "Arm Create: AI Optimization Challenge",
-      "type": "hackathon",
-      "organization": "arm",
-      "link": "https://arm-ai-optimization-challenge.devpost.com/",
-      "deadline": "Jun 04 - Aug 14, 2026 (13 days left)",
-      "matchScore": 85,
-      "description": "Themes: Machine Learning/AI. Host: arm",
-      "tags": [
-        "Hackathon",
-        "Remote",
-        "Machine Learning/AI"
       ]
     },
     {
@@ -338,12 +307,43 @@
       ]
     },
     {
+      "id": "devpost-29613",
+      "title": "CockroachDB \u00d7 AWS Hackathon - Build with Agentic Memory",
+      "type": "hackathon",
+      "organization": "Cockroach Labs",
+      "link": "https://cockroachdb-ai.devpost.com/",
+      "deadline": "Jun 30 - Aug 18, 2026 (15 days left)",
+      "matchScore": 85,
+      "description": "Themes: Machine Learning/AI, Databases, DevOps. Host: Cockroach Labs",
+      "tags": [
+        "Hackathon",
+        "Remote",
+        "Machine Learning/AI",
+        "Databases"
+      ]
+    },
+    {
+      "id": "devpost-30218",
+      "title": "Arm Create: AI Optimization Challenge",
+      "type": "hackathon",
+      "organization": "arm",
+      "link": "https://arm-ai-optimization-challenge.devpost.com/",
+      "deadline": "Jun 04 - Aug 14, 2026 (11 days left)",
+      "matchScore": 85,
+      "description": "Themes: Machine Learning/AI. Host: arm",
+      "tags": [
+        "Hackathon",
+        "Remote",
+        "Machine Learning/AI"
+      ]
+    },
+    {
       "id": "devpost-28039",
       "title": "Build with DataHub: The Agent Hackathon",
       "type": "hackathon",
       "organization": "DataHub",
       "link": "https://datahub.devpost.com/",
-      "deadline": "Jul 06 - Aug 10, 2026 (9 days left)",
+      "deadline": "Jul 06 - Aug 10, 2026 (7 days left)",
       "matchScore": 85,
       "description": "Themes: Machine Learning/AI, DevOps, Open Ended. Host: DataHub",
       "tags": [
@@ -375,7 +375,7 @@
       "type": "hackathon",
       "organization": "Perfect Corp",
       "link": "https://youcam-api.devpost.com/",
-      "deadline": "Jul 06 - Aug 17, 2026 (15 days left)",
+      "deadline": "Jul 06 - Aug 17, 2026 (14 days left)",
       "matchScore": 85,
       "description": "Themes: Machine Learning/AI, AR/VR, E-commerce/Retail. Host: Perfect Corp",
       "tags": [
@@ -391,7 +391,7 @@
       "type": "hackathon",
       "organization": "Backblaze",
       "link": "https://backblaze-generative-media.devpost.com/",
-      "deadline": "Jun 22 - Aug 03, 2026 (1 day left)",
+      "deadline": "Jun 22 - Aug 03, 2026 (about 2 hours left)",
       "matchScore": 85,
       "description": "Themes: Machine Learning/AI, Music/Art, Voice skills. Host: Backblaze",
       "tags": [
@@ -407,7 +407,7 @@
       "type": "hackathon",
       "organization": "Africa Deep Tech Foundation",
       "link": "https://adtc-2026.devpost.com/",
-      "deadline": "Jun 17 - Aug 25, 2026 (23 days left)",
+      "deadline": "Jun 17 - Aug 25, 2026 (22 days left)",
       "matchScore": 85,
       "description": "Themes: Machine Learning/AI, Productivity. Host: Africa Deep Tech Foundation",
       "tags": [
@@ -439,7 +439,7 @@
       "type": "hackathon",
       "organization": "high school",
       "link": "https://3d-websites-hackathon.devpost.com/",
-      "deadline": "Jun 22 - Aug 31, 2026 (30 days left)",
+      "deadline": "Jun 22 - Aug 31, 2026 (28 days left)",
       "matchScore": 75,
       "description": "Themes: Design, Web, Beginner Friendly. Host: high school",
       "tags": [
@@ -455,7 +455,7 @@
       "type": "hackathon",
       "organization": "ML Empowerment Foundation",
       "link": "https://ml-empowerment-2.devpost.com/",
-      "deadline": "Jun 30 - Aug 15, 2026 (13 days left)",
+      "deadline": "Jun 30 - Aug 15, 2026 (12 days left)",
       "matchScore": 85,
       "description": "Themes: Beginner Friendly, Machine Learning/AI, Social Good. Host: ML Empowerment Foundation",
       "tags": [
@@ -471,7 +471,7 @@
       "type": "hackathon",
       "organization": "BuildBeyond",
       "link": "https://build-beyond-hackathon.devpost.com/",
-      "deadline": "Jun 18 - Aug 16, 2026 (14 days left)",
+      "deadline": "Jun 18 - Aug 16, 2026 (13 days left)",
       "matchScore": 75,
       "description": "Themes: Beginner Friendly, Low/No Code, Open Ended. Host: BuildBeyond",
       "tags": [
@@ -487,7 +487,7 @@
       "type": "hackathon",
       "organization": "ImpactForge",
       "link": "https://impactforge.devpost.com/",
-      "deadline": "Jun 19 - Aug 24, 2026 (22 days left)",
+      "deadline": "Jun 19 - Aug 24, 2026 (21 days left)",
       "matchScore": 75,
       "description": "Themes: Beginner Friendly, Low/No Code, Social Good. Host: ImpactForge",
       "tags": [
@@ -498,12 +498,204 @@
       ]
     },
     {
+      "id": "unstop-1729813",
+      "title": "Prompt with Jarvis",
+      "type": "hackathon",
+      "organization": "Loyola ICAM College of Engineering and Technology (LICET), Chennai",
+      "link": "https://unstop.com/hackathons/prompt-with-jarvis-loyola-icam-college-of-engineering-and-technology-licet-chennai-1729813",
+      "deadline": "Aug 17, 2026 (13 days left)",
+      "matchScore": 80,
+      "description": "About the Competition:\nWhere Creativity Meets Intelligence.\nWhat happens when your imagination meets Generative AI?\nAI Prompting is a two-round competition that challenges your creativity, prompt engi...",
+      "tags": [
+        "Hackathon",
+        "India",
+        "Artificial Intelligence (AI)",
+        "Creativity"
+      ]
+    },
+    {
+      "id": "unstop-1729828",
+      "title": "Infinity Interface",
+      "type": "hackathon",
+      "organization": "Loyola ICAM College of Engineering and Technology (LICET), Chennai",
+      "link": "https://unstop.com/hackathons/infinity-interface-loyola-icam-college-of-engineering-and-technology-licet-chennai-1729828",
+      "deadline": "Aug 08, 2026 (4 days left)",
+      "matchScore": 80,
+      "description": "About the Competition:\nDesign. Prototype. Impress.\nCan you transform an idea into an exceptional user experience?\nFigma UI/UX Design is a two-round design challenge where participants solve a real-wor...",
+      "tags": [
+        "Hackathon",
+        "India",
+        "Design Thinking",
+        "User Experience (UX) Design"
+      ]
+    },
+    {
+      "id": "unstop-1727517",
+      "title": "CodeRed 2026: FIFA World Cup",
+      "type": "hackathon",
+      "organization": "National Institute of Technology Karnataka (NITK), Surathkal",
+      "link": "https://unstop.com/hackathons/codered-2026-fifa-world-cup-nitk-surathkal-1727517",
+      "deadline": "Aug 15, 2026 (11 days left)",
+      "matchScore": 80,
+      "description": "About the Competition:\nThe biggest tournament in the world is here, and it's time to prove you've got what it takes to lift the trophy! Welcome to CODE RED: World Cup Edition, brought to you by IEEE N...",
+      "tags": [
+        "Hackathon",
+        "India",
+        "Data Structures and Algorithms",
+        "Problem Solving"
+      ]
+    },
+    {
+      "id": "unstop-1729747",
+      "title": "Simply Updify InnovateX 2.0",
+      "type": "hackathon",
+      "organization": "Simply Updify",
+      "link": "https://unstop.com/hackathons/simply-updify-innovatex-20-simply-updify-1729747",
+      "deadline": "Aug 17, 2026 (12 days left)",
+      "matchScore": 80,
+      "description": "Simply Updify InnovateX 2.0 is a National Level Online Hackathon focused on building innovative Software-as-a-Service (SaaS) applications that solve real-world challenges. Participants are encouraged ...",
+      "tags": [
+        "Hackathon",
+        "India",
+        "API Development (REST)",
+        "UI/UX Design"
+      ]
+    },
+    {
+      "id": "unstop-1729706",
+      "title": "Debuggers Assemble",
+      "type": "hackathon",
+      "organization": "Loyola ICAM College of Engineering and Technology (LICET), Chennai",
+      "link": "https://unstop.com/hackathons/debuggers-assemble-loyola-icam-college-of-engineering-and-technology-licet-chennai-1729706",
+      "deadline": "Aug 08, 2026 (4 days left)",
+      "matchScore": 80,
+      "description": "Where Creativity Meets Intelligence.\nWhat happens when your imagination meets Generative AI?\nAI Prompting is a two-round challenge that tests your ability to think creatively, craft effective prompts,...",
+      "tags": [
+        "Hackathon",
+        "India",
+        "Artificial Intelligence (AI)",
+        "Creative Thinking"
+      ]
+    },
+    {
+      "id": "unstop-1729524",
+      "title": "Web-Forge",
+      "type": "hackathon",
+      "organization": "Loyola ICAM College of Engineering and Technology (LICET), Chennai",
+      "link": "https://unstop.com/hackathons/web-forge-loyola-icam-college-of-engineering-and-technology-licet-chennai-1729524",
+      "deadline": "Aug 09, 2026 (3 days left)",
+      "matchScore": 80,
+      "description": "Prompt, build and pitch a website with Google AI Studio &mdash; race an image-recreation challenge, then design under a live client curveball. Creativity, functionality and pitch all count.\nBuilding R...",
+      "tags": [
+        "Hackathon",
+        "India",
+        "React.js",
+        "TypeScript"
+      ]
+    },
+    {
+      "id": "unstop-1729511",
+      "title": "Spider-Sprint",
+      "type": "hackathon",
+      "organization": "Loyola ICAM College of Engineering and Technology (LICET), Chennai",
+      "link": "https://unstop.com/hackathons/spider-sprint-loyola-icam-college-of-engineering-and-technology-licet-chennai-1729511",
+      "deadline": "Aug 08, 2026 (3 days left)",
+      "matchScore": 80,
+      "description": "Race the clock across three rounds &mdash; from MCQ screening to a live on-stage coding finale. Swing through algorithms at lightning pace.\nBuilding Rules\n\nCarry your college ID card at all times insi...",
+      "tags": [
+        "Hackathon",
+        "India",
+        "Problem Solving",
+        "C++ Programming Language"
+      ]
+    },
+    {
+      "id": "unstop-1729558",
+      "title": "ML Bubble 2026 \u2013 Machine Learning Awareness & Skill Building Challenge",
+      "type": "hackathon",
+      "organization": "Army Institute of Technology (AIT), Pune",
+      "link": "https://unstop.com/hackathons/ml-bubble-2026-machine-learning-awareness-skill-building-challenge-army-institute-of-technology-ait-pune-1729558",
+      "deadline": "Aug 30, 2026 (25 days left)",
+      "matchScore": 80,
+      "description": "Machine Learning is becoming an essential skill for engineers and is now a key component of major hackathons and industry projects. ML Bubble provides students with an opportunity to explore real-worl...",
+      "tags": [
+        "Hackathon",
+        "India",
+        "Machine Learning Concepts",
+        "Predictive Analytics"
+      ]
+    },
+    {
+      "id": "unstop-1729289",
+      "title": "Codeissance 2026",
+      "type": "hackathon",
+      "organization": "Thadomal Shahani Engineering College (TSEC), Mumbai",
+      "link": "https://unstop.com/hackathons/codeissance-2026-thadomal-shahani-engineering-college-tsec-mumbai-1729289",
+      "deadline": "Aug 15, 2026 (11 days left)",
+      "matchScore": 80,
+      "description": "About the Opportunity:\nCODEISSANCE 2026, presented by TSEC CodeStorm, is the annual flagship hackathon that brings together undergraduate students for an intensive 24-hour coding challenge. Participan...",
+      "tags": [
+        "Hackathon",
+        "India",
+        "Artificial Intelligence (AI)",
+        "Interviewing Skills"
+      ]
+    },
+    {
+      "id": "unstop-1724784",
+      "title": "Trivarna CTF \u2014 International CTF Championship",
+      "type": "hackathon",
+      "organization": "Astitwam",
+      "link": "https://unstop.com/hackathons/trivarna-ctf-international-ctf-championship-astitwam-1724784",
+      "deadline": "Aug 13, 2026 (9 days left)",
+      "matchScore": 80,
+      "description": "Trivarna 2.0 is India's premier student cybersecurity championship &mdash; a 24-hour non-stop Capture The Flag (CTF) competition organized by Astitwam, scheduled for 15&ndash;16 August 2026.\nWhat is T...",
+      "tags": [
+        "Hackathon",
+        "India",
+        "Digital Forensics",
+        "Ethical Hacking"
+      ]
+    },
+    {
+      "id": "unstop-1723695",
+      "title": "EchoSphere: Agora Conversational AI Hackathon",
+      "type": "hackathon",
+      "organization": "KNOTiC",
+      "link": "https://unstop.com/hackathons/echosphere-agora-conversational-ai-hackathon-knotic-1723695",
+      "deadline": "Sep 12, 2026 (17 days left)",
+      "matchScore": 80,
+      "description": "Official Discord: Join our community for hackathon discussions, mentorship, and support.https://discord.gg/3TG4EVqcRk\nOfficial Instagram: Follow us for the latest announcements and event updates.https...",
+      "tags": [
+        "Hackathon",
+        "India",
+        "Artificial Intelligence (AI)",
+        "Python"
+      ]
+    },
+    {
+      "id": "unstop-1729093",
+      "title": "Python Basic Programming Competition",
+      "type": "hackathon",
+      "organization": "BVC College of Engineering, Rajamahendravaram, Andhra Pradesh",
+      "link": "https://unstop.com/hackathons/python-basic-programming-competition-bvc-college-of-engineering-rajamahendravaram-andhra-pradesh-1729093",
+      "deadline": "Aug 16, 2026 (11 days left)",
+      "matchScore": 80,
+      "description": "Overview\nWelcome to the Python Basic Programming online coding challenge by BVC College of Engineering, Rajamahendravaram, Andhra Pradesh.\nThis online coding challenge is designed for aspiring program...",
+      "tags": [
+        "Hackathon",
+        "India",
+        "Python",
+        "Teamwork and Collaboration"
+      ]
+    },
+    {
       "id": "unstop-1728774",
       "title": "NexBuildOn Hack 2026",
       "type": "hackathon",
       "organization": "NexBuildOn Community",
       "link": "https://unstop.com/hackathons/nexbuildon-hack-2026-nexbuildon-community-1728774",
-      "deadline": "Aug 16, 2026 (7 days left)",
+      "deadline": "Aug 16, 2026 (5 days left)",
       "matchScore": 80,
       "description": "About NexBuildOn Community:\n\nNexBuildOn Community is a next-generation tech community dedicated to bringing together students, developers, creators, innovators, and industry professionals through impa...",
       "tags": [
@@ -519,7 +711,7 @@
       "type": "hackathon",
       "organization": "Prasunet",
       "link": "https://unstop.com/hackathons/prasunethon-20-prasunet-1728532",
-      "deadline": "Aug 30, 2026 (11 days left)",
+      "deadline": "Aug 30, 2026 (10 days left)",
       "matchScore": 80,
       "description": "About the Hackathon:\nPrasunet invites students, developers, innovators, designers, and technology enthusiasts from across India to participate in Prasunethon 2.0 Hackathon 2026.\nThis national-level ha...",
       "tags": [
@@ -535,7 +727,7 @@
       "type": "hackathon",
       "organization": "Oriental College of Technology (OCT), Bhopal",
       "link": "https://unstop.com/hackathons/codesprint-2o-one-shot-challenge-oriental-college-of-technology-oct-bhopal-1728495",
-      "deadline": "Aug 30, 2026 (25 days left)",
+      "deadline": "Aug 30, 2026 (23 days left)",
       "matchScore": 80,
       "description": "About the Competition:\nOne Shot Challenge is a fast-paced coding competition designed to test problem-solving skills and coding ability under time pressure.\nThis event consists of a single round where...",
       "tags": [
@@ -543,508 +735,6 @@
         "India",
         "C++ Programming Language",
         "Python"
-      ]
-    },
-    {
-      "id": "unstop-1728481",
-      "title": "Techno Vbiquity 2.O \u2013 Technical Coding Competition",
-      "type": "hackathon",
-      "organization": "Technocrats Group of Institutions, Bhopal, Madhya Pradesh",
-      "link": "https://unstop.com/hackathons/techno-vbiquity-2o-technical-coding-competition-technocrats-group-of-institutions-bhopal-madhya-pradesh-1728481",
-      "deadline": "Sep 05, 2026 (29 days left)",
-      "matchScore": 80,
-      "description": "About The Event:\n\nTECNO VBIQUITY 2.O is an online coding competition designed to test and showcase problem-solving skills, logical thinking, and programming expertise.\nThe event provides a competitive...",
-      "tags": [
-        "Hackathon",
-        "India",
-        "Debugging",
-        "Python"
-      ]
-    },
-    {
-      "id": "unstop-1702198",
-      "title": "Y-Hack'26 \u2013 24-Hour National Hackathon",
-      "type": "hackathon",
-      "organization": "KPR Institute of Engineering and Technology (KPRIET), Coimbatore",
-      "link": "https://unstop.com/hackathons/y-hack26-24-hour-national-hackathon-kpr-institute-of-engineering-and-technology-kpriet-coimbatore-1702198",
-      "deadline": "Sep 07, 2026 (1 month left)",
-      "matchScore": 80,
-      "description": "Y-Hack '26 | National Level 24-Hour Hackathon\nAbout the Hackathon\nWelcome to Y-Hack '26, a National Level 24-Hour Hackathon organized by the IEEE Robotics and Automation Society (RAS), KPR Institute o...",
-      "tags": [
-        "Hackathon",
-        "India",
-        "Artificial Intelligence (AI)",
-        "Embedded Systems Design"
-      ]
-    },
-    {
-      "id": "unstop-1720006",
-      "title": "HackDevengers 1.0",
-      "type": "hackathon",
-      "organization": "Devengers",
-      "link": "https://unstop.com/hackathons/hackdevengers-10-hackdevengers-devengers-1720006",
-      "deadline": "Aug 09, 2026 (4 days left)",
-      "matchScore": 80,
-      "description": "One World. One Challenge. Just 8 Hours to Make History.\n\nAre you ready to push your limits, build something extraordinary, and compete with innovators from around the world?\nHackDevengers 1.0 is an In...",
-      "tags": [
-        "Hackathon",
-        "India",
-        "Artificial Intelligence (AI)",
-        "GitHub"
-      ]
-    },
-    {
-      "id": "unstop-1727380",
-      "title": "Samarthya 2026 Project Competition",
-      "type": "hackathon",
-      "organization": "Smt Kashibai Navale College of Engineering (SKNCE), Pune",
-      "link": "https://unstop.com/hackathons/samarthya-2026-project-competition-smt-kashibai-navale-college-of-engineering-sknce-pune-1727380",
-      "deadline": "Aug 12, 2026 (6 days left)",
-      "matchScore": 80,
-      "description": "About the Competition:\n\nSamarthya 2026 is a National Level Hybrid Project Competition organized by the SKN IEEE Student Branch to encourage innovation, creativity, and problem solving among students. ...",
-      "tags": [
-        "Hackathon",
-        "India",
-        "Innovation Management",
-        "Project Management"
-      ]
-    },
-    {
-      "id": "unstop-1727929",
-      "title": "Nexora",
-      "type": "hackathon",
-      "organization": "Hackhere",
-      "link": "https://unstop.com/hackathons/nexora-hackhere-1727929",
-      "deadline": "Aug 20, 2026 (17 days left)",
-      "matchScore": 80,
-      "description": "Nexora is a national-level 24-hour hybrid hackathon organized by HackHere, bringing together students, developers, designers, cybersecurity enthusiasts, blockchain innovators, AI builders, and technol...",
-      "tags": [
-        "Hackathon",
-        "India",
-        "Artificial Intelligence (AI)",
-        "Innovation Management"
-      ]
-    },
-    {
-      "id": "unstop-1727667",
-      "title": "Morrow 1.0",
-      "type": "hackathon",
-      "organization": "Makers Need More (MnM)",
-      "link": "https://unstop.com/hackathons/morrow-10-makers-need-more-mnm-1727667",
-      "deadline": "Sep 17, 2026 (28 days left)",
-      "matchScore": 80,
-      "description": "About the Competition:\nMorrow 1.0 is an open-source hackathon where students, developers, designers, and innovators come together to build impactful solutions for real-world problems. Participants wil...",
-      "tags": [
-        "Hackathon",
-        "India",
-        "Artificial Intelligence (AI)",
-        "Communication Skills"
-      ]
-    },
-    {
-      "id": "unstop-1725407",
-      "title": "Promptathon",
-      "type": "hackathon",
-      "organization": "Yeshwantrao Chavan College of Engineering (YCCE), Nagpur",
-      "link": "https://unstop.com/hackathons/promptathon-yeshwantrao-chavan-college-of-engineering-ycce-nagpur-1725407",
-      "deadline": "Aug 06, 2026 (3 days left)",
-      "matchScore": 80,
-      "description": "About the Competition:\nPromptathon 2026 &ndash; Think Better. Prompt Smarter.\nOrganized by the YCCE ACM Student Chapter under COMPUFEST 2K26, PROMPTATHON 2026 is a prompt engineering competition desig...",
-      "tags": [
-        "Hackathon",
-        "India",
-        "Artificial Intelligence (AI)",
-        "Creative Thinking"
-      ]
-    },
-    {
-      "id": "unstop-1726439",
-      "title": "Caspian AI Agent Hackathon",
-      "type": "hackathon",
-      "organization": "Caspian",
-      "link": "https://unstop.com/hackathons/caspian-ai-agent-hackathon-caspian-1726439",
-      "deadline": "Aug 13, 2026 (7 days left)",
-      "matchScore": 80,
-      "description": "About the Opportunity:\n\nA 15-Day AI Agent Hackathon by Caspian\nYour agent can think. It just can't reach anyone.\nEvery agent you've built sits in a chat window, waiting for you to come to it. It can't...",
-      "tags": [
-        "Hackathon",
-        "India",
-        "Automation Tools",
-        "API Integration"
-      ]
-    },
-    {
-      "id": "unstop-1726911",
-      "title": "Kurukshetra 2.0 Hackfest",
-      "type": "hackathon",
-      "organization": "MIT Arts, Commerce & Science College, Alandi, Pune, Maharashtra",
-      "link": "https://unstop.com/hackathons/kurukshetra-20-hackfest-mit-arts-commerce-science-college-alandi-pune-maharashtra-1726911",
-      "deadline": "Aug 20, 2026 (18 days left)",
-      "matchScore": 80,
-      "description": "About the Event:\nKurukshetra 2.0 is a national-level 24-hour hackathon that fosters innovation and collaboration in AI/ML, Web 3.0, cloud computing, and automation. It empowers students, developers, a...",
-      "tags": [
-        "Hackathon",
-        "India",
-        "Artificial Intelligence (AI)",
-        "Machine Learning Concepts"
-      ]
-    },
-    {
-      "id": "unstop-1726927",
-      "title": "Synapse 2026",
-      "type": "hackathon",
-      "organization": "TechVerse Solutions",
-      "link": "https://unstop.com/hackathons/synapse-2026-techverse-solutions-1726927",
-      "deadline": "Aug 06, 2026 (4 days left)",
-      "matchScore": 80,
-      "description": "About the Opportunity:\nSynapse AI Meetup 2026Where AI Minds Connect &amp; Innovate\nJoin Synapse AI Meetup 2026, an exclusive offline gathering for AI enthusiasts, developers, students, founders, resea...",
-      "tags": [
-        "Hackathon",
-        "India",
-        "Artificial Intelligence (AI)",
-        "Community Engagement"
-      ]
-    },
-    {
-      "id": "unstop-1720578",
-      "title": "Edge AI Hackathon 2026",
-      "type": "hackathon",
-      "organization": "Parala Maharaja Engineering College, Berhampur",
-      "link": "https://unstop.com/hackathons/edge-ai-hackathon-2026-parala-maharaja-engineering-college-berhampur-1720578",
-      "deadline": "Oct 06, 2026 (12 days left)",
-      "matchScore": 80,
-      "description": "About the Hackathon:\nEdge AI Hackathon 2026 is a national-level hardware innovation challenge organized by the IEEE EDS Student Branch Chapter, IEEE Council on Electronics Design &amp; Automation PMEC...",
-      "tags": [
-        "Hackathon",
-        "India",
-        "Arduino Programming",
-        "Artificial Intelligence (AI)"
-      ]
-    },
-    {
-      "id": "unstop-1727790",
-      "title": "FusioniX'26",
-      "type": "hackathon",
-      "organization": "University of Engineering and Management Kolkata",
-      "link": "https://unstop.com/hackathons/fusionix-2026-university-of-engineering-and-management-kolkata-1727790",
-      "deadline": "Sep 12, 2026 (15 days left)",
-      "matchScore": 80,
-      "description": "Overview\nFusioniX 2026 is a 24-hour national-level hybrid hackathon organized by the Department of Electronics &amp; Communication Engineering and the Department of Computer Science &amp; Engineering ...",
-      "tags": [
-        "Hackathon",
-        "India",
-        "Artificial Intelligence (AI)",
-        "Embedded Systems Design"
-      ]
-    },
-    {
-      "id": "ddg-hackathon-0-7873",
-      "title": "HackerEarth | AI Powered Interviews and Assessment",
-      "type": "hackathon",
-      "organization": "HackerEarth",
-      "link": "https://www.hackerearth.com/",
-      "deadline": "Check official site",
-      "matchScore": 75,
-      "description": "HackerEarth enables skill improvement through automated, data-driven assessments for developers, candidates, and AI \u2026",
-      "tags": [
-        "Hackathon",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-hackathon-1-5071",
-      "title": "Log In | HackerEarth",
-      "type": "hackathon",
-      "organization": "HackerEarth",
-      "link": "https://www.hackerearth.com/login",
-      "deadline": "Check official site",
-      "matchScore": 65,
-      "description": "Through HackerEarth, I managed to prepared me for future job roles. Taking part in HackerEarth hackathons has been an amazing \u2026",
-      "tags": [
-        "Hackathon",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-hackathon-2-3652",
-      "title": "HackerRank - Online Coding Tests and Technical Interviews",
-      "type": "hackathon",
-      "organization": "hackerrank.com",
-      "link": "https://www.hackerrank.com/",
-      "deadline": "Check official site",
-      "matchScore": 65,
-      "description": "Over 26 million developers have joined the HackerRank community to certify their skills, practice interviewing, and discover relevant \u2026",
-      "tags": [
-        "Hackathon",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-hackathon-4-7217",
-      "title": "HackerEarth - Wikipedia",
-      "type": "hackathon",
-      "organization": "en.wikipedia.org",
-      "link": "https://en.wikipedia.org/wiki/HackerEarth",
-      "deadline": "Check official site",
-      "matchScore": 65,
-      "description": "HackerEarth is a software company headquartered in San Francisco that provides enterprise software that assists organizations with \u2026",
-      "tags": [
-        "Hackathon",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-hackathon-5-5995",
-      "title": "HackerEarth - LinkedIn",
-      "type": "hackathon",
-      "organization": "LinkedIn Careers",
-      "link": "https://www.linkedin.com/company/hackerearth/",
-      "deadline": "Check official site",
-      "matchScore": 65,
-      "description": "Trusted by global enterprises, HackerEarth powers a community of over 10 million developers and leverages insights from 150 \u2026",
-      "tags": [
-        "Hackathon",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-hackathon-7-1675",
-      "title": "Compete - HackerEarth",
-      "type": "hackathon",
-      "organization": "HackerEarth",
-      "link": "https://www.hackerearth.com/challenges/",
-      "deadline": "Check official site",
-      "matchScore": 65,
-      "description": "Source top engineering talent and surface bold ideas with branded, best-in-class coding events. Test your skills with real challenges \u2026",
-      "tags": [
-        "Hackathon",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-internship-0-8654",
-      "title": "Find Open Datasets and Machine Learning Projects | Kaggle",
-      "type": "internship",
-      "organization": "kaggle.com",
-      "link": "https://www.kaggle.com/datasets",
-      "deadline": "Check official site",
-      "matchScore": 75,
-      "description": "2 days ago \u00b7 Datasets Explore, analyze, and share quality data. Learn more about data types, creating, and collaborating.",
-      "tags": [
-        "Internship",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-course-0-5940",
-      "title": "Free Data Science Courses & Certificates [2026] | Coursera",
-      "type": "course",
-      "organization": "Coursera",
-      "link": "https://www.coursera.org/courses?query=free&skills=Data+Science&msockid=1e811c6a3a4266ef08410bc33b91678e",
-      "deadline": "Check official site",
-      "matchScore": 75,
-      "description": "Discover the foundations of data science and learn how to work with data to generate meaningful insights in a free course. Enroll for \u2026",
-      "tags": [
-        "Course",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-course-1-8501",
-      "title": "15 free MIT data science courses | Open Learning",
-      "type": "course",
-      "organization": "openlearning.mit.edu",
-      "link": "https://openlearning.mit.edu/news/15-free-mit-data-science-courses",
-      "deadline": "Feb 21, 2025",
-      "matchScore": 75,
-      "description": "Feb 21, 2025 \u00b7 15 free MIT data science courses was originally published in MIT Open Learning on Medium, where people are \u2026",
-      "tags": [
-        "Course",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-course-2-171",
-      "title": "Free Data Science Courses With Certificates (2025 Guide)",
-      "type": "course",
-      "organization": "devtoolhub.com",
-      "link": "https://devtoolhub.com/free-data-science-courses-2025/",
-      "deadline": "Dec 4, 2025",
-      "matchScore": 75,
-      "description": "Dec 4, 2025 \u00b7 This is the most complete, accurate, and carefully checked list of free Data Science courses for 2025. Whether you\u2019re \u2026",
-      "tags": [
-        "Course",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-course-3-5747",
-      "title": "Free Data Science Courses Online with Certificates (2026)",
-      "type": "course",
-      "organization": "mygreatlearning.com",
-      "link": "https://www.mygreatlearning.com/data-science/free-courses",
-      "deadline": "Check official site",
-      "matchScore": 75,
-      "description": "These online free data science courses are designed to give you the technical skills and practical experience needed for a career in \u2026",
-      "tags": [
-        "Course",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-course-4-4772",
-      "title": "Free Data Science Course with Certificate | Enroll Now",
-      "type": "course",
-      "organization": "simplilearn.com",
-      "link": "https://www.simplilearn.com/data-science-free-course-for-beginners-skillup",
-      "deadline": "Check official site",
-      "matchScore": 75,
-      "description": "Want to break into data science without spending a dime? This free data science course delivers 7 hours of practical training \u2026",
-      "tags": [
-        "Course",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-course-6-5942",
-      "title": "Free Data Science Online Course with Certificate 2026 - SkillSchool",
-      "type": "course",
-      "organization": "skillschool.co.in",
-      "link": "https://www.skillschool.co.in/courses/free-data-science-certification-training/",
-      "deadline": "Nov 12, 2024",
-      "matchScore": 75,
-      "description": "Nov 12, 2024 \u00b7 Getting started with Data Science is made easy with SkillSchool's FREE Course. Get a Course Completion Certificate \u2026",
-      "tags": [
-        "Course",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-course-7-2709",
-      "title": "Data Science for Everyone - Skill India Digital Hub (SIDH)",
-      "type": "course",
-      "organization": "skillindiadigital.gov.in",
-      "link": "https://www.skillindiadigital.gov.in/courses/detail/0168d594-ec95-4e4d-a060-2cd5c4fd6aaa",
-      "deadline": "Check official site",
-      "matchScore": 80,
-      "description": "1 day ago \u00b7 Explore Skill India Digital Hub's (SIDH) free courses & skill development schemes across sectors including IT, digital \u2026",
-      "tags": [
-        "Course",
-        "India",
-        "Top Match"
-      ]
-    },
-    {
-      "id": "ddg-certificate-0-4459",
-      "title": "OpenAI | Research & Deployment",
-      "type": "certificate",
-      "organization": "openai.com",
-      "link": "https://openai.com/",
-      "deadline": "Check official site",
-      "matchScore": 75,
-      "description": "We believe our research will eventually lead to artificial general intelligence, a system that can solve human-level problems.",
-      "tags": [
-        "Certificate",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-certificate-1-5027",
-      "title": "Artificial intelligence - Wikipedia",
-      "type": "certificate",
-      "organization": "en.wikipedia.org",
-      "link": "https://en.wikipedia.org/wiki/Artificial_intelligence",
-      "deadline": "Check official site",
-      "matchScore": 85,
-      "description": "Artificial intelligence (AI) is the capability of computational systems to perform tasks typically associated with human intelligence, \u2026",
-      "tags": [
-        "Certificate",
-        "India",
-        "Top Match"
-      ]
-    },
-    {
-      "id": "ddg-certificate-2-3895",
-      "title": "Google Gemini",
-      "type": "certificate",
-      "organization": "Google",
-      "link": "https://gemini.google.com/",
-      "deadline": "Check official site",
-      "matchScore": 75,
-      "description": "Meet Gemini, Google\u2019s AI assistant. Get help with writing, planning, brainstorming, and more. Experience the power of generative AI.",
-      "tags": [
-        "Certificate",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-certificate-3-9540",
-      "title": "ChatGPT: Chat, Work, Create & Code with AI",
-      "type": "certificate",
-      "organization": "chatgpt.com",
-      "link": "https://chatgpt.com/",
-      "deadline": "Check official site",
-      "matchScore": 75,
-      "description": "Use ChatGPT to answer questions, write, create images, complete work, and code\u2014all in one place. Get started for free or \u2026",
-      "tags": [
-        "Certificate",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-certificate-4-7645",
-      "title": "Google AI - How we're making AI helpful for everyone",
-      "type": "certificate",
-      "organization": "Google",
-      "link": "https://ai.google/",
-      "deadline": "Check official site",
-      "matchScore": 75,
-      "description": "Discover how Google AI is committed to enriching knowledge, solving complex challenges and helping people grow by building \u2026",
-      "tags": [
-        "Certificate",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-certificate-5-4189",
-      "title": "DeepAI",
-      "type": "certificate",
-      "organization": "deepai.org",
-      "link": "https://deepai.org/",
-      "deadline": "Check official site",
-      "matchScore": 75,
-      "description": "This is what AI for Good means to us\u2014using technology and resources to create opportunities and inspire hope, whether through \u2026",
-      "tags": [
-        "Certificate",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-certificate-6-529",
-      "title": "Microsoft Copilot: Your AI companion",
-      "type": "certificate",
-      "organization": "copilot.microsoft.com",
-      "link": "https://copilot.microsoft.com/?msockid=1e811c6a3a4266ef08410bc33b91678e",
-      "deadline": "Check official site",
-      "matchScore": 75,
-      "description": "Microsoft Copilot is your companion to inform, entertain and inspire. Get advice, feedback and straightforward answers. Try Copilot \u2026",
-      "tags": [
-        "Certificate",
-        "India"
-      ]
-    },
-    {
-      "id": "ddg-certificate-7-8071",
-      "title": "Perplexity AI",
-      "type": "certificate",
-      "organization": "perplexity.ai",
-      "link": "https://www.perplexity.ai/",
-      "deadline": "Check official site",
-      "matchScore": 75,
-      "description": "Perplexity is a free AI-powered answer engine that provides accurate, trusted, and real-time answers to any question.",
-      "tags": [
-        "Certificate",
-        "India"
       ]
     }
   ]

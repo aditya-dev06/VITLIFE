@@ -5328,5 +5328,31 @@
     "uploadedBy": "Community",
     "status": "approved",
     "createdAt": "2026-07-26T17:50:00.649Z"
+  },
+  {
+    "_id": "p_q1cn1co9fi8uravsxu5i",
+    "courseCode": "CSE3010",
+    "courseTitle": "Computer Vision",
+    "department": "CSE",
+    "examType": "MTE",
+    "year": "2024-25",
+    "semester": 5,
+    "url": "https://res.cloudinary.com/dxvqey8bi/image/upload/v1785764767/q1cn1co9fi8uravsxu5i.png",
+    "uploadedBy": "Community",
+    "status": "approved",
+    "createdAt": "2026-08-03T18:49:20.210Z"
+  },
+  {
+    "_id": "p_znqgewibeuli5kaznqon.pdf",
+    "courseCode": "BACSE302L",
+    "courseTitle": "Database system",
+    "department": "BACSE",
+    "examType": "MTE",
+    "year": "2025-26",
+    "semester": 5,
+    "url": "https://res.cloudinary.com/dxvqey8bi/raw/upload/v1785665207/znqgewibeuli5kaznqon.pdf",
+    "uploadedBy": "Community",
+    "status": "approved",
+    "createdAt": "2026-08-03T18:49:20.223Z"
   }
 ]

@@ -7,6 +7,15 @@ export class ErrorBoundary extends React.Component {
   }
 
   static getDerivedStateFromError(error) {
+    const errMsg = String(error?.message || error || '');
+    if (errMsg.includes('dynamically imported module') || errMsg.includes('Loading chunk') || errMsg.includes('Failed to fetch')) {
+      const lastReload = sessionStorage.getItem('ds_auto_reload_time');
+      const now = Date.now();
+      if (!lastReload || now - parseInt(lastReload, 10) > 10000) {
+        sessionStorage.setItem('ds_auto_reload_time', String(now));
+        window.location.reload();
+      }
+    }
     return { hasError: true, error };
   }
 

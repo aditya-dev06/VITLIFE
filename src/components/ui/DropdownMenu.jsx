@@ -28,7 +28,12 @@ export const DropdownMenu = ({ children, open: controlledOpen, onOpenChange }) =
   useEffect(() => {
     if (!open) return;
 
-    const handleGlobalClose = () => setOpen(false);
+    const handleGlobalClose = (e) => {
+      if (e && e.target && e.target.closest && e.target.closest('.dropdown-menu-content')) {
+        return;
+      }
+      setOpen(false);
+    };
 
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') setOpen(false);
@@ -122,19 +127,50 @@ export const DropdownMenuContent = forwardRef(({ className = '', align = 'end', 
     if (!open || !triggerRect || !contentRef.current) return;
 
     const el = contentRef.current;
-    const menuH = el.offsetHeight || 320;
-    const menuW = el.offsetWidth || 260;
+    const menuH = el.offsetHeight || 280;
+    const menuW = el.offsetWidth || 180;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
     const MARGIN = 8; // px gap from trigger + screen edge
 
-    // WhatsApp Web Desktop style: position action menu at top-right side of chat window
-    const top = 64;
-    const right = 24;
-    const maxHeight = vh - 130;
+    let spaceBelow = vh - triggerRect.bottom - MARGIN;
+    let spaceAbove = triggerRect.top - MARGIN;
+    
+    let top;
+    let openUp = false;
+    let computedMaxHeight = 400; // default max height
 
-    setPosition({ top, right, maxHeight });
+    if (menuH <= spaceBelow) {
+      // Fits perfectly below
+      top = triggerRect.bottom + MARGIN;
+      computedMaxHeight = spaceBelow;
+    } else if (menuH <= spaceAbove) {
+      // Fits perfectly above
+      top = triggerRect.top - menuH - MARGIN;
+      openUp = true;
+      computedMaxHeight = spaceAbove;
+    } else {
+      // Doesn't fit perfectly on either side, pick side with more space
+      if (spaceAbove > spaceBelow) {
+        top = MARGIN;
+        openUp = true;
+        computedMaxHeight = spaceAbove;
+      } else {
+        top = triggerRect.bottom + MARGIN;
+        computedMaxHeight = spaceBelow;
+      }
+    }
+
+    if (align === 'end') {
+      right = Math.max(MARGIN, vw - triggerRect.right);
+    } else {
+      left = Math.max(MARGIN, Math.min(triggerRect.left, vw - menuW - MARGIN));
+    }
+
+    const maxHeight = Math.max(150, computedMaxHeight);
+
+    setPosition({ top, left, right, maxHeight, openUp });
   }, [open, triggerRect, align]);
 
   if (!open) return null;
@@ -167,8 +203,14 @@ export const DropdownMenuContent = forwardRef(({ className = '', align = 'end', 
     <>
       <div
         style={{ position: 'fixed', inset: 0, zIndex: 99998, cursor: 'default' }}
-        onClick={() => setOpen(false)}
-        onPointerDown={() => setOpen(false)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(false);
+        }}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          setOpen(false);
+        }}
       />
       <div
         ref={(node) => {
@@ -179,6 +221,7 @@ export const DropdownMenuContent = forwardRef(({ className = '', align = 'end', 
         className={`dropdown-menu-content align-${align} side-${side} ${position?.openUp ? 'opens-up' : 'opens-down'} ${className}`}
         style={baseStyle}
         onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
         {...props}
       >
         {children}
@@ -200,9 +243,16 @@ export const DropdownMenuItem = forwardRef(({ className = '', variant = 'default
   const { setOpen } = useContext(DropdownMenuContext);
 
   const handleClick = (e) => {
+    e.preventDefault();
     e.stopPropagation();
+    if (onClick) {
+      onClick(e);
+    }
     setOpen(false);
-    if (onClick) onClick(e);
+  };
+
+  const handlePointerDown = (e) => {
+    e.stopPropagation();
   };
 
   return (
@@ -210,6 +260,8 @@ export const DropdownMenuItem = forwardRef(({ className = '', variant = 'default
       ref={ref}
       type="button"
       className={`dropdown-menu-item variant-${variant} ${className}`}
+      onPointerDown={handlePointerDown}
+      onMouseDown={handlePointerDown}
       onClick={handleClick}
       {...props}
     >

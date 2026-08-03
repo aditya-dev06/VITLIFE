@@ -13,6 +13,8 @@ import { WhatsAppPollVotingCard } from './WhatsAppPollVotingCard';
 import { WhatsAppVoterListDrawer } from './WhatsAppVoterListDrawer';
 import { ForwardMessageModal } from './ForwardMessageModal';
 import { useToast } from '../hooks/useToast';
+import { useTheme } from './theme-provider';
+import MarketplacePage from './MarketplacePage';
 import './WhatsAppPolls.css';
 
 
@@ -977,6 +979,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
   onPreviewImage 
 }) {
   if (!message) return null;
+  const { theme } = useTheme();
 
   const currentAuthorName = getSafeAuthorName(currentUser);
   const guestClientId = getGuestClientId();
@@ -1214,10 +1217,10 @@ const ChatMessageItem = memo(function ChatMessageItem({
 
           {/* Header Name for Received Messages */}
           {!isOwner && (
-            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#38bdf8', marginBottom: '0.15rem', padding: '0.5rem 0.85rem 0 0.85rem' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: theme === 'light' ? '#0284c7' : '#38bdf8', marginBottom: '0.15rem', padding: '0.5rem 0.85rem 0 0.85rem' }}>
               {message.author}
               {message.role && (
-                <span style={{ fontSize: '0.65rem', marginLeft: '0.4rem', padding: '0.05rem 0.35rem', borderRadius: '4px', background: 'rgba(255,255,255,0.1)', color: '#aebac1', fontWeight: 400 }}>
+                <span style={{ fontSize: '0.65rem', marginLeft: '0.4rem', padding: '0.05rem 0.35rem', borderRadius: '4px', background: theme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)', color: theme === 'light' ? '#475569' : '#aebac1', fontWeight: 400 }}>
                   {message.role}
                 </span>
               )}
@@ -1234,10 +1237,10 @@ const ChatMessageItem = memo(function ChatMessageItem({
               gap: '0.35rem',
               fontSize: '0.72rem',
               fontStyle: 'italic',
-              color: '#8696a0',
+              color: theme === 'light' ? '#64748b' : '#8696a0',
               marginBottom: '0.35rem',
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
+              background: theme === 'light' ? 'rgba(0, 0, 0, 0.04)' : 'rgba(255, 255, 255, 0.05)',
+              border: theme === 'light' ? '1px solid #e2e8f0' : '1px solid rgba(255, 255, 255, 0.08)',
               padding: '0.15rem 0.5rem',
               borderRadius: '6px'
             }}>
@@ -1252,7 +1255,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
           {/* Quoted Reply Preview */}
           {message.replyTo && (
             <div style={{
-              background: 'rgba(0, 0, 0, 0.25)',
+              background: theme === 'light' ? 'rgba(0, 168, 132, 0.08)' : 'rgba(0, 0, 0, 0.25)',
               borderLeft: '3px solid #00a884',
               borderRadius: '4px',
               padding: '0.35rem 0.6rem',
@@ -1262,8 +1265,41 @@ const ChatMessageItem = memo(function ChatMessageItem({
               <div style={{ color: '#00a884', fontWeight: 700, fontSize: '0.72rem' }}>
                 {message.replyTo.author}
               </div>
-              <div style={{ color: '#aebac1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div style={{ color: theme === 'light' ? '#334155' : '#aebac1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {decryptedReplyContent || 'Photo attachment'}
+              </div>
+            </div>
+          )}
+
+          {/* Marketplace Item Reference Card */}
+          {message.marketplaceItem && (
+            <div style={{
+              background: 'rgba(236, 72, 153, 0.08)',
+              borderLeft: '4px solid #ec4899',
+              borderRadius: '8px',
+              padding: '0.6rem 0.75rem',
+              marginBottom: '0.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem'
+            }}>
+              {message.marketplaceItem.imageUrl && (
+                <img 
+                  src={message.marketplaceItem.imageUrl} 
+                  alt={message.marketplaceItem.title} 
+                  style={{ width: '44px', height: '44px', objectFit: 'cover', borderRadius: '6px' }}
+                />
+              )}
+              <div style={{ flex: 1, overflow: 'hidden' }}>
+                <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#ec4899', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  🛒 Marketplace Item Reference
+                </div>
+                <div style={{ fontSize: '0.88rem', fontWeight: 800, color: theme === 'light' ? '#0f172a' : '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {message.marketplaceItem.title}
+                </div>
+                <div style={{ fontSize: '0.78rem', color: '#10b981', fontWeight: 700 }}>
+                  Price: ₹{message.marketplaceItem.price} • Seller: {message.marketplaceItem.sellerName}
+                </div>
               </div>
             </div>
           )}
@@ -1300,10 +1336,10 @@ const ChatMessageItem = memo(function ChatMessageItem({
                 {isPlayingAudio ? '⏸️' : '▶️'}
               </button>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                <div style={{ height: '6px', background: 'rgba(255,255,255,0.2)', borderRadius: '3px', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ height: '6px', background: theme === 'light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.2)', borderRadius: '3px', position: 'relative', overflow: 'hidden' }}>
                   <div style={{ width: isPlayingAudio ? '100%' : '35%', height: '100%', background: '#00a884', transition: isPlayingAudio ? 'width 3s linear' : 'none' }} />
                 </div>
-                <div style={{ fontSize: '0.68rem', color: '#8696a0' }}>
+                <div style={{ fontSize: '0.68rem', color: theme === 'light' ? '#64748b' : '#8696a0' }}>
                   🎙️ Voice Note • {message.audioDuration || '0:05'}
                 </div>
               </div>
@@ -1316,10 +1352,10 @@ const ChatMessageItem = memo(function ChatMessageItem({
                 onChange={(e) => setEditText(e.target.value)}
                 style={{
                   width: '100%',
-                  background: '#111b21',
+                  background: theme === 'light' ? '#ffffff' : '#111b21',
                   border: '1px solid #00a884',
                   borderRadius: '6px',
-                  color: '#e9edef',
+                  color: theme === 'light' ? '#0f172a' : '#e9edef',
                   fontSize: '0.88rem',
                   padding: '0.4rem 0.6rem',
                   outline: 'none'
@@ -1329,7 +1365,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
               <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
                 <button
                   onClick={() => setIsEditing(false)}
-                  style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#aebac1', borderRadius: '4px', padding: '0.2rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer' }}
+                  style={{ background: theme === 'light' ? '#f1f5f9' : 'rgba(255,255,255,0.1)', border: 'none', color: theme === 'light' ? '#475569' : '#aebac1', borderRadius: '4px', padding: '0.2rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer' }}
                 >
                   Cancel
                 </button>
@@ -1343,7 +1379,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
             </div>
           ) : (
             message.content && (
-              <div style={{ color: '#e9edef', fontSize: '0.9rem', lineHeight: '1.45', wordBreak: 'break-word' }}>
+              <div style={{ color: theme === 'light' ? '#0f172a' : (isOwner ? '#ffffff' : '#e9edef'), fontSize: '0.9rem', lineHeight: '1.45', wordBreak: 'break-word' }}>
                 {message.content}
               </div>
             )
@@ -1466,11 +1502,14 @@ const ChatMessageItem = memo(function ChatMessageItem({
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-around',
-              padding: '6px 10px',
+              justifyContent: 'space-between',
+              padding: '6px 8px',
               background: '#111b21',
-              borderRadius: '20px',
-              marginBottom: '6px'
+              borderRadius: '24px',
+              marginBottom: '6px',
+              width: '100%',
+              boxSizing: 'border-box',
+              overflow: 'hidden'
             }}>
               {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) => (
                 <button
@@ -1479,13 +1518,18 @@ const ChatMessageItem = memo(function ChatMessageItem({
                   style={{
                     background: 'none',
                     border: 'none',
-                    fontSize: '1.25rem',
+                    fontSize: '1.2rem',
                     cursor: 'pointer',
-                    padding: '2px 4px',
+                    padding: '2px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     lineHeight: 1,
-                    transition: 'transform 0.12s ease'
+                    transition: 'transform 0.12s ease',
+                    flexShrink: 0
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.3)'}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.28)'}
                   onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                   onClick={(e) => { e.stopPropagation(); onReact && onReact(message.id, emoji); setShowMenu(false); }}
                   title={emoji}
@@ -1498,12 +1542,17 @@ const ChatMessageItem = memo(function ChatMessageItem({
                 style={{
                   background: 'none',
                   border: 'none',
-                  fontSize: '1.1rem',
+                  fontSize: '1rem',
                   fontWeight: 700,
                   color: '#8696a0',
                   cursor: 'pointer',
-                  padding: '2px 4px',
-                  lineHeight: 1
+                  padding: '2px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 1,
+                  flexShrink: 0
                 }}
                 title="More reactions"
               >
@@ -1533,7 +1582,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
               {/* 3. Message Author */}
               <DropdownMenuItem
                 icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>}
-                onClick={() => onDirectMessageUser && onDirectMessageUser(message.author)}
+                onClick={() => onDirectMessageUser && onDirectMessageUser(message)}
               >
                 Message {message.author ? message.author : 'User'}
               </DropdownMenuItem>
@@ -2079,17 +2128,60 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
   const [reportModalMessage, setReportModalMessage] = useState(null);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedMsgIds, setSelectedMsgIds] = useState([]);
+  const [sidebarTab, setSidebarTab] = useState('channels'); // 'channels' or 'dms'
 
   const handleReplyPrivately = useCallback((msg) => {
+    if (!user || user.isGuest) {
+      showToast('🔒 Please log in to send private messages.', 'error');
+      return;
+    }
+    const myId = user.regNo || user.email?.split('@')[0] || user.id || 'me';
+    const theirId = msg.authorId || msg.author.replace(/\s+/g, '');
+    const dmChannelId = 'dm_' + [myId, theirId].sort().join('_');
+    
+    setDmChannels(prev => {
+      if (!prev.find(c => c.id === dmChannelId)) {
+        return [...prev, {
+          id: dmChannelId,
+          label: dmChannelId,
+          icon: '👤',
+          name: `Chat with ${msg.author || 'User'}`,
+          desc: 'Direct Message',
+          isPublic: false
+        }];
+      }
+      return prev;
+    });
+    setSidebarTab('dms');
+    setActiveChannel(dmChannelId);
     setReplyingToMessage(msg);
-    const chatInput = document.querySelector('.wa-input-field');
-    if (chatInput) chatInput.focus();
-  }, []);
+  }, [user, showToast]);
 
-  const handleDirectMessageUser = useCallback((authorName) => {
-    setChatSearch(authorName);
-    showToast(`Filtering messages by ${authorName}`, 'info');
-  }, [showToast]);
+  const handleDirectMessageUser = useCallback((msg) => {
+    if (!user || user.isGuest) {
+      showToast('🔒 Please log in to send private messages.', 'error');
+      return;
+    }
+    const myId = user.regNo || user.email?.split('@')[0] || user.id || 'me';
+    const theirId = msg.authorId || msg.author.replace(/\s+/g, '');
+    const dmChannelId = 'dm_' + [myId, theirId].sort().join('_');
+    
+    setDmChannels(prev => {
+      if (!prev.find(c => c.id === dmChannelId)) {
+        return [...prev, {
+          id: dmChannelId,
+          label: dmChannelId,
+          icon: '👤',
+          name: `Chat with ${msg.author || 'User'}`,
+          desc: 'Direct Message',
+          isPublic: false
+        }];
+      }
+      return prev;
+    });
+    setSidebarTab('dms');
+    setActiveChannel(dmChannelId);
+  }, [user, showToast]);
 
   const handleAskMetaAI = useCallback((msg) => {
     setMetaAiModalMessage(msg);
@@ -2217,9 +2309,30 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
   const userBatchYear = useMemo(() => getUserBatchYear(user), [user]);
 
+  const [dmChannels, setDmChannels] = useState([]);
+
+  useEffect(() => {
+    if (user && !user.isGuest) {
+      const token = localStorage.getItem('ds_ai_token');
+      fetch('/api/chat/dm-channels', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.channels) {
+          setDmChannels(data.channels);
+        }
+      })
+      .catch(err => console.error('Failed to fetch DM channels:', err));
+    }
+  }, [user]);
+
   const CHANNELS = useMemo(() => {
     const baseChannels = [
       { id: 'general', label: 'general-discussion', icon: '💬', name: 'General Campus', desc: 'General campus discussion & updates', isPublic: true },
+      ...dmChannels,
       { id: 'pyq-doubts', label: 'pyq-doubt-solver', icon: '📄', name: 'PYQ Doubts', desc: 'Past year paper solutions & doubts', isPublic: false },
       { id: 'exam-prep', label: 'exam-prep-groups', icon: '📚', name: 'Exam Prep', desc: 'Study circles & CAT/TEE prep', isPublic: false },
       { id: 'buy-sell', label: 'campus-buy-sell', icon: '🛍️', name: 'Buy & Sell', desc: 'Textbooks, bicycles & hostel gear', isPublic: false },
@@ -2257,7 +2370,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
     // Fallback: If student account has no batch prefix in email, show all batch lounges
     return [...baseChannels, ...ALL_BATCH_CHANNELS];
-  }, [user, userBatchYear, ALL_BATCH_CHANNELS]);
+  }, [user, userBatchYear, ALL_BATCH_CHANNELS, dmChannels]);
 
   const activeChannelObj = CHANNELS.find(c => c.id === activeChannel) || CHANNELS[0];
   const isGuestUser = !user || user.isGuest;
@@ -3096,9 +3209,28 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
           </InputGroup>
         </div>
 
+        {/* Sidebar Filter Tabs */}
+        <div style={{ display: 'flex', padding: '0.2rem 0.75rem 0.5rem', background: '#111b21', gap: '0.5rem', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+          <button 
+            onClick={() => setSidebarTab('channels')} 
+            style={{ flex: 1, padding: '0.35rem', borderRadius: '12px', background: sidebarTab === 'channels' ? '#202c33' : 'transparent', color: sidebarTab === 'channels' ? '#00a884' : '#8696a0', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.2s' }}
+          >
+            Channels
+          </button>
+          <button 
+            onClick={() => setSidebarTab('dms')} 
+            style={{ flex: 1, padding: '0.35rem', borderRadius: '12px', background: sidebarTab === 'dms' ? '#202c33' : 'transparent', color: sidebarTab === 'dms' ? '#00a884' : '#8696a0', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.2s' }}
+          >
+            Private
+          </button>
+        </div>
+
         {/* Rooms List */}
         <div className="wa-chat-list">
-          {CHANNELS.map(ch => {
+          {CHANNELS.filter(ch => {
+            if (sidebarTab === 'dms') return ch.id.startsWith('dm_');
+            return !ch.id.startsWith('dm_');
+          }).map(ch => {
             const isLocked = isGuestUser && !ch.isPublic;
             const channelMsgs = messages.filter(m => m.channel === ch.id);
             const lastMsg = channelMsgs[channelMsgs.length - 1];
@@ -4764,14 +4896,11 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
       )}
 
       {activeSubTab === 'marketplace' && (
-        <div className="community-locked-section animate-fade-in">
-          <div className="locked-card">
-            <span className="locked-icon">🔒</span>
-            <h2>Buy & Sell Marketplace</h2>
-            <p>Peer-to-peer campus marketplace to trade textbooks, bicycles, mattresses, lab coats, and other student essentials.</p>
-            <div className="locked-tag">BETA STAGE</div>
-          </div>
-        </div>
+        <MarketplacePage 
+          user={user} 
+          onRequireAuth={onRequireAuth} 
+          onBackToApp={onBackToApp} 
+        />
       )}
 
       {/* ── SHARE A PAPER MODAL ── */}

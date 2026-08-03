@@ -6,22 +6,25 @@ import time
 from datetime import datetime
 import requests
 
-# Import duckduckgo_search safely
+# Import DDGS safely (handles ddgs and duckduckgo_search)
 try:
-    from duckduckgo_search import DDGS
+    from ddgs import DDGS
 except ImportError:
-    print("duckduckgo_search library not found. Installing it now...")
-    import subprocess
     try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "duckduckgo_search"])
-    except Exception:
-        print("Standard installation failed. Trying with --break-system-packages...")
+        from duckduckgo_search import DDGS
+    except ImportError:
+        print("DDGS library not found. Installing ddgs now...")
+        import subprocess
         try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "--break-system-packages", "duckduckgo_search"])
-        except Exception as e:
-            print(f"Failed to install library: {e}")
-            raise e
-    from duckduckgo_search import DDGS
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "ddgs"])
+            from ddgs import DDGS
+        except Exception:
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "duckduckgo_search"])
+                from duckduckgo_search import DDGS
+            except Exception as e:
+                print(f"Failed to install library: {e}")
+                DDGS = None
 
 # Paths
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "server", "data")
@@ -290,14 +293,25 @@ def fetch_from_duckduckgo():
     crawled_items = []
     seen_links = set()
     
+    if not DDGS:
+        print("DDGS search module unavailable. Skipping web queries.")
+        return crawled_items
+
     print("Starting DuckDuckGo search queries...")
-    with DDGS() as ddgs:
-        for opp_type, query_list in queries.items():
-            for query in query_list:
-                print(f"Searching for {opp_type}s with query: '{query}'...")
-                time.sleep(2.5)  # Add delay to avoid bot detection/rate-limiting
-                try:
-                    results = list(ddgs.text(query))
+    try:
+        with DDGS() as ddgs:
+            for opp_type, query_list in queries.items():
+                for query in query_list:
+                    print(f"Searching for {opp_type}s with query: '{query}'...")
+                    time.sleep(1.5)  # Add delay to avoid bot detection/rate-limiting
+                    try:
+                        results = list(ddgs.text(query, max_results=10))
+                    except Exception:
+                        try:
+                            results = list(ddgs.text(query))
+                        except Exception as search_err:
+                            print(f"DuckDuckGo search error for '{query}': {search_err}")
+                            results = []
                     print(f"DEBUG: '{query}' returned {len(results)} results")
                     count = 0
                     for r in results[:8]:  # Limit to top 8 results to prevent spam

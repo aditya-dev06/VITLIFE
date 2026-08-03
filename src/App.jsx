@@ -4,22 +4,38 @@ import TypewriterText from './components/TypewriterText';
 import Dock from './components/Dock';
 import { motion, AnimatePresence } from 'motion/react';
 
-const Dashboard = lazy(() => import('./components/Dashboard'));
-const Opportunities = lazy(() => import('./components/Opportunities'));
-const CampusLife = lazy(() => import('./components/CampusLife'));
-const TimetablePage = lazy(() => import('./components/TimetablePage'));
-const VITBhopalGuide = lazy(() => import('./components/VITBhopalGuide'));
-const Auth = lazy(() => import('./components/Auth'));
-const TermsAndConditions = lazy(() => import('./components/TermsAndConditions'));
-const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
-const CommunityPage = lazy(() => import('./components/CommunityPage'));
-const FacultyDirectory = lazy(() => import('./components/FacultyDirectory'));
-const FeedbackModal = lazy(() => import('./components/FeedbackModal'));
-const EditProfileModal = lazy(() => import('./components/EditProfileModal'));
 import AppSidebar from './components/AppSidebar';
 import FullPageLoader from './components/FullPageLoader';
 import { useTheme } from './components/theme-provider';
 import { cachedFetch } from './utils/apiClient';
+
+const safeLazy = (importFn) =>
+  lazy(() =>
+    importFn().catch((err) => {
+      console.warn('[Auto-Recovery] Dynamic chunk failed to load after update, auto-refreshing assets:', err);
+      const lastReload = sessionStorage.getItem('ds_chunk_reload_time');
+      const now = Date.now();
+      if (!lastReload || now - parseInt(lastReload, 10) > 10000) {
+        sessionStorage.setItem('ds_chunk_reload_time', String(now));
+        window.location.reload();
+      }
+      return new Promise(() => {});
+    })
+  );
+
+const Dashboard = safeLazy(() => import('./components/Dashboard'));
+const Opportunities = safeLazy(() => import('./components/Opportunities'));
+const CampusLife = safeLazy(() => import('./components/CampusLife'));
+const TimetablePage = safeLazy(() => import('./components/TimetablePage'));
+const VITBhopalGuide = safeLazy(() => import('./components/VITBhopalGuide'));
+const Auth = safeLazy(() => import('./components/Auth'));
+const TermsAndConditions = safeLazy(() => import('./components/TermsAndConditions'));
+const PrivacyPolicy = safeLazy(() => import('./components/PrivacyPolicy'));
+const CommunityPage = safeLazy(() => import('./components/CommunityPage'));
+const MarketplacePage = safeLazy(() => import('./components/MarketplacePage'));
+const FacultyDirectory = safeLazy(() => import('./components/FacultyDirectory'));
+const FeedbackModal = safeLazy(() => import('./components/FeedbackModal'));
+const EditProfileModal = safeLazy(() => import('./components/EditProfileModal'));
 
 // Global fetch interceptor to catch 401/403 responses and trigger logouts (HMR-safe)
 if (!window.fetch.__isWrapped) {
@@ -707,6 +723,15 @@ function App() {
             user={user}
             onRequireAuth={handleRequireAuth}
             initialSubTab="pyq"
+            onBackToApp={() => setActiveTab('dashboard')}
+          />
+        );
+      case 'marketplace':
+        return (
+          <MarketplacePage 
+            key="marketplace"
+            user={user}
+            onRequireAuth={handleRequireAuth}
             onBackToApp={() => setActiveTab('dashboard')}
           />
         );

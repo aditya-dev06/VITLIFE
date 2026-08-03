@@ -437,3 +437,60 @@
     max-width: 100%;
   }
 }
+
+/* ── Light Mode Overrides for Meta AI Drawer ── */
+.light-theme .meta-ai-drawer-panel,
+.light .meta-ai-drawer-panel {
+  background: #ffffff !important;
+  border-left: 1px solid #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: -12px 0 36px rgba(15, 23, 42, 0.12) !important;
+}
+
+.light-theme .meta-ai-drawer-header,
+.light .meta-ai-drawer-header {
+  background: #f8fafc !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.light-theme .meta-ai-header-subtext,
+.light .meta-ai-header-subtext {
+  color: #64748b !important;
+}
+
+.light-theme .meta-ai-user-bubble,
+.light .meta-ai-user-bubble {
+  background: #eef2ff !important;
+  color: #3730a3 !important;
+  border: 1px solid #c7d2fe !important;
+}
+
+.light-theme .meta-ai-assistant-bubble,
+.light .meta-ai-assistant-bubble {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  border-left: 3px solid #7c3aed !important;
+}
+
+.light-theme .meta-ai-drawer-footer,
+.light .meta-ai-drawer-footer {
+  background: #f8fafc !important;
+  border-top: 1px solid #e2e8f0 !important;
+}
+
+.light-theme .meta-ai-input-form,
+.light .meta-ai-input-form {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+.light-theme .meta-ai-input-field,
+.light .meta-ai-input-field {
+  color: #0f172a !important;
+}
+
+.light-theme .meta-ai-input-field::placeholder,
+.light .meta-ai-input-field::placeholder {
+  color: #94a3b8 !important;
+}

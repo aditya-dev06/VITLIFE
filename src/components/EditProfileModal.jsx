@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import ConsentBanner from './ConsentBanner';
+import { useTheme } from './theme-provider';
 
 export default function EditProfileModal({ user, token, handleLogout, onClose, onSave }) {
+  const { theme } = useTheme();
   const [name, setName] = useState(user?.name || '');
   const [semester, setSemester] = useState(user?.semester || 1);
   const [loading, setLoading] = useState(false);
@@ -185,10 +187,10 @@ export default function EditProfileModal({ user, token, handleLogout, onClose, o
               onChange={e => setSemester(e.target.value)} 
               required
               style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
+                background: theme === 'light' ? '#ffffff' : 'rgba(255, 255, 255, 0.05)',
+                border: theme === 'light' ? '1px solid #cbd5e1' : '1px solid rgba(255, 255, 255, 0.15)',
                 borderRadius: '8px',
-                color: '#ffffff',
+                color: theme === 'light' ? '#0f172a' : '#ffffff',
                 padding: '0.65rem 0.85rem',
                 fontSize: '0.9rem',
                 fontWeight: 600,
@@ -198,7 +200,7 @@ export default function EditProfileModal({ user, token, handleLogout, onClose, o
               }}
             >
               {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
-                <option key={sem} value={sem} style={{ background: '#121215', color: '#ffffff' }}>
+                <option key={sem} value={sem} style={{ background: theme === 'light' ? '#ffffff' : '#121215', color: theme === 'light' ? '#0f172a' : '#ffffff' }}>
                   Semester {sem}
                 </option>
               ))}

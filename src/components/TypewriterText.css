@@ -6,8 +6,8 @@
 }
 
 .typewriter-text {
-  color: #ffffff !important;
-  -webkit-text-fill-color: #ffffff !important;
+  color: var(--sidebar-text, currentColor);
+  -webkit-text-fill-color: var(--sidebar-text, currentColor);
   font-weight: inherit;
 }
 
@@ -15,7 +15,7 @@
   display: inline-block;
   width: 2px;
   height: 1.1em;
-  background-color: #ffffff;
+  background-color: var(--sidebar-text, currentColor);
   margin-left: 2px;
   vertical-align: middle;
   transition: opacity 0.4s ease, visibility 0.4s ease;

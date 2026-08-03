@@ -861,3 +861,102 @@ input:checked + .wa-slider:before {
   }
 }
 
+/* --------------------------------------------------------------------------
+   Light Mode Overrides for WhatsApp Poll Cards & Creator Modal
+   -------------------------------------------------------------------------- */
+.light-theme .wa-poll-question,
+.light .wa-poll-question {
+  color: #0f172a !important;
+}
+
+.light-theme .wa-poll-badge-row,
+.light .wa-poll-badge-row {
+  color: #64748b !important;
+  border-bottom-color: #e2e8f0 !important;
+}
+
+.light-theme .wa-poll-option-item,
+.light .wa-poll-option-item {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.light-theme .wa-poll-option-item:hover,
+.light .wa-poll-option-item:hover {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+}
+
+.light-theme .wa-poll-option-item.selected,
+.light .wa-poll-option-item.selected {
+  border-color: #00a884 !important;
+  background: rgba(0, 168, 132, 0.08) !important;
+}
+
+.light-theme .wa-poll-option-text,
+.light .wa-poll-option-text {
+  color: #0f172a !important;
+}
+
+.light-theme .wa-poll-option-right,
+.light .wa-poll-option-right {
+  color: #64748b !important;
+}
+
+.light-theme .wa-poll-option-percent,
+.light .wa-poll-option-percent {
+  color: #0f172a !important;
+}
+
+.light-theme .wa-poll-modal-card,
+.light .wa-poll-modal-card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 20px 50px -10px rgba(15, 23, 42, 0.16) !important;
+}
+
+.light-theme .wa-poll-modal-header,
+.light .wa-poll-modal-header {
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.light-theme .wa-poll-modal-header h3,
+.light .wa-poll-modal-header h3 {
+  color: #0f172a !important;
+}
+
+.light-theme .wa-poll-modal-header p,
+.light .wa-poll-modal-header p {
+  color: #64748b !important;
+}
+
+.light-theme .wa-poll-modal-close,
+.light .wa-poll-modal-close {
+  color: #64748b !important;
+}
+
+.light-theme .wa-poll-modal-close:hover,
+.light .wa-poll-modal-close:hover {
+  color: #0f172a !important;
+  background: #f1f5f9 !important;
+}
+
+.light-theme .wa-poll-input,
+.light .wa-poll-input {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.light-theme .wa-poll-input:focus,
+.light .wa-poll-input:focus {
+  border-color: #00a884 !important;
+  box-shadow: 0 0 0 3px rgba(0, 168, 132, 0.15) !important;
+}
+
+.light-theme .wa-poll-input::placeholder,
+.light .wa-poll-input::placeholder {
+  color: #94a3b8 !important;
+}
+

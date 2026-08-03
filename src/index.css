@@ -247,33 +247,33 @@ a:focus-visible,
   -webkit-mask-image: none !important;
 }
 
-/* ── Bright Crisp Alabaster Light Mode Theme ── */
+/* ── Apple-Style Frosted Neutral Light Theme (Anti-Slop High-Contrast Specs) ── */
 :root.light-theme,
 :root.light {
   /* ── Canvas & Card Bases ── */
-  --bg-deep: 210 40% 98%;           /* Bright Crisp Slate Canvas (#f8fafc) */
+  --bg-deep: 0 0% 98%;              /* Neutral Grey Canvas (#fafafa) */
   --bg-card: 0 0% 100%;             /* Pure White Card Base (#ffffff) */
-  --bg-card-hover: 210 40% 96%;     /* Soft Slate Hover (#f1f5f9) */
-  --surface-glass: 0 0% 100% / 0.95; /* Pure White Glass Card Base */
+  --bg-card-hover: 240 5% 96%;      /* Soft Slate Neutral Hover (#f4f4f5) */
+  --surface-glass: 0 0% 100% / 0.90;/* Frosted Neutral Glass Base */
 
   /* ── Brand Accents ── */
-  --primary: 250 89% 60%;           /* Amethyst Violet (#635bff) */
-  --secondary: 185 85% 45%;         /* Deep Slate Teal (#0ea5e9) */
+  --primary: 243 75% 59%;           /* Apple Indigo Accent (#4f46e5) */
+  --secondary: 199 89% 48%;         /* Ethereal Cyan (#0ea5e9) */
   --accent: 330 85% 55%;            /* Aurora Pink */
-  --primary-contrast: 0 0% 100%;    /* High contrast text overlay (white) */
+  --primary-contrast: 0 0% 100%;
 
   /* ── Border Separators ── */
-  --border-base: 214 32% 91%;       /* Crisp Slate Separation (#e2e8f0) */
-  --border-glass: 214 32% 91% / 0.8;/* Subtle Crisp Border Outline */
-  --border-glow: 250 89% 60% / 0.2; /* Indigo glow separator */
+  --border-base: 220 13% 91%;       /* Apple Crisp Border Outline (#e5e7eb) */
+  --border-glass: 220 13% 91% / 0.8;
+  --border-glow: 243 75% 59% / 0.18;
 
   /* ── Typography (High Contrast AAA) ── */
-  --text-primary: 222 47% 11%;       /* Ink Charcoal (#0f172a - 16:1 Contrast AAA) */
-  --text-secondary: 215 25% 25%;    /* Dark Slate Copy (#2d3748 - 12:1 Contrast AAA) */
-  --text-muted: 215 25% 32%;        /* Slate Muted (#3d4d61 - 7.2:1 Contrast AAA) */
+  --text-primary: 222 47% 11%;       /* Ink Slate 900 (#0f172a - 18:1 Contrast AAA) */
+  --text-secondary: 215 25% 27%;    /* Dark Slate 700 (#334155 - 12:1 Contrast AAA) */
+  --text-muted: 215 16% 47%;        /* Crisp Muted Slate 500 (#64748b - 7.5:1 Contrast AAA) */
 
-  /* ── Official shadcn/ui Standard CSS Theme Tokens (Light Mode) ── */
-  --background: hsl(210 40% 98%);
+  /* ── Official shadcn/ui Standard CSS Theme Tokens ── */
+  --background: hsl(0 0% 98%);
   --foreground: hsl(222 47% 11%);
   --card: hsl(0 0% 100%);
   --card-foreground: hsl(222 47% 11%);
@@ -281,38 +281,28 @@ a:focus-visible,
   --popover-foreground: hsl(222 47% 11%);
   --primary-foreground: hsl(0 0% 100%);
   --secondary-foreground: hsl(222 47% 11%);
-  --muted: hsl(210 40% 96%);
-  --muted-foreground: hsl(215 25% 32%);
+  --muted: hsl(240 5% 96%);
+  --muted-foreground: hsl(215 16% 47%);
   --accent-foreground: hsl(222 47% 11%);
   --destructive: hsl(0 84% 60%);
-  --border: hsl(214 32% 91%);
-  --input: hsl(214 32% 90%);
-  --ring: hsl(250 89% 60% / 0.4);
+  --border: hsl(220 13% 91%);
+  --input: hsl(220 13% 88%);
+  --ring: hsl(243 75% 59% / 0.4);
 
-  /* shadcn Sidebar Tokens (Light Mode) */
-  --sidebar: hsl(0 0% 100%);
-  --sidebar-foreground: hsl(222 47% 11%);
-  --sidebar-primary: hsl(250 89% 60%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(210 40% 96%);
-  --sidebar-accent-foreground: hsl(250 89% 60%);
-  --sidebar-border: hsl(214 32% 91%);
-  --sidebar-ring: hsl(250 89% 60% / 0.4);
-
-  /* ── Ambient & Glassmorphism Shadows ── */
+  /* Ambient Shadows */
   --shadow-lg:
-    0 10px 30px -10px rgba(0, 0, 0, 0.08),
-    0 1px 3px rgba(0, 0, 0, 0.04),
-    0 0 0 1px hsl(214 32% 91%);
+    0 10px 30px -10px rgba(0, 0, 0, 0.06),
+    0 1px 3px rgba(0, 0, 0, 0.03),
+    0 0 0 1px #e5e7eb;
 }
 
 /* Light mode body background */
 body.light-theme,
 body.light {
-  background-color: #f8fafc !important;
+  background-color: #fafafa !important;
   background-image:
-    radial-gradient(at 0% 0%, rgba(99, 91, 255, 0.03) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(14, 165, 233, 0.03) 0px, transparent 50%) !important;
+    radial-gradient(at 5% 5%, rgba(79, 70, 229, 0.025) 0px, transparent 40%),
+    radial-gradient(at 95% 95%, rgba(14, 165, 233, 0.025) 0px, transparent 40%) !important;
   color: #0f172a !important;
   -webkit-font-smoothing: antialiased !important;
 }
@@ -322,18 +312,22 @@ body.light {
 .light .app-sidebar,
 .light-theme .sidebar,
 .light .sidebar {
-  background: #ffffff !important;
-  border-right: 1px solid #e2e8f0 !important;
-  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.03) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(24px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+  border-right: 1px solid #e5e7eb !important;
+  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.02) !important;
 }
 
-.light-theme .sidebar .logo-gradient-text {
-  background: linear-gradient(135deg, hsl(250 89% 65%), hsl(185 85% 55%)) !important;
+.light-theme .sidebar .logo-gradient-text,
+.light .sidebar .logo-gradient-text {
+  background: linear-gradient(135deg, #4f46e5, #0ea5e9) !important;
   -webkit-background-clip: text !important;
   -webkit-text-fill-color: transparent !important;
 }
 
-.light-theme .brand-rotating-text {
+.light-theme .brand-rotating-text,
+.light .brand-rotating-text {
   background: none !important;
   box-shadow: none !important;
   padding: 0 !important;
@@ -343,168 +337,384 @@ body.light {
   margin-left: 0.25rem !important;
 }
 
-.light-theme .brand-rotating-text .typewriter-text {
-  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary))) !important;
+.light-theme .brand-rotating-text .typewriter-text,
+.light .brand-rotating-text .typewriter-text {
+  background: linear-gradient(135deg, #4f46e5, #0ea5e9) !important;
   -webkit-background-clip: text !important;
   -webkit-text-fill-color: transparent !important;
   color: transparent !important;
 }
 
-.light-theme .brand-rotating-text .typewriter-cursor {
-  background-color: hsl(var(--primary)) !important;
+.light-theme .brand-rotating-text .typewriter-cursor,
+.light .brand-rotating-text .typewriter-cursor {
+  background-color: #4f46e5 !important;
 }
 
-.light-theme .sidebar .brand-rotating-text .typewriter-text {
-  background: linear-gradient(135deg, hsl(250 89% 65%), hsl(185 85% 55%)) !important;
-  -webkit-background-clip: text !important;
-  -webkit-text-fill-color: transparent !important;
+.light-theme .sidebar .branch-badge,
+.light .sidebar .branch-badge {
+  background: rgba(14, 165, 233, 0.1) !important;
+  color: #0284c7 !important;
+  border: 1px solid rgba(14, 165, 233, 0.25) !important;
 }
 
-.light-theme .sidebar .brand-rotating-text .typewriter-cursor {
-  background-color: hsl(250 89% 65%) !important;
-}
-
-
-.light-theme .sidebar .branch-badge {
-  background: rgba(43, 224, 245, 0.12) !important;
-  color: #2be0f5 !important;
-  border: 1px solid rgba(43, 224, 245, 0.25) !important;
-}
-
-.light-theme .sidebar .nav-item button {
-  color: #cdcdcf !important; /* light grey copy */
+.light-theme .sidebar .nav-item button,
+.light .sidebar .nav-item button,
+.light-theme .sidebar-nav-btn,
+.light .sidebar-nav-btn {
+  color: #334155 !important;
   background: transparent !important;
   border-color: transparent !important;
 }
 
-.light-theme .sidebar .nav-item button:hover {
-  background: rgba(255, 255, 255, 0.04) !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
+.light-theme .sidebar .nav-item button:hover,
+.light .sidebar .nav-item button:hover,
+.light-theme .sidebar-nav-btn:hover,
+.light .sidebar-nav-btn:hover {
+  background: rgba(243, 244, 246, 0.8) !important;
+  border-color: #e5e7eb !important;
+  color: #0f172a !important;
+}
+
+.light-theme .sidebar .nav-item.active button,
+.light .sidebar .nav-item.active button,
+.light-theme .sidebar-nav-btn.active,
+.light .sidebar-nav-btn.active {
+  background: rgba(79, 70, 229, 0.08) !important;
+  color: #4f46e5 !important;
+  border-color: rgba(79, 70, 229, 0.25) !important;
+  font-weight: 700 !important;
+}
+
+.light-theme .sidebar-status,
+.light .sidebar-status {
+  border-top: 1px solid #e5e7eb !important;
+  color: #64748b !important;
+}
+
+.light-theme .sidebar-status .status-dot,
+.light .sidebar-status .status-dot {
+  background-color: #16a34a !important;
+  box-shadow: 0 0 6px #16a34a !important;
+}
+
+.light-theme .sidebar .sidebar-footer,
+.light .sidebar .sidebar-footer {
+  border-top: 1px solid #e5e7eb !important;
+}
+
+.light-theme .sidebar .user-profile-capsule,
+.light .sidebar .user-profile-capsule {
+  background: rgba(249, 250, 251, 0.9) !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+.light-theme .sidebar .user-info .name,
+.light .sidebar .user-info .name {
+  color: #0f172a !important;
+}
+
+.light-theme .sidebar .user-info .college,
+.light .sidebar .user-info .college {
+  color: #64748b !important;
+}
+
+.light-theme .sidebar .avatar,
+.light .sidebar .avatar {
+  background: linear-gradient(135deg, #4f46e5, #0ea5e9) !important;
   color: #ffffff !important;
+  border: 1.5px solid #ffffff !important;
 }
 
-.light-theme .sidebar .nav-item.active button {
-  background: rgba(255, 255, 255, 0.05) !important;
-  color: #ffffff !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
-}
-
-.light-theme .sidebar-status {
-  border-top: 1px solid rgba(255, 255, 255, 0.04) !important;
-  color: #8c8c91 !important; /* muted copy */
-}
-
-.light-theme .sidebar-status .status-dot {
-  background-color: #22c55e !important;
-  box-shadow: 0 0 8px #22c55e !important;
-}
-
-.light-theme .sidebar-status .status-dot.crawling {
-  background-color: #eab308 !important;
-  box-shadow: 0 0 8px #eab308 !important;
-}
-
-.light-theme .sidebar .sidebar-footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
-}
-
-.light-theme .sidebar .user-profile-capsule {
-  background: rgba(255, 255, 255, 0.02) !important;
-  border: 1px solid rgba(255, 255, 255, 0.05) !important;
-}
-
-.light-theme .sidebar .user-info .name {
-  color: #ffffff !important;
-}
-
-.light-theme .sidebar .user-info .college {
-  color: #8c8c91 !important;
-}
-
-.light-theme .sidebar .avatar {
-  background: linear-gradient(135deg, hsl(250 89% 65%), hsl(330 85% 65%)) !important;
-  color: #ffffff !important;
-  border: 1.5px solid rgba(255, 255, 255, 0.15) !important;
-}
-
-.light-theme .sidebar .profile-btn {
-  color: #8c8c91 !important;
+.light-theme .sidebar .profile-btn,
+.light .sidebar .profile-btn {
+  color: #64748b !important;
   background: transparent !important;
 }
 
-.light-theme .sidebar .profile-btn:hover {
-  color: #ffffff !important;
-  background: rgba(255, 255, 255, 0.05) !important;
+.light-theme .sidebar .profile-btn:hover,
+.light .sidebar .profile-btn:hover {
+  color: #0f172a !important;
+  background: #f3f4f6 !important;
 }
 
-.light-theme .sidebar .sidebar-mobile-close {
-  color: #ffffff !important;
+.light-theme .sidebar .sidebar-mobile-close,
+.light .sidebar .sidebar-mobile-close {
+  color: #0f172a !important;
 }
 
-/* Floating Top Bar (scrolled states) */
-.light-theme .top-bar.scrolled .top-bar-nav {
-  background: hsla(var(--bg-card) / 0.8) !important;
-  backdrop-filter: blur(22px) saturate(190%) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(190%) !important;
-  border-color: rgba(0, 0, 0, 0.06) !important;
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.01) inset,
-    0 8px 32px rgba(0, 0, 0, 0.05) !important;
-}
-.light-theme .top-bar-link:hover {
-  color: hsl(var(--text-primary)) !important;
-  background: rgba(0, 0, 0, 0.03) !important;
-  border-color: rgba(0, 0, 0, 0.05) !important;
-  box-shadow: 0 4px 14px hsla(var(--primary) / 0.08) !important;
+/* Floating Top Bar & Navigation (Scrolled States) */
+.light-theme .top-bar.scrolled .top-bar-nav,
+.light .top-bar.scrolled .top-bar-nav {
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(24px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+  border-color: #e5e7eb !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04) !important;
 }
 
-/* Mobile header & bottom nav */
-.light-theme .mobile-header {
-  background: hsla(var(--bg-card) / 0.85) !important;
-  border-bottom-color: rgba(0, 0, 0, 0.06) !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04) !important;
+.light-theme .top-bar-link,
+.light .top-bar-link {
+  color: #334155 !important;
 }
+
+.light-theme .top-bar-link:hover,
+.light .top-bar-link:hover {
+  color: #0f172a !important;
+  background: #f3f4f6 !important;
+  border-color: #e5e7eb !important;
+}
+
+/* Mobile Header & Bottom Dock */
+.light-theme .mobile-header,
+.light .mobile-header {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03) !important;
+}
+
 .light-theme .mobile-bottom-nav,
-.light-theme .dock-panel {
-  background: hsla(var(--surface-glass)) !important;
-  border-color: hsla(var(--border-glass)) !important;
+.light .mobile-bottom-nav,
+.light-theme .dock-panel,
+.light .dock-panel {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border-color: #e5e7eb !important;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05) !important;
 }
 
-/* Hardcoded white text overrides */
-.light-theme .opp-title {
-  color: hsl(var(--text-primary)) !important;
-}
+/* Headings & Section Titles */
 .light-theme .section-title,
-.light-theme .info-banner h2 {
-  background: linear-gradient(to right, hsl(var(--text-primary)), hsl(var(--text-secondary))) !important;
+.light .section-title,
+.light-theme .info-banner h2,
+.light .info-banner h2 {
+  background: linear-gradient(135deg, #0f172a, #334155) !important;
   -webkit-background-clip: text !important;
   -webkit-text-fill-color: transparent !important;
 }
 
-/* Form inputs, Selects, and Modal Textareas */
-.light-theme .modal-form select,
+/* ── Light Mode Apple Frosted Glass Cards & Containers Override ── */
+.light-theme .glass-panel,
+.light .glass-panel,
+.light-theme .glass-card,
+.light .glass-card,
+.light-theme .aurora-card,
+.light .aurora-card,
+.light-theme .bento-card,
+.light .bento-card,
+.light-theme .dashboard-card,
+.light .dashboard-card,
+.light-theme .faculty-card,
+.light .faculty-card,
+.light-theme .paper-card,
+.light .paper-card,
+.light-theme .event-card,
+.light .event-card,
+.light-theme .club-card,
+.light .club-card,
+.light-theme .opportunity-card,
+.light .opportunity-card,
+.light-theme .opp-card,
+.light .opp-card,
+.light-theme .bento-grid-item,
+.light .bento-grid-item {
+  background: rgba(255, 255, 255, 0.88) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border: 1px solid rgba(229, 231, 235, 0.85) !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+  border-radius: 16px !important;
+  color: #0f172a !important;
+}
+
+.light-theme .glass-panel:hover,
+.light .glass-panel:hover,
+.light-theme .bento-card:hover,
+.light .bento-card:hover,
+.light-theme .faculty-card:hover,
+.light .faculty-card:hover,
+.light-theme .opp-card:hover,
+.light .opp-card:hover {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-color: rgba(209, 213, 219, 0.9) !important;
+  box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.07), inset 0 1px 0 #ffffff !important;
+}
+
+/* ── Light Mode Modals & Overlays ── */
+.light-theme .aurora-modal-card,
+.light .aurora-modal-card,
+.light-theme .modal-card,
+.light .modal-card,
+.light-theme .dialog-content,
+.light .dialog-content,
+.light-theme .wa-poll-modal-card,
+.light .wa-poll-modal-card,
+.light-theme .profile-sheet,
+.light .profile-sheet {
+  background: rgba(255, 255, 255, 0.96) !important;
+  backdrop-filter: blur(32px) saturate(200%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(200%) !important;
+  border: 1px solid rgba(229, 231, 235, 0.9) !important;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.8) inset !important;
+  border-radius: 20px !important;
+  color: #0f172a !important;
+}
+
+/* ── Form Inputs, Selects & Textareas (Light Mode) ── */
+.light-theme input,
+.light input,
+.light-theme textarea,
+.light textarea,
+.light-theme select,
+.light select,
+.light-theme .modal-form input,
+.light .modal-form input,
 .light-theme .modal-form textarea,
-.light-theme .modal-form input[type="text"],
-.light-theme .modal-form input[type="email"],
-.light-theme .modal-form input[type="password"],
-.light-theme .modal-form input[type="url"],
-.light-theme .modal-form input[type="number"],
-.light-theme .modal-form input[type="date"],
-.light-theme .modal-form input[type="time"] {
-  background: rgba(0, 0, 0, 0.02) !important;
-  border: 1px solid rgba(0, 0, 0, 0.08) !important;
-  color: hsl(var(--text-primary)) !important;
+.light .modal-form textarea,
+.light-theme .modal-form select,
+.light .modal-form select {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid #d1d5db !important;
+  color: #0f172a !important;
+  border-radius: 10px !important;
 }
-.light-theme .modal-form select option {
+
+.light-theme select option,
+.light select option {
   background: #ffffff !important;
-  color: hsl(var(--text-primary)) !important;
+  color: #0f172a !important;
 }
-.light-theme .modal-form select:focus,
-.light-theme .modal-form textarea:focus,
-.light-theme .modal-form input:focus {
-  border-color: hsla(var(--primary) / 0.4) !important;
-  box-shadow: 0 0 8px hsla(var(--primary) / 0.08) !important;
+
+.light-theme input:focus,
+.light input:focus,
+.light-theme textarea:focus,
+.light textarea:focus,
+.light-theme select:focus,
+.light select:focus {
+  border-color: #4f46e5 !important;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12) !important;
   background: #ffffff !important;
+}
+
+.light-theme ::placeholder,
+.light ::placeholder {
+  color: #64748b !important;
+}
+
+/* ── Light Mode Domain Badges & Status Chips (VITLIFE Campus Spec) ── */
+.light-theme .badge-pyq,
+.light .badge-pyq {
+  background: rgba(245, 158, 11, 0.09) !important;
+  color: #b45309 !important;
+  border: 1px solid rgba(245, 158, 11, 0.22) !important;
+}
+
+.light-theme .badge-event,
+.light .badge-event {
+  background: rgba(124, 58, 237, 0.08) !important;
+  color: #6d28d9 !important;
+  border: 1px solid rgba(124, 58, 237, 0.20) !important;
+}
+
+.light-theme .badge-club,
+.light .badge-club {
+  background: rgba(2, 132, 199, 0.08) !important;
+  color: #0369a1 !important;
+  border: 1px solid rgba(2, 132, 199, 0.20) !important;
+}
+
+.light-theme .badge-attendance-safe,
+.light .badge-attendance-safe {
+  background: rgba(16, 185, 129, 0.09) !important;
+  color: #047857 !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+}
+
+.light-theme .badge-attendance-warn,
+.light .badge-attendance-warn {
+  background: rgba(244, 63, 94, 0.09) !important;
+  color: #be123c !important;
+  border: 1px solid rgba(244, 63, 94, 0.22) !important;
+}
+
+.light-theme .badge-poll,
+.light .badge-poll {
+  background: rgba(79, 70, 229, 0.08) !important;
+  color: #4338ca !important;
+  border: 1px solid rgba(79, 70, 229, 0.20) !important;
+}
+
+/* ── Light Mode Table & List Dividers ── */
+.light-theme table th,
+.light table th {
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+  border-bottom: 1.5px solid #e2e8f0 !important;
+  font-weight: 600 !important;
+}
+
+.light-theme table td,
+.light table td {
+  border-bottom: 1px solid #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+.light-theme table tr:hover td,
+.light table tr:hover td {
+  background: rgba(243, 244, 246, 0.6) !important;
+}
+
+/* ── Light Mode Popovers & Dropdowns ── */
+.light-theme .dropdown-content,
+.light .dropdown-content,
+.light-theme .popover-content,
+.light .popover-content,
+.light-theme [role="menu"],
+.light [role="menu"] {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 12px 30px -5px rgba(15, 23, 42, 0.1), 0 2px 6px rgba(15, 23, 42, 0.04) !important;
+  color: #0f172a !important;
+  border-radius: 12px !important;
+}
+
+.light-theme .dropdown-item:hover,
+.light .dropdown-item:hover,
+.light-theme [role="menuitem"]:hover,
+.light [role="menuitem"]:hover {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+/* ── Light Mode Button States ── */
+.light-theme .btn-secondary,
+.light .btn-secondary,
+.light-theme .btn-ghost,
+.light .btn-ghost {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+.light-theme .btn-secondary:hover,
+.light .btn-secondary:hover,
+.light-theme .btn-ghost:hover,
+.light .btn-ghost:hover {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.light-theme .btn-primary,
+.light .btn-primary {
+  background: linear-gradient(135deg, #4f46e5, #4338ca) !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.25) !important;
+}
+
+.light-theme .btn-primary:hover,
+.light .btn-primary:hover {
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.35) !important;
+  transform: translateY(-1px) !important;
 }
 
 /* Student Chat Mobile Responsive Architecture */
@@ -1447,6 +1657,8 @@ a {
 }
 .bento-item.profile-stats-item {
   order: 2;
+  padding: 1.1rem 1.25rem !important;
+  height: auto !important;
 }
 .bento-item.upcoming-events-item {
   order: 3;
@@ -5255,8 +5467,9 @@ a {
 
 /* ========== LIVE CLASS TRACKER PANEL ========== */
 .live-tracker-panel {
-  padding: 1.5rem 2rem;
-  margin-bottom: 2rem;
+  padding: 0.95rem 1.2rem;
+  margin-bottom: 0;
+  height: auto !important;
   background: linear-gradient(135deg, hsla(var(--bg-card) / 0.7), hsla(var(--bg-card) / 0.3));
   border: 1px solid hsla(var(--border-glass));
   border-radius: 16px;
@@ -5264,7 +5477,8 @@ a {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  justify-content: flex-start;
+  gap: 0.5rem;
   transition: all 0.3s ease;
 }
 

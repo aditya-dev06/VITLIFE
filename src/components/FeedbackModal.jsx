@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
+import { useTheme } from './theme-provider';
 
 export default function FeedbackModal({ user, onClose }) {
+  const { theme } = useTheme();
   const [type, setType] = useState('Suggestion');
   const [name, setName] = useState(user ? (user.username || '') : '');
   const [email, setEmail] = useState(user ? (user.email || '') : '');
@@ -69,7 +71,16 @@ export default function FeedbackModal({ user, onClose }) {
         aria-modal="true"
         aria-labelledby="feedback-heading"
         onClick={e => e.stopPropagation()} 
-        style={{ maxWidth: '520px', borderRadius: '24px', background: 'rgba(15, 23, 42, 0.75)', border: '1px solid hsla(var(--border-glass))', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', padding: '2rem' }}
+        style={{ 
+          maxWidth: '520px', 
+          borderRadius: '24px', 
+          background: theme === 'light' ? '#ffffff' : 'rgba(15, 23, 42, 0.75)', 
+          border: theme === 'light' ? '1px solid #e2e8f0' : '1px solid hsla(var(--border-glass))', 
+          backdropFilter: 'blur(20px)', 
+          WebkitBackdropFilter: 'blur(20px)', 
+          boxShadow: theme === 'light' ? '0 20px 40px rgba(15, 23, 42, 0.12)' : '0 20px 40px rgba(0,0,0,0.5)', 
+          padding: '2rem' 
+        }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
           <h2 id="feedback-heading" style={{ fontSize: '1.3rem', fontWeight: 800, margin: 0, background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -147,15 +158,15 @@ export default function FeedbackModal({ user, onClose }) {
                   style={{
                     padding: '0.75rem 1rem',
                     borderRadius: '12px',
-                    border: '1px solid hsla(var(--border-glass))',
-                    background: 'rgba(255,255,255,0.03)',
-                    color: '#fff',
+                    border: theme === 'light' ? '1px solid #cbd5e1' : '1px solid hsla(var(--border-glass))',
+                    background: theme === 'light' ? '#ffffff' : 'rgba(255,255,255,0.03)',
+                    color: theme === 'light' ? '#0f172a' : '#fff',
                     fontSize: '0.88rem',
                     outline: 'none',
                     transition: 'all 0.2s ease'
                   }}
                   onFocus={(e) => e.target.style.borderColor = 'hsl(var(--primary))'}
-                  onBlur={(e) => e.target.style.borderColor = 'hsla(var(--border-glass))'}
+                  onBlur={(e) => e.target.style.borderColor = theme === 'light' ? '#cbd5e1' : 'hsla(var(--border-glass))'}
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
@@ -169,15 +180,15 @@ export default function FeedbackModal({ user, onClose }) {
                   style={{
                     padding: '0.75rem 1rem',
                     borderRadius: '12px',
-                    border: '1px solid hsla(var(--border-glass))',
-                    background: 'rgba(255,255,255,0.03)',
-                    color: '#fff',
+                    border: theme === 'light' ? '1px solid #cbd5e1' : '1px solid hsla(var(--border-glass))',
+                    background: theme === 'light' ? '#ffffff' : 'rgba(255,255,255,0.03)',
+                    color: theme === 'light' ? '#0f172a' : '#fff',
                     fontSize: '0.88rem',
                     outline: 'none',
                     transition: 'all 0.2s ease'
                   }}
                   onFocus={(e) => e.target.style.borderColor = 'hsl(var(--primary))'}
-                  onBlur={(e) => e.target.style.borderColor = 'hsla(var(--border-glass))'}
+                  onBlur={(e) => e.target.style.borderColor = theme === 'light' ? '#cbd5e1' : 'hsla(var(--border-glass))'}
                 />
               </div>
             </div>
@@ -193,9 +204,9 @@ export default function FeedbackModal({ user, onClose }) {
                 style={{
                   padding: '0.75rem 1rem',
                   borderRadius: '12px',
-                  border: '1px solid hsla(var(--border-glass))',
-                  background: 'rgba(255,255,255,0.03)',
-                  color: '#fff',
+                  border: theme === 'light' ? '1px solid #cbd5e1' : '1px solid hsla(var(--border-glass))',
+                  background: theme === 'light' ? '#ffffff' : 'rgba(255,255,255,0.03)',
+                  color: theme === 'light' ? '#0f172a' : '#fff',
                   fontSize: '0.88rem',
                   outline: 'none',
                   resize: 'none',

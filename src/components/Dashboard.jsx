@@ -1412,9 +1412,9 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
                 ref={messButtonRef}
                 onClick={toggleMessDropdown}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  color: '#ffffff',
+                  background: theme === 'light' ? '#ffffff' : 'rgba(255, 255, 255, 0.05)',
+                  border: theme === 'light' ? '1px solid #cbd5e1' : '1px solid rgba(255, 255, 255, 0.15)',
+                  color: theme === 'light' ? '#0f172a' : '#ffffff',
                   fontSize: isMobileDevice ? '0.68rem' : '0.78rem',
                   fontWeight: 700,
                   padding: isMobileDevice ? '0.22rem 0.6rem' : '0.3rem 0.75rem',
@@ -1424,17 +1424,16 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
                   alignItems: 'center',
                   gap: '0.4rem',
                   transition: 'all 0.2s ease',
-                  backdropFilter: 'blur(8px)'
+                  backdropFilter: 'blur(8px)',
+                  boxShadow: theme === 'light' ? '0 2px 6px rgba(15, 23, 42, 0.04)' : 'none'
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'translateY(-1px)';
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+                  e.currentTarget.style.background = theme === 'light' ? '#f8fafc' : 'rgba(255, 255, 255, 0.1)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                  e.currentTarget.style.background = theme === 'light' ? '#ffffff' : 'rgba(255, 255, 255, 0.05)';
                 }}
               >
                 <span>📍</span>
@@ -1442,7 +1441,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
                 <span style={{ fontSize: '0.65rem', opacity: 0.7, transform: messDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>▼</span>
               </button>
 
-              {/* Floating Dark Glass Dropdown Menu (Portaled directly to document.body for top z-index isolation) */}
+              {/* Floating Glass Dropdown Menu */}
               {messDropdownOpen && createPortal(
                 <div
                   ref={messDropdownRef}
@@ -1454,11 +1453,11 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
                     width: '210px',
                     maxHeight: '340px',
                     overflowY: 'auto',
-                    background: '#121215',
-                    border: '1px solid rgba(255, 255, 255, 0.18)',
+                    background: theme === 'light' ? '#ffffff' : '#121215',
+                    border: theme === 'light' ? '1px solid #e2e8f0' : '1px solid rgba(255, 255, 255, 0.18)',
                     borderRadius: '14px',
                     padding: '0.45rem',
-                    boxShadow: '0 16px 40px rgba(0, 0, 0, 0.95)',
+                    boxShadow: theme === 'light' ? '0 12px 32px rgba(15, 23, 42, 0.12)' : '0 16px 40px rgba(0, 0, 0, 0.95)',
                     backdropFilter: 'blur(20px)',
                     zIndex: 9999999,
                     display: 'flex',
@@ -1468,7 +1467,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
                   }}
                 >
                   {/* Boys Hostels Section */}
-                  <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#38bdf8', letterSpacing: '0.08em', padding: '0.3rem 0.5rem 0.15rem 0.5rem', textTransform: 'uppercase' }}>
+                  <div style={{ fontSize: '0.62rem', fontWeight: 800, color: theme === 'light' ? '#0284c7' : '#38bdf8', letterSpacing: '0.08em', padding: '0.3rem 0.5rem 0.15rem 0.5rem', textTransform: 'uppercase' }}>
                     👦 Boys Hostels
                   </div>
                   {MESS_OPTIONS.filter(m => m.group === 'boys').map(m => {
@@ -1483,8 +1482,8 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
                           padding: '0.38rem 0.65rem',
                           fontSize: '0.78rem',
                           fontWeight: isSelected ? 700 : 500,
-                          color: isSelected ? '#38bdf8' : '#e2e8f0',
-                          background: isSelected ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                          color: isSelected ? (theme === 'light' ? '#0284c7' : '#38bdf8') : (theme === 'light' ? '#334155' : '#e2e8f0'),
+                          background: isSelected ? (theme === 'light' ? 'rgba(2, 132, 199, 0.1)' : 'rgba(56, 189, 248, 0.12)') : 'transparent',
                           border: 'none',
                           borderRadius: '8px',
                           cursor: 'pointer',
@@ -1495,24 +1494,24 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
                         }}
                         onMouseEnter={(e) => {
                           if (!isSelected) {
-                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
-                            e.currentTarget.style.color = '#ffffff';
+                            e.currentTarget.style.background = theme === 'light' ? '#f1f5f9' : 'rgba(255, 255, 255, 0.06)';
+                            e.currentTarget.style.color = theme === 'light' ? '#0f172a' : '#ffffff';
                           }
                         }}
                         onMouseLeave={(e) => {
                           if (!isSelected) {
                             e.currentTarget.style.background = 'transparent';
-                            e.currentTarget.style.color = '#e2e8f0';
+                            e.currentTarget.style.color = theme === 'light' ? '#334155' : '#e2e8f0';
                           }
                         }}
                       >
                         <span>{m.name}</span>
-                        {isSelected && <span style={{ color: '#38bdf8', fontSize: '0.78rem' }}>✓</span>}
+                        {isSelected && <span style={{ color: theme === 'light' ? '#0284c7' : '#38bdf8', fontSize: '0.78rem' }}>✓</span>}
                       </button>
                     );
                   })}
 
-                  <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.08)', margin: '0.25rem 0' }} />
+                  <div style={{ height: '1px', background: theme === 'light' ? '#e2e8f0' : 'rgba(255, 255, 255, 0.08)', margin: '0.25rem 0' }} />
 
                   {/* Girls Hostels Section */}
                   <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#ec4899', letterSpacing: '0.08em', padding: '0.3rem 0.5rem 0.15rem 0.5rem', textTransform: 'uppercase' }}>
@@ -1530,7 +1529,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
                           padding: '0.38rem 0.65rem',
                           fontSize: '0.78rem',
                           fontWeight: isSelected ? 700 : 500,
-                          color: isSelected ? '#ec4899' : '#e2e8f0',
+                          color: isSelected ? '#ec4899' : (theme === 'light' ? '#334155' : '#e2e8f0'),
                           background: isSelected ? 'rgba(236, 72, 153, 0.12)' : 'transparent',
                           border: 'none',
                           borderRadius: '8px',
@@ -1542,14 +1541,14 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
                         }}
                         onMouseEnter={(e) => {
                           if (!isSelected) {
-                            e.currentTarget.style.background = 'rgba(236, 72, 153, 0.08)';
-                            e.currentTarget.style.color = '#ffffff';
+                            e.currentTarget.style.background = theme === 'light' ? '#f1f5f9' : 'rgba(236, 72, 153, 0.08)';
+                            e.currentTarget.style.color = theme === 'light' ? '#0f172a' : '#ffffff';
                           }
                         }}
                         onMouseLeave={(e) => {
                           if (!isSelected) {
                             e.currentTarget.style.background = 'transparent';
-                            e.currentTarget.style.color = '#e2e8f0';
+                            e.currentTarget.style.color = theme === 'light' ? '#334155' : '#e2e8f0';
                           }
                         }}
                       >
@@ -1569,10 +1568,10 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
             display: 'flex',
             alignItems: 'center',
             gap: isMobileDevice ? '0.2rem' : '0.35rem',
-            background: 'rgba(255, 255, 255, 0.03)',
+            background: theme === 'light' ? '#f1f5f9' : 'rgba(255, 255, 255, 0.03)',
             padding: '0.25rem',
             borderRadius: '12px',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            border: theme === 'light' ? '1px solid #e2e8f0' : '1px solid rgba(255, 255, 255, 0.08)',
             backdropFilter: 'blur(12px)'
           }}>
             {MEAL_TABS.map((tab, idx) => {
@@ -1590,25 +1589,31 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
                     fontSize: isMobileDevice ? '0.66rem' : '0.76rem',
                     fontWeight: isActive ? 800 : 600,
                     borderRadius: '8px',
-                    border: isActive ? '1px solid rgba(255, 255, 255, 0.25)' : '1px solid transparent',
+                    border: isActive 
+                      ? (theme === 'light' ? '1px solid #c7d2fe' : '1px solid rgba(255, 255, 255, 0.25)') 
+                      : '1px solid transparent',
                     background: isActive
-                      ? 'rgba(255, 255, 255, 0.12)'
+                      ? (theme === 'light' ? '#ffffff' : 'rgba(255, 255, 255, 0.12)')
                       : 'transparent',
-                    color: isActive ? '#ffffff' : '#94a3b8',
+                    color: isActive 
+                      ? (theme === 'light' ? '#4f46e5' : '#ffffff') 
+                      : (theme === 'light' ? '#64748b' : '#94a3b8'),
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '0.25rem',
                     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                    boxShadow: isActive ? '0 4px 12px rgba(0, 0, 0, 0.3)' : 'none',
+                    boxShadow: isActive 
+                      ? (theme === 'light' ? '0 2px 8px rgba(79, 70, 229, 0.12)' : '0 4px 12px rgba(0, 0, 0, 0.3)') 
+                      : 'none',
                     whiteSpace: 'nowrap'
                   }}
                   onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.color = '#ffffff';
+                    if (!isActive) e.currentTarget.style.color = theme === 'light' ? '#0f172a' : '#ffffff';
                   }}
                   onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.color = '#94a3b8';
+                    if (!isActive) e.currentTarget.style.color = theme === 'light' ? '#64748b' : '#94a3b8';
                   }}
                 >
                   <span>{tab.icon}</span>
@@ -1621,7 +1626,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
           {/* Dish Showcase Cards */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
             {messMenuLoading && !messMenuData ? (
-              <span style={{ fontSize: isMobileDevice ? '0.75rem' : '0.85rem', color: '#94a3b8', fontStyle: 'italic' }}>Fetching live menu...</span>
+              <span style={{ fontSize: isMobileDevice ? '0.75rem' : '0.85rem', color: theme === 'light' ? '#64748b' : '#94a3b8', fontStyle: 'italic' }}>Fetching live menu...</span>
             ) : mainDishes.length > 0 ? (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: isMobileDevice ? '0.3rem' : '0.45rem' }}>
                 {mainDishes.map((dish, i) => {
@@ -1646,21 +1651,24 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
                         : (isMobileDevice ? '0.3rem 0.6rem' : '0.38rem 0.75rem'),
                       borderRadius: '10px',
                       background: isMainHighlight
-                        ? 'rgba(255, 255, 255, 0.08)'
-                        : 'rgba(255, 255, 255, 0.03)',
+                        ? (theme === 'light' ? '#ffffff' : 'rgba(255, 255, 255, 0.08)')
+                        : (theme === 'light' ? '#f8fafc' : 'rgba(255, 255, 255, 0.03)'),
                       border: isMainHighlight
-                        ? '1px solid rgba(255, 255, 255, 0.22)'
-                        : '1px solid rgba(255, 255, 255, 0.06)',
-                      color: isMainHighlight ? '#ffffff' : '#cbd5e1',
+                        ? (theme === 'light' ? '1px solid #cbd5e1' : '1px solid rgba(255, 255, 255, 0.22)')
+                        : (theme === 'light' ? '1px solid #e2e8f0' : '1px solid rgba(255, 255, 255, 0.06)'),
+                      color: isMainHighlight 
+                        ? (theme === 'light' ? '#0f172a' : '#ffffff') 
+                        : (theme === 'light' ? '#334155' : '#cbd5e1'),
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '0.4rem',
                       backdropFilter: 'blur(8px)',
-                      transition: 'all 0.2s ease-out'
+                      transition: 'all 0.2s ease-out',
+                      boxShadow: isMainHighlight && theme === 'light' ? '0 2px 6px rgba(15, 23, 42, 0.04)' : 'none'
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.transform = 'translateY(-2px)';
-                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+                      e.currentTarget.style.borderColor = theme === 'light' ? '#94a3b8' : 'rgba(255, 255, 255, 0.3)';
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.transform = 'translateY(0)';
@@ -1808,16 +1816,16 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
     // Desktop: side-by-side | Mobile: tabs
     if (!isMobileDevice) {
       return (
-        <div className={`bento-item span-2 live-tracker-item live-tracker-panel ${statusClass}`} style={{ overflow: 'visible' }}>
-          <div style={{ display: 'flex', gap: '1.5rem', width: '100%' }}>
+        <div className={`bento-item span-2 live-tracker-item live-tracker-panel ${statusClass}`} style={{ overflow: 'visible', padding: '0.95rem 1.2rem', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
+          <div style={{ display: 'flex', gap: '1.25rem', width: '100%', alignItems: 'flex-start' }}>
             {/* Left: Class Alert */}
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               {renderClassTrackerSection()}
             </div>
             {/* Divider */}
             <div style={{ width: '1px', background: 'rgba(255,255,255,0.08)', alignSelf: 'stretch' }} />
             {/* Right: Mess Menu */}
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               {renderMessTrackerSection()}
             </div>
           </div>
@@ -1853,19 +1861,19 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
     const coursesCount = user && user.courses ? user.courses.length : 0;
     
     return (
-      <div className="profile-stats-widget" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', gap: '0.75rem' }}>
+      <div className="profile-stats-widget" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', gap: '0.65rem' }}>
         <div>
           {/* User Header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.85rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
             <div style={{ 
-              width: '42px', 
-              height: '42px', 
+              width: '40px', 
+              height: '40px', 
               borderRadius: '50%', 
               background: 'linear-gradient(135deg, #ffffff, #a1a1aa)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '1.25rem',
+              fontSize: '1.2rem',
               fontWeight: 'bold',
               color: '#09090b',
               boxShadow: '0 4px 12px rgba(255,255,255,0.25)',
@@ -1886,256 +1894,97 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
             </div>
           </div>
 
-          {/* PROMINENT SHORTCUT WINDOW TO FACULTY CABINS SECTION */}
-          <div 
-            onClick={() => onNavigate('faculty')}
-            style={{
-              padding: '0.75rem 0.85rem',
-              borderRadius: '14px',
-              background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.12), rgba(56, 189, 248, 0.03))',
-              border: '1px solid rgba(56, 189, 248, 0.3)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '0.6rem',
-              transition: 'all 0.25s ease',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
-              position: 'relative',
-              overflow: 'hidden',
-              marginBottom: '0.75rem'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.5)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.3)';
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          {/* 2-COLUMN SHORTCUT GRID TO FACULTY CABINS & PYQ PAPERS */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+            {/* Faculty Cabins */}
+            <div 
+              onClick={() => onNavigate('faculty')}
+              style={{
+                padding: '0.55rem 0.65rem',
+                borderRadius: '12px',
+                background: theme === 'light'
+                  ? 'linear-gradient(135deg, rgba(2, 132, 199, 0.08), rgba(2, 132, 199, 0.02))'
+                  : 'linear-gradient(135deg, rgba(56, 189, 248, 0.12), rgba(56, 189, 248, 0.03))',
+                border: theme === 'light'
+                  ? '1px solid rgba(2, 132, 199, 0.25)'
+                  : '1px solid rgba(56, 189, 248, 0.3)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                transition: 'all 0.25s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.borderColor = theme === 'light' ? '#0284c7' : 'rgba(56, 189, 248, 0.5)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.borderColor = theme === 'light' ? 'rgba(2, 132, 199, 0.25)' : 'rgba(56, 189, 248, 0.3)';
+              }}
+            >
               <div style={{
-                width: '36px', height: '36px', borderRadius: '10px',
-                background: 'rgba(56, 189, 248, 0.2)',
-                border: '1px solid rgba(56, 189, 248, 0.3)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '1.2rem', flexShrink: 0
+                width: '28px',
+                height: '28px',
+                borderRadius: '8px',
+                background: theme === 'light' ? 'rgba(2, 132, 199, 0.15)' : 'rgba(56, 189, 248, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: theme === 'light' ? '#0284c7' : '#38bdf8',
+                flexShrink: 0
               }}>
-                🏢
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg>
               </div>
-              <div>
-                <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', fontFamily: 'var(--font-heading)' }}>
-                  Faculty Cabins & Emails
-                </div>
-                <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.7)', marginTop: '0.05rem' }}>
-                  All 150+ cabins located in <strong>Academic Block 2 (AB2)</strong>
-                </div>
+              <div style={{ overflow: 'hidden' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: theme === 'light' ? '#0f172a' : '#f8fafc', lineHeight: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Faculty Cabins</div>
+                <div style={{ fontSize: '0.62rem', color: theme === 'light' ? '#64748b' : '#94a3b8', marginTop: '0.05rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>150+ Cabins →</div>
               </div>
             </div>
-            
-            <div style={{
-              fontSize: '0.72rem',
-              fontWeight: 700,
-              padding: '0.3rem 0.6rem',
-              borderRadius: '8px',
-              background: '#38bdf8',
-              color: '#0f172a',
-              whiteSpace: 'nowrap',
-              boxShadow: '0 2px 8px rgba(56, 189, 248, 0.3)'
-            }}>
-              Find Cabins →
-            </div>
-          </div>
 
-          {/* PROMINENT SHORTCUT WINDOW TO PYQ SECTION */}
-          <div 
-            onClick={() => onNavigate('community')}
-            style={{
-              padding: '0.75rem 0.85rem',
-              borderRadius: '14px',
-              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02))',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '0.6rem',
-              transition: 'all 0.25s ease',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
-              position: 'relative',
-              overflow: 'hidden'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.35)';
-              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05))';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
-              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02))';
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            {/* PYQ Question Papers */}
+            <div 
+              onClick={() => onNavigate('community', 'pyq')}
+              style={{
+                padding: '0.55rem 0.65rem',
+                borderRadius: '12px',
+                background: theme === 'light'
+                  ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.08), rgba(168, 85, 247, 0.02))'
+                  : 'linear-gradient(135deg, rgba(192, 132, 252, 0.12), rgba(192, 132, 252, 0.03))',
+                border: theme === 'light'
+                  ? '1px solid rgba(168, 85, 247, 0.25)'
+                  : '1px solid rgba(192, 132, 252, 0.3)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                transition: 'all 0.25s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.borderColor = theme === 'light' ? '#a855f7' : 'rgba(192, 132, 252, 0.5)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.borderColor = theme === 'light' ? 'rgba(168, 85, 247, 0.25)' : 'rgba(192, 132, 252, 0.3)';
+              }}
+            >
               <div style={{
-                width: '36px', height: '36px', borderRadius: '10px',
-                background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05))',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '1.2rem', flexShrink: 0
+                width: '28px',
+                height: '28px',
+                borderRadius: '8px',
+                background: theme === 'light' ? 'rgba(168, 85, 247, 0.15)' : 'rgba(192, 132, 252, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: theme === 'light' ? '#a855f7' : '#c084fc',
+                flexShrink: 0
               }}>
-                📚
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="M6.5 17H20"/></svg>
               </div>
-              <div>
-                <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#ffffff', fontFamily: 'var(--font-heading)' }}>
-                  PYQ Question Papers
-                </div>
-                <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.6)', marginTop: '0.05rem' }}>
-                  Explore past CAT-1, CAT-2 & FAT papers ⚡
-                </div>
-              </div>
-            </div>
-            
-            <div style={{
-              fontSize: '0.72rem',
-              fontWeight: 700,
-              padding: '0.3rem 0.6rem',
-              borderRadius: '8px',
-              background: '#ffffff',
-              color: '#000000',
-              whiteSpace: 'nowrap',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.2rem',
-              boxShadow: '0 2px 8px rgba(255,255,255,0.2)'
-            }}>
-              Open ➔
-            </div>
-          </div>
-
-          {/* Stats Bar */}
-          <div style={{ display: 'flex', gap: '0.65rem', marginTop: '0.75rem' }}>
-            <div style={{ flex: 1, padding: '0.6rem 0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-              <div style={{ fontSize: '0.65rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Courses</div>
-              <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#ffffff' }}>{coursesCount}</div>
-            </div>
-            <div style={{ flex: 1, padding: '0.6rem 0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-              <div style={{ fontSize: '0.65rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Semester</div>
-              {/* Base UI / shadcn Style Navigation Menu Trigger */}
-              <div style={{ position: 'relative', marginTop: '0.15rem' }}>
-                <button
-                  ref={semButtonRef}
-                  onClick={toggleSemDropdown}
-                  style={{
-                    fontSize: '0.9rem',
-                    fontWeight: 800,
-                    color: '#ffffff',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    borderRadius: '8px',
-                    padding: '0.2rem 0.55rem',
-                    margin: 0,
-                    outline: 'none',
-                    cursor: 'pointer',
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '0.3rem',
-                    transition: 'all 0.2s ease',
-                    backdropFilter: 'blur(8px)'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)';
-                  }}
-                >
-                  <span>{user && user.semester ? `Sem ${user.semester}` : 'Sem 1'}</span>
-                  <span style={{ fontSize: '0.6rem', opacity: 0.7, transform: semDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>▼</span>
-                </button>
-
-                {/* Base UI NavigationMenuContent Popover */}
-                {semDropdownOpen && createPortal(
-                  <div
-                    ref={semDropdownRef}
-                    className="base-nav-menu-popover"
-                    style={{
-                      position: 'fixed',
-                      top: `${semDropdownCoords.top}px`,
-                      left: `${semDropdownCoords.left}px`,
-                      width: '135px',
-                      maxHeight: '260px',
-                      overflowY: 'auto',
-                      background: '#121215',
-                      border: '1px solid rgba(255, 255, 255, 0.18)',
-                      borderRadius: '12px',
-                      padding: '0.35rem',
-                      boxShadow: '0 16px 40px rgba(0, 0, 0, 0.95)',
-                      backdropFilter: 'blur(20px)',
-                      zIndex: 9999999,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '0.2rem',
-                      animation: 'fadeIn 0.15s ease-out'
-                    }}
-                  >
-                    {(() => {
-                      const currentSem = (user && user.semester) ? user.semester.toString() : '1';
-                      const isIntegrated = (user?.program && user.program.startsWith('Integrated M.Tech')) || 
-                                           (user?.email && (user.email.toLowerCase().includes('bim') || user.email.toLowerCase().includes('mim')));
-                      const maxSem = isIntegrated ? 10 : 8;
-                      const sems = [];
-                      for (let i = 1; i <= maxSem; i++) {
-                        const semStr = i.toString();
-                        const isSelected = semStr === currentSem;
-                        sems.push(
-                          <button
-                            key={i}
-                            onClick={() => selectSemester(semStr)}
-                            style={{
-                              width: '100%',
-                              textAlign: 'left',
-                              padding: '0.35rem 0.6rem',
-                              fontSize: '0.78rem',
-                              fontWeight: isSelected ? 700 : 500,
-                              color: isSelected ? '#38bdf8' : '#e2e8f0',
-                              background: isSelected ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
-                              border: 'none',
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              transition: 'all 0.15s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              if (!isSelected) {
-                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
-                                e.currentTarget.style.color = '#ffffff';
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!isSelected) {
-                                e.currentTarget.style.background = 'transparent';
-                                e.currentTarget.style.color = '#e2e8f0';
-                              }
-                            }}
-                          >
-                            <span>Sem {i}</span>
-                            {isSelected && <span style={{ color: '#38bdf8', fontSize: '0.75rem' }}>✓</span>}
-                          </button>
-                        );
-                      }
-                      return sems;
-                    })()}
-                  </div>,
-                  document.body
-                )}
+              <div style={{ overflow: 'hidden' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: theme === 'light' ? '#0f172a' : '#f8fafc', lineHeight: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>PYQ Papers</div>
+                <div style={{ fontSize: '0.62rem', color: theme === 'light' ? '#64748b' : '#94a3b8', marginTop: '0.05rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>CAT & FAT ⚡</div>
               </div>
             </div>
           </div>
@@ -2297,7 +2146,7 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
           width: '100vw',
           height: '100vh',
           zIndex: 0,
-          opacity: theme === 'light' ? 0.6 : 0.5,
+          opacity: theme === 'light' ? 0.08 : 0.5,
           pointerEvents: 'none'
         }}>
           <Suspense fallback={null}>
@@ -2333,14 +2182,17 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
           </div>
           
           {/* Upcoming Events Bento Item takes 2 columns in the second row */}
-          <div className="bento-item span-2 upcoming-events-item" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div className="bento-item span-2 upcoming-events-item" style={{ display: 'flex', flexDirection: 'column', minHeight: '260px', padding: '1.5rem 1.75rem', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <div>
-                <div style={{ fontSize: '0.85rem', color: 'hsl(var(--text-muted))', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Upcoming & Recommended Events</div>
-                <h3 style={{ margin: '0.25rem 0 0 0', fontSize: '1.25rem', fontFamily: 'var(--font-heading)', fontWeight: 700 }}>Events For You</h3>
+                <div style={{ fontSize: '0.78rem', color: theme === 'light' ? '#0284c7' : '#38bdf8', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.08em', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#38bdf8', boxShadow: '0 0 8px #38bdf8' }} />
+                  UPCOMING & RECOMMENDED EVENTS
+                </div>
+                <h3 style={{ margin: '0.2rem 0 0 0', fontSize: '1.35rem', fontFamily: 'var(--font-heading)', fontWeight: 800, color: theme === 'light' ? '#0f172a' : '#f8fafc' }}>Events For You</h3>
               </div>
-              <button className="btn-secondary" onClick={() => onNavigate('campus')} style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', borderRadius: '8px' }}>
-                View All
+              <button className="btn-secondary" onClick={() => onNavigate('campus')} style={{ padding: '0.45rem 0.95rem', fontSize: '0.8rem', borderRadius: '10px', fontWeight: 700 }}>
+                View All Events →
               </button>
             </div>
 
@@ -2373,10 +2225,13 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
             {(() => {
               if (eventsLocked && !isAdmin) {
                 return (
-                  <div style={{ display: 'flex', flexGrow: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', minHeight: '180px', background: 'rgba(255, 255, 255, 0.02)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: '12px', padding: '1.5rem', textAlign: 'center' }}>
-                    <span style={{ fontSize: '2.5rem', marginBottom: '0.75rem', display: 'block' }}>🔒</span>
-                    <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', color: 'hsl(var(--text-primary))', fontWeight: '700' }}>Events will resume after exams</h4>
-                    <p style={{ margin: 0, fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}>Stay tuned! Check back once exams are completed for exciting club recruitments and hackathons.</p>
+                  <div style={{ display: 'flex', flexGrow: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', minHeight: '190px', background: theme === 'light' ? 'rgba(2, 132, 199, 0.04)' : 'rgba(255, 255, 255, 0.02)', border: theme === 'light' ? '1px dashed rgba(2, 132, 199, 0.2)' : '1px dashed rgba(255, 255, 255, 0.1)', borderRadius: '16px', padding: '1.75rem 1.5rem', textAlign: 'center' }}>
+                    <span style={{ fontSize: '2.8rem', marginBottom: '0.75rem', display: 'block' }}>🔒</span>
+                    <h4 style={{ margin: '0 0 0.35rem 0', fontSize: '1.15rem', color: theme === 'light' ? '#0f172a' : 'hsl(var(--text-primary))', fontWeight: 800 }}>Events Will Resume After Exams</h4>
+                    <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.85rem', color: theme === 'light' ? '#475569' : 'hsl(var(--text-muted))', maxWidth: '460px', lineHeight: 1.4 }}>Stay tuned! Check back once exams are completed for exciting club recruitments, technical workshops, and hackathons.</p>
+                    <button className="btn-primary" onClick={() => onNavigate('campus')} style={{ padding: '0.45rem 1rem', fontSize: '0.82rem', borderRadius: '10px', fontWeight: 700 }}>
+                      Explore Campus Clubs & Life
+                    </button>
                   </div>
                 );
               }
@@ -2384,9 +2239,13 @@ const Dashboard = ({ stats, user, opportunities, onNavigate, onUpdateSemester, c
               const N = recommendedEvents.length;
               if (N === 0) {
                 return (
-                  <div style={{ display: 'flex', flexGrow: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', padding: '1rem 0' }}>
-                    <span style={{ fontSize: '1.6rem' }}>📅</span>
-                    <p style={{ marginTop: '0.35rem', fontSize: '0.85rem' }}>No recommended events at this time.</p>
+                  <div style={{ display: 'flex', flexGrow: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-muted))', minHeight: '190px', background: theme === 'light' ? 'rgba(2, 132, 199, 0.04)' : 'rgba(255, 255, 255, 0.02)', border: theme === 'light' ? '1px dashed rgba(2, 132, 199, 0.2)' : '1px dashed rgba(255, 255, 255, 0.1)', borderRadius: '16px', padding: '1.75rem 1.5rem', textAlign: 'center' }}>
+                    <span style={{ fontSize: '2.8rem', marginBottom: '0.75rem', display: 'block' }}>🎉</span>
+                    <h4 style={{ margin: '0 0 0.35rem 0', fontSize: '1.15rem', color: theme === 'light' ? '#0f172a' : 'hsl(var(--text-primary))', fontWeight: 800 }}>Discover Campus Events & Clubs</h4>
+                    <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.85rem', color: theme === 'light' ? '#475569' : 'hsl(var(--text-muted))', maxWidth: '480px', lineHeight: 1.4 }}>No active event recommendations right now. Explore active campus clubs, hackathons, and upcoming workshops!</p>
+                    <button className="btn-primary" onClick={() => onNavigate('campus')} style={{ padding: '0.5rem 1.15rem', fontSize: '0.85rem', borderRadius: '10px', fontWeight: 700 }}>
+                      Explore All Events & Clubs →
+                    </button>
                   </div>
                 );
               }
