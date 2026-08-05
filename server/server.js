@@ -375,17 +375,23 @@ function sanitizeUser(userObj) {
 app.use(express.json({ limit: '15mb' }));
 
 const uploadsDir = path.join(path.dirname(__dirname), 'public', 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-app.use('/uploads', express.static(uploadsDir, {
-  maxAge: '30d',
-  etag: true,
-  lastModified: true,
-  setHeaders: (res) => {
-    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+try {
+  if (!process.env.VERCEL && !fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
   }
-}));
+} catch (e) {
+  console.warn('Could not create uploads directory locally:', e.message);
+}
+if (fs.existsSync(uploadsDir)) {
+  app.use('/uploads', express.static(uploadsDir, {
+    maxAge: '30d',
+    etag: true,
+    lastModified: true,
+    setHeaders: (res) => {
+      res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+    }
+  }));
+}
 
 // Enable strong ETags for aggressive caching
 app.set('etag', 'strong');
