@@ -7202,23 +7202,50 @@ a {
 
 .wa-input-bar {
   min-height: 64px;
-  background-color: #202c33;
-  padding: 0.5rem 1rem;
+  background-color: #1f2c34;
+  padding: 0.5rem 0.75rem;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.wa-input-container {
+  flex: 1;
+  background-color: #2a3942;
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  padding: 0 0.5rem;
+  min-height: 44px;
 }
 
 .wa-input-field {
   flex: 1;
-  background-color: #2a3942;
+  background-color: transparent;
   border: none;
-  border-radius: 8px;
-  padding: 0.65rem 1rem;
+  padding: 0.65rem 0.5rem;
   color: #e9edef;
-  font-size: 0.92rem;
+  font-size: 1rem;
   outline: none;
+}
+
+.wa-dynamic-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: width 0.25s cubic-bezier(0.2, 0, 0, 1), opacity 0.2s ease-in-out, transform 0.25s ease-in-out;
+  width: 34px;
+  opacity: 1;
+  transform: scale(1);
+}
+
+.wa-dynamic-icon.hidden {
+  width: 0;
+  opacity: 0;
+  transform: scale(0.5);
+  pointer-events: none;
 }
 
 .wa-send-btn {

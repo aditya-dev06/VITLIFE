@@ -3745,43 +3745,72 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                 </div>
               )}
 
-              {/* WhatsApp Message Field */}
-              <input
-                type="text"
-                placeholder={isRecordingVoice ? "🎙️ Recording Voice Note..." : "Message"}
-                value={newMessage}
-                onChange={handleInputChange}
-                onFocus={() => setActiveMenuMsgId(null)}
-                className="wa-input-field"
-                disabled={isRecordingVoice}
-              />
+              {/* Input pill container */}
+              <div className="wa-input-container">
+                {/* Emoji Picker Trigger */}
+                <span 
+                  title="Emojis" 
+                  onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(!showEmojiPicker); setShowAttachMenu(false); }}
+                  style={{ color: '#8696a0', fontSize: '1.3rem', cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0, padding: '8px' }}
+                >
+                  <svg viewBox="0 0 24 24" width="24" height="24" fill="#8696a0">
+                    <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8zm3.5-9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm-7 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm5.893 4.11C14.025 15.68 13.054 16 12 16s-2.025-.32-2.393-.89A.999.999 0 1 0 7.94 16.22C8.734 17.35 10.29 18 12 18c1.71 0 3.266-.65 4.06-1.78a.999.999 0 1 0-1.667-1.11z"/>
+                  </svg>
+                </span>
 
-              {/* Mobile-only: ₹ rupee pay icon */}
-              <button
-                type="button"
-                className="wa-mobile-extra-btn"
-                title="Pay"
-                onClick={(e) => { e.preventDefault(); showToast('UPI Pay feature coming soon 💸', 'info'); }}
-                style={{ background: 'none', border: 'none', color: '#8696a0', cursor: 'pointer', display: 'none', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}
-              >
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="#8696a0">
-                  <path d="M15 3H9v2h2.5L6 19h2l5.5-14H16l-1-2zm-4 8H9l-1 2h2l-1 2H7l-1 2h2l-1 2h2l1-2h2l1 2h2l-1-2h2l1-2h-2l1-2h-2l-1-2z"/>
-                </svg>
-              </button>
+                {/* WhatsApp Message Field */}
+                <input
+                  type="text"
+                  placeholder={isRecordingVoice ? "🎙️ Recording Voice Note..." : "Message"}
+                  value={newMessage}
+                  onChange={handleInputChange}
+                  onFocus={() => setActiveMenuMsgId(null)}
+                  className="wa-input-field"
+                  disabled={isRecordingVoice}
+                />
 
-              {/* Mobile-only: camera icon */}
-              <button
-                type="button"
-                className="wa-mobile-extra-btn"
-                title="Camera"
-                onClick={(e) => { e.preventDefault(); if (fileInputRef.current) { fileInputRef.current.accept = 'image/*'; fileInputRef.current.click(); } }}
-                style={{ background: 'none', border: 'none', color: '#8696a0', cursor: 'pointer', display: 'none', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}
-              >
-                <svg viewBox="0 0 24 24" width="24" height="24" fill="#8696a0">
-                  <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"/>
-                  <path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
-                </svg>
-              </button>
+                {/* Right side icons container */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '2px', paddingRight: '4px' }}>
+                  {/* Attachment Menu Paperclip Button */}
+                  <button
+                    type="button"
+                    title="Attach"
+                    onClick={(e) => { e.stopPropagation(); setShowAttachMenu(!showAttachMenu); setShowEmojiPicker(false); }}
+                    style={{ background: 'none', border: 'none', color: '#8696a0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', flexShrink: 0, position: 'relative' }}
+                  >
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="#8696a0">
+                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                    </svg>
+                  </button>
+
+                  <div className={`wa-dynamic-icon ${newMessage || selectedAttachment ? 'hidden' : ''}`}>
+                    <button
+                      type="button"
+                      title="Pay"
+                      onClick={(e) => { e.preventDefault(); showToast('UPI Pay feature coming soon 💸', 'info'); }}
+                      style={{ background: 'none', border: 'none', color: '#8696a0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', flexShrink: 0 }}
+                    >
+                      <svg viewBox="0 0 24 24" width="22" height="22" fill="#8696a0">
+                        <path d="M15 3H9v2h2.5L6 19h2l5.5-14H16l-1-2zm-4 8H9l-1 2h2l-1 2H7l-1 2h2l-1 2h2l1-2h2l1 2h2l-1-2h2l1-2h-2l1-2h-2l-1-2z"/>
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div className={`wa-dynamic-icon ${newMessage || selectedAttachment ? 'hidden' : ''}`}>
+                    <button
+                      type="button"
+                      title="Camera"
+                      onClick={(e) => { e.preventDefault(); if (fileInputRef.current) { fileInputRef.current.accept = 'image/*'; fileInputRef.current.click(); } }}
+                      style={{ background: 'none', border: 'none', color: '#8696a0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', flexShrink: 0 }}
+                    >
+                      <svg viewBox="0 0 24 24" width="24" height="24" fill="#8696a0">
+                        <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"/>
+                        <path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
 
               {/* WhatsApp Voice Mic or Send Button */}
               {(!newMessage.trim() && !selectedAttachment) ? (
