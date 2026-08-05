@@ -218,8 +218,9 @@ const FacultyDirectory = memo(function FacultyDirectory({ user, onRequireAuth })
                             <Phone size={14} className="contact-icon text-cyan-400" />
                             <span className="contact-link">{f.phone}</span>
                           </div>
-                          <div className="guest-lock-overlay">
+                          <div className="guest-lock-overlay" style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.72rem' }}>🔒 Login to View Phone</span>
+                            <button className="btn-primary" style={{ padding: '2px 8px', fontSize: '0.65rem' }}>Sign In</button>
                           </div>
                         </div>
                       ) : (
@@ -260,8 +261,9 @@ const FacultyDirectory = memo(function FacultyDirectory({ user, onRequireAuth })
                             <Mail size={14} className="contact-icon text-purple-400" />
                             <span className="contact-link">{f.email}</span>
                           </div>
-                          <div className="guest-lock-overlay">
+                          <div className="guest-lock-overlay" style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.72rem' }}>🔒 Login to View Email</span>
+                            <button className="btn-primary" style={{ padding: '2px 8px', fontSize: '0.65rem' }}>Sign In</button>
                           </div>
                         </div>
                       ) : (

@@ -54,6 +54,112 @@ const isDocumentUrl = (url) => {
   return docRegex.test(trimmed);
 };
 
+// --- WHATSAPP STYLE LOCAL FILE DB ---
+const initFileDB = () => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('VITLife_WhatsApp_Files', 1);
+    request.onupgradeneeded = (e) => {
+      e.target.result.createObjectStore('chatMedia');
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+export const storeLocalFile = async (id, base64Data) => {
+  try {
+    const db = await initFileDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('chatMedia', 'readwrite');
+      tx.objectStore('chatMedia').put(base64Data, id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch(e) {
+    console.error("Local DB store error:", e);
+  }
+};
+
+export const getLocalFile = async (id) => {
+  try {
+    const db = await initFileDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('chatMedia', 'readonly');
+      const req = tx.objectStore('chatMedia').get(id);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  } catch(e) {
+    console.error("Local DB get error:", e);
+    return null;
+  }
+};
+// ------------------------------------
+
+const RelayImage = ({ src, alt, onClick, style }) => {
+  const [actualSrc, setActualSrc] = useState('');
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    
+    const resolveSrc = async () => {
+      if (!src) return;
+      if (!src.startsWith('relay://')) {
+        setActualSrc(src);
+        return;
+      }
+      
+      const id = src.replace('relay://', '');
+      
+      // Check local device storage (user as host)
+      const cached = await getLocalFile(id);
+      if (cached) {
+        if (isMounted) setActualSrc(cached);
+        return;
+      }
+      
+      // Fetch from ephemeral relay
+      try {
+        const token = localStorage.getItem('ds_ai_token');
+        const res = await fetch(`/api/relay/${id}`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+        const data = await res.json();
+        if (data.success && data.data) {
+          if (isMounted) setActualSrc(data.data);
+          // Save to local device storage to act as host
+          await storeLocalFile(id, data.data);
+        } else {
+          if (isMounted) setError(true);
+        }
+      } catch(e) {
+        if (isMounted) setError(true);
+      }
+    };
+    
+    resolveSrc();
+    return () => { isMounted = false; };
+  }, [src]);
+
+  if (error) {
+    return <div style={{ fontSize: '0.75rem', color: '#fb7185', padding: '0.3rem 0.5rem', background: 'rgba(239,68,68,0.1)', borderRadius: '6px' }}>⚠️ Preview Unavailable</div>;
+  }
+  
+  if (!actualSrc) {
+    return <div style={{ width: '150px', height: '100px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ opacity: 0.5 }}>Loading...</span></div>;
+  }
+
+  return (
+    <img 
+      src={sanitizeImageSrc(actualSrc)} 
+      alt={alt} 
+      onClick={() => onClick && onClick(actualSrc)}
+      style={style}
+    />
+  );
+};
+
 const readAsArrayBuffer = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1386,11 +1492,11 @@ const ChatMessageItem = memo(function ChatMessageItem({
           )}
 
           {/* Attachment Rendering */}
-          {message.attachment && (
+          {(message.attachment || message.imageUrl) && (
             <div style={{ marginTop: '0.35rem' }}>
-              {isDocumentUrl(message.attachment) ? (
+              {isDocumentUrl(message.attachment || message.imageUrl) ? (
                 <a
-                  href={sanitizeUrl(message.attachment)}
+                  href={sanitizeUrl(message.attachment || message.imageUrl)}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
@@ -1411,25 +1517,19 @@ const ChatMessageItem = memo(function ChatMessageItem({
                   <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>↗ View</span>
                 </a>
               ) : (
-                <img 
-                  src={sanitizeImageSrc(message.attachment)} 
-                  alt="Chat attachment" 
-                  onClick={() => onPreviewImage && onPreviewImage(message.attachment)}
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                    if (e.currentTarget.parentNode) {
-                      e.currentTarget.parentNode.innerHTML = '<div style="font-size:0.75rem; color:#fb7185; padding:0.3rem 0.5rem; background:rgba(239,68,68,0.1); border-radius:6px;">⚠️ Preview Unavailable</div>';
-                    }
-                  }}
+                <RelayImage 
+                  src={message.imageUrl || message.attachment}
+                  alt="Chat attachment"
+                  onClick={onPreviewImage}
                   style={{
-                    maxWidth: '240px',
-                    maxHeight: '180px',
-                    borderRadius: '8px',
-                    objectFit: 'cover',
-                    border: '1px solid rgba(255,255,255,0.15)',
-                    cursor: 'pointer',
-                    transition: 'transform 0.2s ease'
+                    maxWidth: '100%',
+                    maxHeight: '300px',
+                    borderRadius: '12px',
+                    objectFit: 'contain',
+                    border: '1px solid rgba(255,255,255,0.1)',
                   }}
+                  onMouseEnter={(e) => e.currentTarget.style.filter = 'brightness(1.1)'}
+                  onMouseLeave={(e) => e.currentTarget.style.filter = 'brightness(1)'}
                 />
               )}
             </div>
@@ -2331,7 +2431,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
   const CHANNELS = useMemo(() => {
     const baseChannels = [
-      { id: 'general', label: 'general-discussion', icon: '💬', name: 'General Campus', desc: 'General campus discussion & updates', isPublic: true },
+      { id: 'general', label: 'general', icon: '💬', name: 'General Campus', desc: 'General campus discussion & updates', isPublic: true },
       ...dmChannels,
       { id: 'pyq-doubts', label: 'pyq-doubt-solver', icon: '📄', name: 'PYQ Doubts', desc: 'Past year paper solutions & doubts', isPublic: false },
       { id: 'exam-prep', label: 'exam-prep-groups', icon: '📚', name: 'Exam Prep', desc: 'Study circles & CAT/TEE prep', isPublic: false },
@@ -2440,7 +2540,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       const tsFormatted = data.message.timestamp
         ? (data.message.timestamp.includes('T') ? new Date(data.message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : data.message.timestamp)
         : 'Just now';
-      const serverMsg = { ...data.message, content: rawContent, timestamp: tsFormatted, status: 'sent' };
+      const serverMsg = { ...data.message, content: rawContent, timestamp: tsFormatted, rawTimestamp: data.message.timestamp, status: 'sent' };
       setMessages(prev => {
         const exists = prev.some(m => m.id === serverMsg.id || (serverMsg.tempId && m.tempId === serverMsg.tempId));
         if (exists) return prev.map(m => (m.id === serverMsg.id || (serverMsg.tempId && m.tempId === serverMsg.tempId)) ? serverMsg : m);
@@ -2533,7 +2633,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
             const tsFormatted = m.timestamp
               ? (m.timestamp.includes('T') ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : m.timestamp)
               : 'Just now';
-            return { ...m, content: rawContent, timestamp: tsFormatted };
+            return { ...m, content: rawContent, timestamp: tsFormatted, rawTimestamp: m.timestamp };
           }));
 
           setMessages(prev => {
@@ -2580,7 +2680,15 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
             }
 
             const serverIds = new Set(decryptedMsgs.map(m => m.id));
-            const afterDelete = merged.filter(m => m.status === 'sending' || !m.id || serverIds.has(m.id));
+            const now = Date.now();
+            const afterDelete = merged.filter(m => {
+              if (m.status === 'sending' || !m.id || serverIds.has(m.id)) return true;
+              if (m.id && m.id.startsWith('msg_')) {
+                const ts = parseInt(m.id.split('_')[1], 10);
+                if (!isNaN(ts) && (now - ts < 30000)) return true; // keep if newer than 30s to shield from race conditions
+              }
+              return false;
+            });
             if (afterDelete.length !== merged.length) hasChanges = true;
 
             return hasChanges ? afterDelete : prev;
@@ -2957,20 +3065,34 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     let attachmentUrl = null;
 
     if (selectedAttachment) {
-      const formData = new FormData();
-      formData.append('file', selectedAttachment);
       const token = localStorage.getItem('ds_ai_token');
       try {
-        const res = await fetch('/api/chat/upload', {
+        const base64Data = await readAsDataURL(selectedAttachment);
+        const relayId = generateSecureId('relay');
+        
+        // Save to our local "host" IndexedDB immediately
+        await storeLocalFile(relayId, base64Data);
+        
+        // Relay to server (ephemeral)
+        const res = await fetch('/api/relay', {
           method: 'POST',
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-          body: formData
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            id: relayId,
+            data: base64Data,
+            contentType: selectedAttachment.type
+          })
         });
         const data = await res.json();
-        if (data.success && data.url) {
-          attachmentUrl = data.url;
+        
+        if (data.success) {
+          // Tell others to fetch from this relay ID
+          attachmentUrl = `relay://${relayId}`;
         } else {
-          attachmentUrl = await readAsDataURL(selectedAttachment);
+          attachmentUrl = base64Data; // fallback
         }
       } catch (err) {
         try {
@@ -3000,8 +3122,10 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       role: user && !user.isGuest ? (user.role === 'admin' ? 'Admin' : (user.program || 'Student')) : 'Guest User',
       content: rawText,
       attachment: attachmentUrl,
+      imageUrl: attachmentUrl,
       replyTo: replyingToMessage ? { author: replyingToMessage.author, content: replyingToMessage.content } : null,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      rawTimestamp: new Date().toISOString(),
       status: 'sending',
       reactions: { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] }
     };
@@ -3027,6 +3151,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         channel: activeChannel,
         content: encryptedContent,
         attachment: attachmentUrl,
+        imageUrl: attachmentUrl,
         authorName: msg.author,
         authorRole: msg.role,
         userId: currentAuthorId,
@@ -3048,6 +3173,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
           channel: activeChannel, 
           content: encryptedContent, 
           attachment: attachmentUrl,
+          imageUrl: attachmentUrl,
           authorName: msg.author,
           authorRole: msg.role,
           userId: currentAuthorId,
@@ -3094,6 +3220,17 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
   const filteredMessages = useMemo(() => {
     let list = (Array.isArray(messages) ? messages : []).filter(m => m && m.channel === activeChannel && !deletedForMeIds.includes(m.id));
+    
+    // Sort chronologically (oldest first, newest last) to guarantee chat order
+    list.sort((a, b) => {
+      const getTs = (m) => {
+        if (m.rawTimestamp) return new Date(m.rawTimestamp).getTime();
+        if (m.id && m.id.startsWith('msg_')) return parseInt(m.id.split('_')[1], 10);
+        return 0;
+      };
+      return getTs(a) - getTs(b);
+    });
+
     const q = debouncedChatSearch.trim().toLowerCase();
     if (q) {
       list = list.filter(m => m && ((m.content && m.content.toLowerCase().includes(q)) || (m.author && m.author.toLowerCase().includes(q))));
@@ -3389,7 +3526,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                 #{activeChannelObj.label} is Locked
               </h3>
               <p style={{ color: '#8696a0', fontSize: '0.85rem', lineHeight: 1.5, marginBottom: '1.5rem' }}>
-                Only <strong>#general-discussion</strong> is open for guest previews. Please log in to unlock PYQ doubt solvers, study groups, placement QAs, and campus trading.
+                Only <strong>#general</strong> is open for guest previews. Please log in to unlock PYQ doubt solvers, study groups, placement QAs, and campus trading.
               </p>
               <button 
                 onClick={() => { if (onRequireAuth) onRequireAuth(); }}
@@ -3552,6 +3689,20 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   ))}
                 </div>
               )}
+
+              {/* Image/GIF Direct Attachment Button */}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); if (fileInputRef.current) { fileInputRef.current.accept = 'image/*,.gif'; fileInputRef.current.click(); } }}
+                title="Attach Image or GIF"
+                style={{ background: 'none', border: 'none', color: '#8696a0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', flexShrink: 0 }}
+              >
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+              </button>
 
               {/* Attachment Menu Paperclip Button */}
               <button
@@ -4032,7 +4183,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
               {user && !user.isGuest ? (user.program || 'Verified Student') : 'Guest Account Mode'}
             </span>
             <p style={{ fontSize: '0.82rem', color: '#8696a0', marginTop: '1rem', lineHeight: 1.4 }}>
-              {user && !user.isGuest ? 'Access to all student community channels unlocked.' : 'Guest accounts can send messages in #general-discussion. Log in to unlock specialized doubt solvers and trade markets.'}
+              {user && !user.isGuest ? 'Access to all student community channels unlocked.' : 'Guest accounts can send messages in #general. Log in to unlock specialized doubt solvers and trade markets.'}
             </p>
             {isGuestUser ? (
               <button 
@@ -4836,6 +4987,16 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
                     <span>📂</span>
                     <p>{searchQuery ? `No papers match "${searchQuery}".` : 'No papers found matching the selected criteria.'}</p>
                     <p className="subtitle">{searchQuery ? 'Try a different search term.' : 'Be the first to share one!'}</p>
+                    <button 
+                      className="btn-primary" 
+                      style={{ marginTop: '1rem', background: '#38bdf8', color: '#0f172a' }}
+                      onClick={() => {
+                        setActiveSubTab('chats');
+                        handleChannelSelect('pyq-doubts');
+                      }}
+                    >
+                      Request in #pyq-doubt-solver
+                    </button>
                   </div>
                 ) : (
                   <>

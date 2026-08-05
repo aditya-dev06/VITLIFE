@@ -137,7 +137,7 @@ export const DropdownMenuContent = forwardRef(({ className = '', align = 'end', 
     let spaceBelow = vh - triggerRect.bottom - MARGIN;
     let spaceAbove = triggerRect.top - MARGIN;
     
-    let top;
+    let top, bottom;
     let openUp = false;
     let computedMaxHeight = 400; // default max height
 
@@ -147,13 +147,13 @@ export const DropdownMenuContent = forwardRef(({ className = '', align = 'end', 
       computedMaxHeight = spaceBelow;
     } else if (menuH <= spaceAbove) {
       // Fits perfectly above
-      top = triggerRect.top - menuH - MARGIN;
+      bottom = vh - triggerRect.top + MARGIN;
       openUp = true;
       computedMaxHeight = spaceAbove;
     } else {
       // Doesn't fit perfectly on either side, pick side with more space
       if (spaceAbove > spaceBelow) {
-        top = MARGIN;
+        bottom = vh - triggerRect.top + MARGIN;
         openUp = true;
         computedMaxHeight = spaceAbove;
       } else {
@@ -162,6 +162,7 @@ export const DropdownMenuContent = forwardRef(({ className = '', align = 'end', 
       }
     }
 
+    let left, right;
     if (align === 'end') {
       right = Math.max(MARGIN, vw - triggerRect.right);
     } else {
@@ -170,7 +171,7 @@ export const DropdownMenuContent = forwardRef(({ className = '', align = 'end', 
 
     const maxHeight = Math.max(150, computedMaxHeight);
 
-    setPosition({ top, left, right, maxHeight, openUp });
+    setPosition({ top, bottom, left, right, maxHeight, openUp });
   }, [open, triggerRect, align]);
 
   if (!open) return null;
@@ -187,6 +188,7 @@ export const DropdownMenuContent = forwardRef(({ className = '', align = 'end', 
 
   if (position) {
     if (position.top !== undefined) baseStyle.top = `${position.top}px`;
+    if (position.bottom !== undefined) baseStyle.bottom = `${position.bottom}px`;
     if (position.left !== undefined) baseStyle.left = `${position.left}px`;
     if (position.right !== undefined) baseStyle.right = `${position.right}px`;
     if (position.maxHeight !== undefined) {

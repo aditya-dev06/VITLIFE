@@ -374,7 +374,7 @@ function sanitizeUser(userObj) {
 
 app.use(express.json({ limit: '15mb' }));
 
-const uploadsDir = path.join(__dirname, 'uploads');
+const uploadsDir = path.join(path.dirname(__dirname), 'public', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -556,7 +556,7 @@ const PYTHON_SCRIPT = path.join(SCRIPTS_DIR, 'fetch_opportunities.py');
 const CLUBS_FILE = path.join(DATA_DIR, 'clubs.json');
 const EVENTS_FILE = path.join(DATA_DIR, 'events.json');
 const RECRUITMENTS_FILE = path.join(DATA_DIR, 'recruitments.json');
-const UPLOADS_DIR = path.join(__dirname, 'uploads');
+const UPLOADS_DIR = path.join(path.dirname(__dirname), 'public', 'uploads');
 const ACTIVITY_LOGS_FILE = path.join(DATA_DIR, 'activity_logs.json');
 const PAPERS_FILE = path.join(DATA_DIR, 'papers.json');
 const FEEDBACK_FILE = path.join(DATA_DIR, 'feedback.json');
@@ -926,13 +926,13 @@ const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max (matching frontend limit)
   fileFilter: (req, file, cb) => {
-    const allowed = /jpeg|jpg|png|webp/;
+    const allowed = /jpeg|jpg|png|webp|gif/;
     const ext = allowed.test(path.extname(file.originalname).toLowerCase());
     const mime = allowed.test(file.mimetype);
     if (ext && mime) {
       cb(null, true);
     } else {
-      cb(new Error('Only images of type jpeg, jpg, png, or webp are allowed.'));
+      cb(new Error('Only images of type jpeg, jpg, png, webp, or gif are allowed.'));
     }
   }
 });
@@ -5298,10 +5298,29 @@ app.post('/api/research', authenticate, requireAdmin, (req, res) => {
 });
 
 // ================= BUY & SELL MARKETPLACE ROUTES =================
+let inMemoryMarketplaceItems = null;
+
 const getMarketplaceItems = async () => {
+  if (inMemoryMarketplaceItems) return inMemoryMarketplaceItems;
+  
+  if (dbConnectingPromise) await dbConnectingPromise;
+  if (db) {
+    try {
+      const items = await db.collection('marketplace_items').find({}).toArray();
+      if (items && items.length > 0) {
+        const data = { lastUpdated: new Date().toISOString(), items: items.map(({ _id, ...rest }) => rest) };
+        inMemoryMarketplaceItems = data;
+        return data;
+      }
+    } catch (dbErr) {
+      console.error('Failed to read marketplace from MongoDB:', dbErr);
+    }
+  }
+
   try {
     if (fs.existsSync(MARKETPLACE_FILE)) {
       const data = JSON.parse(fs.readFileSync(MARKETPLACE_FILE, 'utf-8'));
+      inMemoryMarketplaceItems = data;
       return data;
     }
   } catch (e) {
@@ -5311,6 +5330,7 @@ const getMarketplaceItems = async () => {
 };
 
 const saveMarketplaceItems = async (data) => {
+  inMemoryMarketplaceItems = data;
   try {
     fs.writeFileSync(MARKETPLACE_FILE, JSON.stringify(data, null, 2), 'utf-8');
     if (dbConnectingPromise) await dbConnectingPromise;
@@ -5322,7 +5342,8 @@ const saveMarketplaceItems = async (data) => {
       }
     }
   } catch (e) {
-    console.error('Failed to save marketplace items:', e);
+    console.error('Failed to save marketplace items (falling back to memory):', e);
+    // Do not throw! Fallback to memory is sufficient for read-only environments.
   }
 };
 
@@ -6130,7 +6151,43 @@ app.post('/api/upload/image', authenticate, (req, res) => {
   });
 });
 
-app.post('/api/upload', authenticate, requireClubManager, (req, res) => {
+// --- WHATSAPP STYLE EPHEMERAL RELAY ---
+const relayCache = new Map();
+
+// Clear old relays every hour to prevent memory leaks
+setInterval(() => {
+    const now = Date.now();
+    for (const [id, relay] of relayCache.entries()) {
+        if (now - relay.timestamp > 3600000) {
+            relayCache.delete(id);
+        }
+    }
+}, 3600000);
+
+app.post('/api/relay', authenticate, (req, res) => {
+    try {
+        const { id, data, contentType } = req.body;
+        if (!id || !data) return res.status(400).json({ error: 'Missing id or data' });
+        
+        // Ensure we don't exceed Vercel body limits; usually frontend chunks or sends max 4.5MB
+        relayCache.set(id, { data, contentType, timestamp: Date.now() });
+        res.json({ success: true, id });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/relay/:id', authenticate, (req, res) => {
+    const relay = relayCache.get(req.params.id);
+    if (!relay) return res.status(404).json({ error: 'Relay not found or expired' });
+    
+    // We do NOT delete it immediately because multiple users in a channel might need to download it.
+    // It will expire based on the TTL.
+    res.json({ success: true, data: relay.data, contentType: relay.contentType });
+});
+// --------------------------------------
+
+app.post('/api/upload', authenticate, (req, res) => {
   upload.single('poster')(req, res, async (err) => {
     if (err instanceof multer.MulterError) {
       return res.status(400).json({ error: 'Upload error: ' + err.message });
@@ -6598,7 +6655,27 @@ app.get('/api/chat/messages', async (req, res) => {
       }
     }
 
-    // 2. High-performance in-memory fallback
+    // 2. Try MongoDB fallback
+    if (dbConnectingPromise) await dbConnectingPromise;
+    if (db) {
+      try {
+        const dbMessages = await db.collection('chat_messages').find({ channel }).sort({ timestamp: -1 }).limit(100).toArray();
+        if (dbMessages && dbMessages.length > 0) {
+          const parsed = dbMessages.map(({ _id, ...rest }) => rest).reverse();
+          // Update in memory array to prevent immediate future misses
+          parsed.forEach(m => {
+            if (!inMemoryChatMessages.find(mem => mem.id === m.id)) {
+              inMemoryChatMessages.push(m);
+            }
+          });
+          return res.json({ success: true, messages: parsed });
+        }
+      } catch (e) {
+        console.warn("MongoDB chat fetch warning:", e.message);
+      }
+    }
+
+    // 3. High-performance in-memory fallback
     const filtered = inMemoryChatMessages.filter(m => m.channel === channel).slice(-100);
     res.json({ success: true, messages: filtered });
   } catch (err) {
@@ -6609,8 +6686,8 @@ app.get('/api/chat/messages', async (req, res) => {
 
 // Rate limiter for chat messages — 30 messages per minute per IP
 const chatMessageLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
+  windowMs: 10 * 1000,
+  max: 5,
   message: { success: false, error: 'Too many messages. Please slow down.' },
   standardHeaders: true,
   legacyHeaders: false
@@ -6650,7 +6727,33 @@ app.delete('/api/chat/messages/clear', authenticate, requireAdmin, async (req, r
 app.post('/api/chat/messages', chatMessageLimiter, async (req, res) => {
   try {
     const { channel, content, attachment, poll, replyTo, authorName, authorRole, tempId, marketplaceItem } = req.body;
-    const cleanContent = sanitizeString(content, 5000);
+    
+    // Moderation Engine: Enforce Max Length
+    if (content && content.length > 1500) {
+      return res.status(400).json({ success: false, error: 'Message exceeds maximum length of 1500 characters.' });
+    }
+
+    // Moderation Engine: Profanity & Abuse filter
+    const badWords = ['porn', 'sex', 'nude', 'xxx', 'dick', 'cock', 'pussy', 'fuck', 'shit', 'bitch'];
+    const lowerContent = content ? content.toLowerCase() : '';
+    if (badWords.some(word => lowerContent.includes(word))) {
+      return res.status(400).json({ success: false, error: 'Message contains inappropriate content.' });
+    }
+
+    // Moderation Engine: Link Policy
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const urls = content ? content.match(urlRegex) : [];
+    if (urls && urls.length > 2) {
+      return res.status(400).json({ success: false, error: 'Message contains too many links.' });
+    }
+    const badLinkWords = ['porn', 'onlyfans', 'xxx'];
+    if (urls && urls.some(url => badLinkWords.some(bad => url.toLowerCase().includes(bad)))) {
+        return res.status(400).json({ success: false, error: 'Message contains inappropriate links.' });
+    }
+
+    // Moderation Engine: Strict XSS sanitization
+    let xssSanitizedContent = content ? content.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;') : '';
+    const cleanContent = sanitizeString(xssSanitizedContent, 1500);
 
     if (!cleanContent && !attachment && !poll && !marketplaceItem) {
       return res.status(400).json({ success: false, error: "Message content, attachment, or poll required" });
@@ -6707,6 +6810,16 @@ app.post('/api/chat/messages', chatMessageLimiter, async (req, res) => {
         await redisClient.lpush(`chat:messages:${targetChannel}`, JSON.stringify(messageObj));
         await redisClient.ltrim(`chat:messages:${targetChannel}`, 0, 199);
       } catch (e) {}
+    }
+    
+    // Save to MongoDB
+    if (dbConnectingPromise) await dbConnectingPromise;
+    if (db) {
+      try {
+        await db.collection('chat_messages').insertOne({ ...messageObj });
+      } catch (e) {
+        console.warn("MongoDB chat save warning:", e.message);
+      }
     }
 
     // Always maintain in-memory store
@@ -6817,7 +6930,7 @@ app.post('/api/chat/upload', authenticate, upload.single('file'), async (req, re
       // Local fallback with sanitized filename
       const cleanBaseName = path.basename(req.file.originalname, safeExt).replace(/[^a-zA-Z0-9_-]/g, '_');
       const filename = `chat_${Date.now()}_${cleanBaseName}${safeExt}`;
-      const uploadsDir = path.join(__dirname, 'uploads');
+      const uploadsDir = path.join(path.dirname(__dirname), 'public', 'uploads');
       if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
       fs.writeFileSync(path.join(uploadsDir, filename), req.file.buffer);
       fileUrl = `/uploads/${filename}`;
