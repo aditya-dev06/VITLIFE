@@ -1567,7 +1567,7 @@ if (MONGODB_URI) {
 
             await db.collection('users').updateOne(
               { email: lowerEmail },
-              { $set: safeData },
+              { $setOnInsert: safeData },
               { upsert: true }
             );
             syncedCount++;
