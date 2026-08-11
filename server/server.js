@@ -301,12 +301,10 @@ app.use(cors((req, callback) => {
   const corsOptions = { credentials: true };
   
   if (!origin) {
-    if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
-      corsOptions.origin = true;
-      return callback(null, corsOptions);
-    }
-    corsOptions.origin = false;
-    return callback(new Error('CORS blocked: Missing Origin header'), corsOptions);
+    // Browsers omit the Origin header for same-origin GET requests. 
+    // We must allow !origin to ensure normal site navigation works.
+    corsOptions.origin = true;
+    return callback(null, corsOptions);
   }
 
   // Allow same-origin requests dynamically by checking host and x-forwarded-host headers
