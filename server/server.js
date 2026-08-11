@@ -3174,7 +3174,7 @@ const logActivity = async (email, action, req) => {
 };
 
 
-// Migration: ensure existing admin user has role set
+// Migration: ensure existing admin user has role set, or auto-create if missing
 (async () => {
   if (dbConnectingPromise) await dbConnectingPromise;
   const adminEmails = (process.env.ADMIN_EMAILS || ADMIN_EMAIL || '')
@@ -3183,10 +3183,36 @@ const logActivity = async (email, action, req) => {
     .filter(Boolean);
   for (const email of adminEmails) {
     const adminUser = await findUserByEmail(email);
-    if (adminUser && adminUser.role !== 'admin') {
-      adminUser.role = 'admin';
-      await saveUser(email, adminUser);
-      console.log(`Migrated admin user role for ${email}.`);
+    if (adminUser) {
+      if (adminUser.role !== 'admin') {
+        adminUser.role = 'admin';
+        await saveUser(email, adminUser);
+        console.log(`Migrated admin user role for ${email}.`);
+      }
+    } else {
+      // Auto-create admin account to prevent lockouts during DB resets
+      const salt = generateSalt();
+      const passwordHash = hashPassword("Admin@12345", salt);
+      const parsed = typeof parseVitBhopalEmail === 'function' ? parseVitBhopalEmail(email) : null;
+      
+      const newAdmin = {
+        name: "Admin User",
+        email: email,
+        isVitBhopal: email.endsWith('@vitbhopal.ac.in'),
+        registrationNumber: parsed ? parsed.registrationNumber : '',
+        program: parsed ? parsed.program : 'Global Member',
+        semester: 1,
+        courses: [],
+        passwordHash,
+        salt,
+        xpPoints: 0,
+        skillsProgress: {},
+        role: 'admin',
+        verified: true, // Auto-verify admin
+        createdAt: new Date().toISOString()
+      };
+      await saveUser(email, newAdmin);
+      console.log(`🚀 Auto-created missing admin account for ${email} with default password: Admin@12345`);
     }
   }
 })();
