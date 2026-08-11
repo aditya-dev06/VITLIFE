@@ -389,6 +389,12 @@ function App() {
     if (navigator.serviceWorker && navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({ type: 'PURGE_API_CACHE' });
     }
+    // Explicitly delete all caches from the main thread for maximum security
+    if ('caches' in window) {
+      caches.keys().then((names) => {
+        names.forEach(name => caches.delete(name));
+      });
+    }
     setToken(null);
     setUser(null);
     setSkills(INITIAL_SKILLS);

@@ -236,48 +236,8 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Routine A: Network-First Strategy for Backend API Requests (/api/)
+  // Routine A: Bypass Service Worker entirely for Backend API Requests (/api/) to prevent caching sensitive JSON data.
   if (requestUrl.pathname.startsWith('/api/')) {
-    const isSensitive = SENSITIVE_API_PATHS.some(p => requestUrl.pathname.startsWith(p));
-    if (isSensitive) {
-      return; // Direct network execution for auth, profile, and admin endpoints
-    }
-
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          if (response.status === 200) {
-            const responseClone = response.clone();
-            caches.open(API_CACHE_NAME).then(cache => {
-              cache.put(event.request, responseClone).catch(() => {});
-            }).catch(() => {});
-          }
-          return response;
-        })
-        .catch(() => {
-          return caches.match(event.request).then(cachedResponse => {
-            if (cachedResponse) {
-              return cachedResponse;
-            }
-            return new Response(
-              JSON.stringify({
-                error: 'You are currently offline. Showing cached offline data.',
-                offline: true,
-                opportunities: [],
-                events: [],
-                clubs: [],
-                recruitments: []
-              }),
-              {
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-VITLife-Offline': 'true'
-                }
-              }
-            );
-          });
-        })
-    );
     return;
   }
 

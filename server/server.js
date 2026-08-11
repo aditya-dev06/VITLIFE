@@ -301,8 +301,12 @@ app.use(cors((req, callback) => {
   const corsOptions = { credentials: true };
   
   if (!origin) {
-    corsOptions.origin = true;
-    return callback(null, corsOptions);
+    if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+      corsOptions.origin = true;
+      return callback(null, corsOptions);
+    }
+    corsOptions.origin = false;
+    return callback(new Error('CORS blocked: Missing Origin header'), corsOptions);
   }
 
   // Allow same-origin requests dynamically by checking host and x-forwarded-host headers
@@ -550,7 +554,6 @@ app.get('/robots.txt', (req, res) => {
 
 const DATA_DIR = path.join(__dirname, 'data');
 const OPPORTUNITIES_FILE = path.join(DATA_DIR, 'opportunities.json');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const SCRIPTS_DIR = path.join(path.dirname(__dirname), 'scripts');
 const PYTHON_SCRIPT = path.join(SCRIPTS_DIR, 'fetch_opportunities.py');
 const CLUBS_FILE = path.join(DATA_DIR, 'clubs.json');
@@ -1521,64 +1524,6 @@ if (MONGODB_URI) {
         console.error("Error seeding papers to MongoDB:", e.message);
       }
       // Sync local users to MongoDB on startup — validates each record before writing
-      try {
-        if (fs.existsSync(USERS_FILE)) {
-          const rawContent = fs.readFileSync(USERS_FILE, 'utf-8');
-          const localUsers = JSON.parse(rawContent) || {};
-          const BLOCKED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-          let syncedCount = 0;
-          for (const email of Object.keys(localUsers)) {
-            // Skip prototype-pollution keys
-            if (BLOCKED_KEYS.has(email)) continue;
-            const userData = localUsers[email];
-            if (!userData || typeof email !== 'string') continue;
-
-            // Security: only migrate records with a valid structure
-            if (
-              typeof userData.passwordHash !== 'string' ||
-              typeof userData.salt !== 'string' ||
-              userData.passwordHash.length < 32
-            ) {
-              console.warn(`[Sync] Skipping malformed/incomplete user record for: ${email}`);
-              continue;
-            }
-
-            const lowerEmail = email.toLowerCase().trim();
-            if (BLOCKED_KEYS.has(lowerEmail)) continue;
-
-            // Only migrate fields we explicitly trust
-            const safeData = {
-              email: lowerEmail,
-              name: typeof userData.name === 'string' ? userData.name.substring(0, 200) : '',
-              passwordHash: userData.passwordHash,
-              salt: userData.salt,
-              verified: userData.verified === true,
-              role: ['admin', 'user', 'club_manager'].includes(userData.role) ? userData.role : 'user',
-              isVitBhopal: userData.isVitBhopal === true,
-              registrationNumber: typeof userData.registrationNumber === 'string' ? userData.registrationNumber : undefined,
-              program: typeof userData.program === 'string' ? userData.program : undefined,
-              semester: userData.semester,
-              courses: Array.isArray(userData.courses) ? userData.courses : undefined,
-              timetable: userData.timetable,
-              createdAt: userData.createdAt,
-            };
-            // Remove undefined keys
-            Object.keys(safeData).forEach(k => safeData[k] === undefined && delete safeData[k]);
-
-            await db.collection('users').updateOne(
-              { email: lowerEmail },
-              { $setOnInsert: safeData },
-              { upsert: true }
-            );
-            syncedCount++;
-          }
-          if (syncedCount > 0) {
-            console.log(`[Sync] Successfully validated and synced ${syncedCount} users from users.json to MongoDB.`);
-          }
-        }
-      } catch (e) {
-        console.error("Error syncing users from users.json to MongoDB:", e.message);
-      }
     })
     .catch(err => {
       dbConnectionStatus = "Failed";
@@ -1883,31 +1828,6 @@ const writeInitialSeeds = () => {
 if (!fs.existsSync(OPPORTUNITIES_FILE)) {
   writeInitialSeeds();
 }
-
-// User helper functions (local file fallback fallback)
-const loadUsers = () => {
-  if (!fs.existsSync(USERS_FILE)) {
-    try {
-      fs.writeFileSync(USERS_FILE, JSON.stringify({}, null, 2), 'utf-8');
-    } catch (err) {
-      console.warn("Could not create empty users file fallback:", err.message);
-    }
-    return {};
-  }
-  try {
-    return JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'));
-  } catch (e) {
-    return {};
-  }
-};
-
-const saveUsers = (users) => {
-  try {
-    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
-  } catch (err) {
-    console.warn("Could not save users to disk fallback:", err.message);
-  }
-};
 
 // Database interface methods — STRICT MONGODB ONLY (No file fallback)
 const userCache = new Map();
@@ -2529,31 +2449,6 @@ const deleteClub = async (clubId) => {
       console.error("MongoDB deleteClub error:", err);
     }
   }
-
-  // Fallback to local files
-  if (fs.existsSync(CLUBS_FILE)) {
-    try {
-      const fileData = JSON.parse(fs.readFileSync(CLUBS_FILE, 'utf-8'));
-      fileData.clubs = (fileData.clubs || []).filter(c => c.id !== clubId);
-      fs.writeFileSync(CLUBS_FILE, JSON.stringify(fileData, null, 2), 'utf-8');
-    } catch(e) {}
-  }
-
-  // Demote managers in local users file
-  try {
-    const users = loadUsers();
-    let updated = false;
-    for (const email in users) {
-      if (users[email].clubId === clubId) {
-        users[email].role = 'student';
-        delete users[email].clubId;
-        updated = true;
-      }
-    }
-    if (updated) {
-      saveUsers(users);
-    }
-  } catch(e) {}
 };
 
 
@@ -3615,12 +3510,16 @@ app.post('/api/auth/login', authLimiter, authRateLimiter(10, 15 * 60 * 1000), as
 
     const user = await findUserByEmail(lowerEmail);
 
-    if (!user) {
-      return res.status(400).json({ error: 'Invalid email or password.' });
+    let isValid = false;
+    if (user) {
+      isValid = verifyPassword(password, user.salt, user.passwordHash);
+    } else {
+      // Dummy check to mitigate user enumeration timing attacks
+      // Using a 'scrypt$' prefix ensures it takes exactly 1 hash iteration (like a valid user)
+      verifyPassword(password, 'dummysalt123', 'scrypt$dummyhash123');
     }
 
-    const isValid = verifyPassword(password, user.salt, user.passwordHash);
-    if (!isValid) {
+    if (!user || !isValid) {
       return res.status(400).json({ error: 'Invalid email or password.' });
     }
 
@@ -3668,32 +3567,27 @@ app.post('/api/auth/login', authLimiter, authRateLimiter(10, 15 * 60 * 1000), as
 
 // Real-time session event stream (Server-Sent Events)
 app.get('/api/user/sessions/events', async (req, res) => {
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive'
-  });
-
   const token = req.query.token;
   if (!token) {
-    res.write(`data: ${JSON.stringify({ type: 'error', message: 'Missing token' })}\n\n`);
-    res.end();
-    return;
+    return res.status(401).json({ error: 'Missing token' });
   }
 
   let decoded;
   try {
     decoded = await verifyToken(token);
     if (!decoded) {
-      res.write(`data: ${JSON.stringify({ type: 'error', message: 'Invalid token' })}\n\n`);
-      res.end();
-      return;
+      return res.status(401).json({ error: 'Invalid token' });
     }
   } catch (err) {
-    res.write(`data: ${JSON.stringify({ type: 'error', message: 'Invalid token signature' })}\n\n`);
-    res.end();
-    return;
+    return res.status(401).json({ error: 'Invalid token signature' });
   }
+
+  // Token is valid, now start the SSE stream
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
 
   const email = decoded.email.toLowerCase().trim();
   const signature = token.split('.')[0];
@@ -4841,7 +4735,7 @@ Extract ONLY what is actually visible in the document. Do NOT invent or guess in
     });
   } catch (err) {
     console.error('[Vision OCR Error]:', err.message);
-    res.status(500).json({ error: err.message || 'Vision OCR scan failed.' });
+    res.status(500).json({ error: 'An internal server error occurred.' });
   }
 });
 
@@ -5788,10 +5682,7 @@ app.get('/api/clubs/:id/managers', async (req, res) => {
       }
     }
     if (managers.length === 0) {
-      const localUsers = loadUsers();
-      managers = Object.values(localUsers)
-        .filter(u => u.role === 'club_manager' && u.clubId === id && u.verified === true)  // exclude unverified
-        .map(u => ({ name: u.name, role: u.role, clubId: u.clubId }));
+      managers = [];
     }
     res.json({ managers });
   } catch (error) {
@@ -6378,13 +6269,7 @@ app.get('/api/admin/users', authenticate, requireAdmin, async (req, res) => {
       }
     }
     if (users.length === 0) {
-      const localUsers = loadUsers();
-      users = Object.values(localUsers)
-        .filter(u => u.verified === true)  // exclude unverified users
-        .map(u => ({
-          name: u.name, email: u.email, role: u.role || 'student',
-          clubId: u.clubId || null, registrationNumber: u.registrationNumber || '', program: u.program || ''
-        }));
+      users = [];
     }
     
     const usersWithFlag = users.map(u => ({
