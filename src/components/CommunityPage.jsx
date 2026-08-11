@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback, useMemo, useRef, memo, startTransitio
 import { createPortal } from 'react-dom';
 import { Search, X, Send } from 'lucide-react';
 import Pusher from 'pusher-js';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/InputGroup';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator } from './ui/DropdownMenu';
 import { Bubble, BubbleContent, BubbleReactions, BubbleGroup } from './ui/bubble';
@@ -5402,7 +5406,18 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
                         <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg> <span>AI PYQ Tutor</span></>
                       )}
                     </div>
-                    {msg.text}
+                    {msg.role === 'assistant' ? (
+                      <div className="ai-pyq-markdown">
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkMath]} 
+                          rehypePlugins={[rehypeKatex]}
+                        >
+                          {msg.text}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      msg.text
+                    )}
                   </div>
                 ))
               )}
