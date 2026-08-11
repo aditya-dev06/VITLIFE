@@ -302,95 +302,98 @@ def fetch_from_duckduckgo():
         with DDGS() as ddgs:
             for opp_type, query_list in queries.items():
                 for query in query_list:
-                    print(f"Searching for {opp_type}s with query: '{query}'...")
-                    time.sleep(1.5)  # Add delay to avoid bot detection/rate-limiting
                     try:
-                        results = list(ddgs.text(query, max_results=10))
-                    except Exception:
+                        print(f"Searching for {opp_type}s with query: '{query}'...")
+                        time.sleep(1.5)  # Add delay to avoid bot detection/rate-limiting
                         try:
-                            results = list(ddgs.text(query))
-                        except Exception as search_err:
-                            print(f"DuckDuckGo search error for '{query}': {search_err}")
-                            results = []
-                    print(f"DEBUG: '{query}' returned {len(results)} results")
-                    count = 0
-                    for r in results[:8]:  # Limit to top 8 results to prevent spam
-                        title = r.get("title", "")
-                        link = r.get("href", "")
-                        body = r.get("body", "")
+                            results = list(ddgs.text(query, max_results=10))
+                        except Exception:
+                            try:
+                                results = list(ddgs.text(query))
+                            except Exception as search_err:
+                                print(f"DuckDuckGo search error for '{query}': {search_err}")
+                                results = []
+                        print(f"DEBUG: '{query}' returned {len(results)} results")
+                        count = 0
+                        for r in results[:8]:  # Limit to top 8 results to prevent spam
+                            title = r.get("title", "")
+                            link = r.get("href", "")
+                            body = r.get("body", "")
 
-                        if not title or not link or link in seen_links:
-                            continue
+                            if not title or not link or link in seen_links:
+                                continue
 
-                        # Filter out noise
-                        if any(domain in link for domain in ["youtube.com", "facebook.com", "instagram.com", "twitter.com"]):
-                            continue
+                            # Filter out noise
+                            if any(domain in link for domain in ["youtube.com", "facebook.com", "instagram.com", "twitter.com"]):
+                                continue
 
-                        # Filter out irrelevant search results (e.g. movies, games, general online freebies)
-                        if not is_relevant(title, body, opp_type, link):
-                            continue
+                            # Filter out irrelevant search results (e.g. movies, games, general online freebies)
+                            if not is_relevant(title, body, opp_type, link):
+                                continue
 
-                        seen_links.add(link)
+                            seen_links.add(link)
 
-                        # Determine score
-                        score = calculate_match_score(title, body)
+                            # Determine score
+                            score = calculate_match_score(title, body)
 
-                        # Extract organization name if possible (e.g., from domain or title)
-                        domain_match = re.search(r'https?://(?:www\.)?([^/]+)', link)
-                        org = domain_match.group(1) if domain_match else "Online Portal"
-                        
-                        if "coursera" in link:
-                            org = "Coursera"
-                        elif "udemy" in link:
-                            org = "Udemy"
-                        elif "unstop" in link:
-                            org = "Unstop"
-                        elif "devpost" in link:
-                            org = "Devpost"
-                        elif "linkedin" in link:
-                            org = "LinkedIn Careers"
-                        elif "internshala" in link:
-                            org = "Internshala"
-                        elif "hackerearth" in link:
-                            org = "HackerEarth"
-                        elif "google" in link:
-                            org = "Google"
-                        elif "ibm" in link:
-                            org = "IBM"
+                            # Extract organization name if possible (e.g., from domain or title)
+                            domain_match = re.search(r'https?://(?:www\.)?([^/]+)', link)
+                            org = domain_match.group(1) if domain_match else "Online Portal"
+                            
+                            if "coursera" in link:
+                                org = "Coursera"
+                            elif "udemy" in link:
+                                org = "Udemy"
+                            elif "unstop" in link:
+                                org = "Unstop"
+                            elif "devpost" in link:
+                                org = "Devpost"
+                            elif "linkedin" in link:
+                                org = "LinkedIn Careers"
+                            elif "internshala" in link:
+                                org = "Internshala"
+                            elif "hackerearth" in link:
+                                org = "HackerEarth"
+                            elif "google" in link:
+                                org = "Google"
+                            elif "ibm" in link:
+                                org = "IBM"
 
-                        # Generate a deadline representation
-                        deadline = "Check official site"
-                        date_matches = re.findall(r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}(?:st|nd|rd|th)?(?:, \d{4})?\b', body)
-                        if date_matches:
-                            deadline = date_matches[0]
+                            # Generate a deadline representation
+                            deadline = "Check official site"
+                            date_matches = re.findall(r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}(?:st|nd|rd|th)?(?:, \d{4})?\b', body)
+                            if date_matches:
+                                deadline = date_matches[0]
 
-                        tags = [opp_type.capitalize()]
-                        if "remote" in body.lower() or "remote" in title.lower():
-                            tags.append("Remote")
-                        else:
-                            tags.append("India")
-                        
-                        if score >= 80:
-                            tags.append("Top Match")
-                        
-                        if "python" in (title + body).lower():
-                            tags.append("Python")
+                            tags = [opp_type.capitalize()]
+                            if "remote" in body.lower() or "remote" in title.lower():
+                                tags.append("Remote")
+                            else:
+                                tags.append("India")
+                            
+                            if score >= 80:
+                                tags.append("Top Match")
+                            
+                            if "python" in (title + body).lower():
+                                tags.append("Python")
 
-                        crawled_items.append({
-                            "id": f"ddg-{opp_type}-{count}-{hash(title) % 10000}",
-                            "title": title,
-                            "type": "certificate" if opp_type == "certificate" else opp_type,
-                            "organization": org,
-                            "link": link,
-                            "deadline": deadline,
-                            "matchScore": score,
-                            "description": body,
-                            "tags": tags
-                        })
-                        count += 1
-                    print(f"Found {count} opportunities for query: '{query}'.")
-                except Exception as e:
-                    print(f"Error searching for query '{query}': {e}")
+                            crawled_items.append({
+                                "id": f"ddg-{opp_type}-{count}-{hash(title) % 10000}",
+                                "title": title,
+                                "type": "certificate" if opp_type == "certificate" else opp_type,
+                                "organization": org,
+                                "link": link,
+                                "deadline": deadline,
+                                "matchScore": score,
+                                "description": body,
+                                "tags": tags
+                            })
+                            count += 1
+                        print(f"Found {count} opportunities for query: '{query}'.")
+                    except Exception as e:
+                        print(f"Error searching for query '{query}': {e}")
+    except Exception as e:
+        print(f"Error initializing DuckDuckGo search engine: {e}")
 
     # Remove duplicates based on title similarity or exact links
     unique_items = []

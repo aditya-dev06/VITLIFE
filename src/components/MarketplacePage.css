@@ -144,19 +144,23 @@
   border-radius: 12px;
   font-size: 0.92rem;
   font-weight: 800;
-  color: #ffffff;
-  background: linear-gradient(135deg, #ec4899, #d946ef);
-  border: none;
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   cursor: pointer;
-  box-shadow: 0 6px 20px rgba(236, 72, 153, 0.35);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   transition: all 0.25s ease;
   white-space: nowrap;
 }
 
 .btn-post-listing:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 28px rgba(236, 72, 153, 0.5);
-  background: linear-gradient(135deg, #f472b6, #e879f9);
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #38bdf8;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
 }
 
 .btn-safety-toggle {
@@ -775,17 +779,23 @@
   border-radius: 12px;
   font-size: 0.95rem;
   font-weight: 800;
-  color: #ffffff;
-  background: linear-gradient(135deg, #ec4899, #d946ef);
-  border: none;
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
   margin-top: 0.5rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
 .btn-submit-item:hover {
-  opacity: 0.95;
-  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #38bdf8;
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
 }
 
 .empty-state {

@@ -764,7 +764,7 @@ const CourseGroupCard = memo(function CourseGroupCard({ group, onSelect }) {
  * PaperFileItem Component
  * Memoized single paper item row in course sub-page view.
  */
-const PaperFileItem = memo(function PaperFileItem({ paper, user, onDelete }) {
+const PaperFileItem = memo(function PaperFileItem({ paper, user, onDelete, onOpenAskAi }) {
   const badgeProps = useMemo(() => {
     const t = (paper.examType || '').toUpperCase();
     if (t.includes('MTE')) {
@@ -888,6 +888,36 @@ const PaperFileItem = memo(function PaperFileItem({ paper, user, onDelete }) {
         >
           📖 Open Paper {urls.length > 1 ? `(${urls.length} Pages)` : ''}
         </a>
+        <button
+          className="paper-btn ask-ai"
+          onClick={() => onOpenAskAi && onOpenAskAi(paper)}
+          title="Ask AI Tutor about this paper"
+          style={{
+            margin: 0,
+            padding: '0.5rem 1rem',
+            fontSize: '0.8rem',
+            borderRadius: '10px',
+            fontWeight: '700',
+            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.15))',
+            border: '1px solid rgba(16, 185, 129, 0.4)',
+            color: '#10b981',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-1px)';
+            e.currentTarget.style.background = 'linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(6, 182, 212, 0.3))';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'none';
+            e.currentTarget.style.background = 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.15))';
+          }}
+        >
+          🤖 Ask AI
+        </button>
         {user && user.role === 'admin' && (
           <button
             className="paper-btn delete"
@@ -2181,7 +2211,11 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
   useEffect(() => {
     const fetchStats = () => {
-      fetch('/api/chat/online-users')
+      const token = localStorage.getItem('ds_ai_token');
+      if (!token) return;
+      fetch('/api/chat/online-users', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
         .then(res => res.json())
         .then(data => {
           if (data && data.success) {
@@ -2196,7 +2230,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     fetchStats();
     const interval = setInterval(fetchStats, 15000);
     return () => clearInterval(interval);
-  }, []);
+  }, [user]);
 
   const [chatSearch, setChatSearch] = useState('');
   const [debouncedChatSearch, setDebouncedChatSearch] = useState('');
@@ -2620,10 +2654,15 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
     const syncMessages = async () => {
       if (!isMounted) return;
+      const token = localStorage.getItem('ds_ai_token');
+      if (!token) return;
       if (currentController) currentController.abort();
       currentController = new AbortController();
       try {
-        const res = await fetch(`/api/chat/messages?channel=${encodeURIComponent(activeChannel)}`, { signal: currentController.signal });
+        const res = await fetch(`/api/chat/messages?channel=${encodeURIComponent(activeChannel)}`, {
+          signal: currentController.signal,
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         const data = await res.json();
         if (!isMounted) return;
         if (data.success && Array.isArray(data.messages)) {
@@ -2813,7 +2852,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
   const handleReactMessage = useCallback((messageId, emoji) => {
     const token = localStorage.getItem('ds_ai_token');
     const isGuest = !user || user.isGuest;
-    if (isGuest && activeChannel !== 'general') {
+    if (isGuest || !token) {
       if (onRequireAuth) onRequireAuth();
       return;
     }
@@ -2843,6 +2882,8 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
   // Connect to Redis Presence & Typing Engine
   // Presence & typing polling (throttled for performance)
   useEffect(() => {
+    const token = localStorage.getItem('ds_ai_token');
+    if (!token || !user || user.isGuest) return undefined;
     const userId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
     const username = user && !user.isGuest ? (user.name || user.email) : 'Guest Student';
 
@@ -2850,7 +2891,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     const initTimer = setTimeout(() => {
       fetch('/api/chat/presence', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ userId, username })
       }).catch(() => {});
     }, 3000);
@@ -2859,14 +2900,16 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     const presenceInterval = setInterval(() => {
       fetch('/api/chat/presence', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ userId, username })
       }).catch(() => {});
     }, 30000);
 
     // Real-time typing poll every 1.2s with premature cancellation protection
     const typingPollInterval = setInterval(() => {
-      fetch(`/api/chat/typing-status?channel=${activeChannel}`)
+      fetch(`/api/chat/typing-status?channel=${activeChannel}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
         .then(res => res.json())
         .then(data => {
           if (data.success && Array.isArray(data.typers)) {
@@ -2897,6 +2940,9 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     const val = e.target.value;
     setNewMessage(val);
 
+    const token = localStorage.getItem('ds_ai_token');
+    if (!token || !user || user.isGuest) return;
+
     const userId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
     const authorName = getSafeAuthorName(user);
 
@@ -2906,7 +2952,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         lastTypingNotify.current = now;
         fetch('/api/chat/typing', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({ channel: activeChannel, username: authorName, userId, isTyping: true })
         }).catch(() => {});
       }
@@ -2914,7 +2960,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       lastTypingNotify.current = 0;
       fetch('/api/chat/typing', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ channel: activeChannel, username: authorName, userId, isTyping: false })
       }).catch(() => {});
     }
@@ -3053,8 +3099,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     e.preventDefault();
     const isGuest = !user || user.isGuest;
 
-    // If on a locked channel and user is a guest, prompt login
-    if (isGuest && activeChannel !== 'general') {
+    if (isGuest) {
       if (onRequireAuth) onRequireAuth();
       return;
     }
@@ -3647,17 +3692,6 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                 style={{ display: 'none' }} 
               />
 
-              {/* Emoji Picker Trigger */}
-              <span 
-                title="Emojis" 
-                onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(!showEmojiPicker); setShowAttachMenu(false); }}
-                style={{ color: '#8696a0', fontSize: '1.3rem', cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
-              >
-                <svg viewBox="0 0 24 24" width="24" height="24" fill="#8696a0">
-                  <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8zm3.5-9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm-7 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm5.893 4.11C14.025 15.68 13.054 16 12 16s-2.025-.32-2.393-.89A.999.999 0 1 0 7.94 16.22C8.734 17.35 10.29 18 12 18c1.71 0 3.266-.65 4.06-1.78a.999.999 0 1 0-1.667-1.11z"/>
-                </svg>
-              </span>
-
               {/* Floating Emoji Picker Palette */}
               {showEmojiPicker && (
                 <div 
@@ -3668,7 +3702,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                     left: '10px',
                     background: '#233138',
                     border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '12px',
+                    borderRadius: '16px',
                     padding: '0.65rem',
                     display: 'grid',
                     gridTemplateColumns: 'repeat(6, 1fr)',
@@ -3690,32 +3724,6 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                 </div>
               )}
 
-              {/* Image/GIF Direct Attachment Button */}
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); if (fileInputRef.current) { fileInputRef.current.accept = 'image/*,.gif'; fileInputRef.current.click(); } }}
-                title="Attach Image or GIF"
-                style={{ background: 'none', border: 'none', color: '#8696a0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', flexShrink: 0 }}
-              >
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                  <circle cx="8.5" cy="8.5" r="1.5"/>
-                  <polyline points="21 15 16 10 5 21"/>
-                </svg>
-              </button>
-
-              {/* Attachment Menu Paperclip Button */}
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setShowAttachMenu(!showAttachMenu); setShowEmojiPicker(false); }}
-                title="Attach File or Image"
-                style={{ background: 'none', border: 'none', color: '#8696a0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}
-              >
-                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#8696a0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-                </svg>
-              </button>
-
               {/* Floating Attachment Menu Popup */}
               {showAttachMenu && (
                 <div 
@@ -3723,10 +3731,10 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   style={{
                     position: 'absolute',
                     bottom: '70px',
-                    left: '45px',
+                    right: '80px',
                     background: '#233138',
                     border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '12px',
+                    borderRadius: '16px',
                     padding: '0.4rem 0',
                     boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
                     zIndex: 200,
@@ -3753,8 +3761,11 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(!showEmojiPicker); setShowAttachMenu(false); }}
                   style={{ color: '#8696a0', fontSize: '1.3rem', cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0, padding: '8px' }}
                 >
-                  <svg viewBox="0 0 24 24" width="24" height="24" fill="#8696a0">
-                    <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8zm3.5-9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm-7 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm5.893 4.11C14.025 15.68 13.054 16 12 16s-2.025-.32-2.393-.89A.999.999 0 1 0 7.94 16.22C8.734 17.35 10.29 18 12 18c1.71 0 3.266-.65 4.06-1.78a.999.999 0 1 0-1.667-1.11z"/>
+                  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#8696a0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+                    <line x1="9" y1="9" x2="9.01" y2="9"></line>
+                    <line x1="15" y1="9" x2="15.01" y2="9"></line>
                   </svg>
                 </span>
 
@@ -3778,8 +3789,8 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                     onClick={(e) => { e.stopPropagation(); setShowAttachMenu(!showAttachMenu); setShowEmojiPicker(false); }}
                     style={{ background: 'none', border: 'none', color: '#8696a0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', flexShrink: 0, position: 'relative' }}
                   >
-                    <svg viewBox="0 0 24 24" width="24" height="24" fill="#8696a0">
-                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#8696a0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
                     </svg>
                   </button>
 
@@ -3790,8 +3801,12 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                       onClick={(e) => { e.preventDefault(); showToast('UPI Pay feature coming soon 💸', 'info'); }}
                       style={{ background: 'none', border: 'none', color: '#8696a0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', flexShrink: 0 }}
                     >
-                      <svg viewBox="0 0 24 24" width="22" height="22" fill="#8696a0">
-                        <path d="M15 3H9v2h2.5L6 19h2l5.5-14H16l-1-2zm-4 8H9l-1 2h2l-1 2H7l-1 2h2l-1 2h2l1-2h2l1 2h2l-1-2h2l1-2h-2l1-2h-2l-1-2z"/>
+                      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#8696a0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 3h12"></path>
+                        <path d="M6 8h12"></path>
+                        <path d="M6 13h8.5l-5 8"></path>
+                        <path d="M6 13h3"></path>
+                        <path d="M9 13c6.667 0 6.667-10 0-10"></path>
                       </svg>
                     </button>
                   </div>
@@ -3803,9 +3818,9 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                       onClick={(e) => { e.preventDefault(); if (fileInputRef.current) { fileInputRef.current.accept = 'image/*'; fileInputRef.current.click(); } }}
                       style={{ background: 'none', border: 'none', color: '#8696a0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', flexShrink: 0 }}
                     >
-                      <svg viewBox="0 0 24 24" width="24" height="24" fill="#8696a0">
-                        <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"/>
-                        <path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
+                      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#8696a0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path>
+                        <circle cx="12" cy="13" r="3"></circle>
                       </svg>
                     </button>
                   </div>
@@ -4283,6 +4298,50 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
 
   const [papers, setPapers] = useState([]);
   const [pendingPapers, setPendingPapers] = useState([]);
+
+  // Ask Me PYQ AI Tutor Session State
+  const [aiSessionPaper, setAiSessionPaper] = useState(null);
+  const [aiSessionQuery, setAiSessionQuery] = useState('');
+  const [aiSessionLoading, setAiSessionLoading] = useState(false);
+  const [aiSessionHistory, setAiSessionHistory] = useState([]);
+
+  const handleRunAiPyqSession = useCallback(async (queryText, mode = 'explain') => {
+    if (!queryText || !queryText.trim() || !aiSessionPaper) return;
+    const q = queryText.trim();
+    
+    setAiSessionHistory(prev => [...prev, { role: 'user', text: q }]);
+    setAiSessionQuery('');
+    setAiSessionLoading(true);
+
+    try {
+      const token = localStorage.getItem('ds_ai_token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/papers/ask-pyq', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          paperId: aiSessionPaper._id,
+          courseCode: aiSessionPaper.courseCode,
+          userQuery: q,
+          mode
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.answer) {
+        setAiSessionHistory(prev => [...prev, { role: 'assistant', text: data.answer }]);
+      } else {
+        setAiSessionHistory(prev => [...prev, { role: 'assistant', text: `⚠️ ${data.error || 'Failed to generate answer. Please try again.'}` }]);
+      }
+    } catch (err) {
+      console.error(err);
+      setAiSessionHistory(prev => [...prev, { role: 'assistant', text: `⚠️ Connection error: ${err.message}` }]);
+    } finally {
+      setAiSessionLoading(false);
+    }
+  }, [aiSessionPaper]);
 
   // Search input state (immediate for input field) and debounced search state (for heavy filtering index)
   const [searchQuery, setSearchQuery] = useState('');
@@ -4936,6 +4995,11 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
                       paper={paper}
                       user={user}
                       onDelete={handleDeletePaper}
+                      onOpenAskAi={(p) => {
+                        setAiSessionPaper(p);
+                        setAiSessionHistory([]);
+                        setAiSessionQuery('');
+                      }}
                     />
                   ))}
                 </div>
@@ -5049,9 +5113,10 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
                           style={{
                             padding: '0.65rem 1.6rem',
                             borderRadius: '12px',
-                            background: 'linear-gradient(135deg, hsla(var(--primary) / 0.15), hsla(var(--primary) / 0.05))',
-                            border: '1px solid hsla(var(--primary) / 0.3)',
-                            color: 'hsl(var(--primary))',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            backdropFilter: 'blur(10px)',
+                            border: '1px solid rgba(255, 255, 255, 0.16)',
+                            color: '#f8fafc',
                             fontWeight: '700',
                             fontSize: '0.85rem',
                             cursor: 'pointer',
@@ -5170,6 +5235,232 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
               <button type="submit" className="aurora-submit-btn" disabled={uploadLoading} style={{ marginTop: '1rem', padding: '0.75rem 1rem' }}>
                 {uploadLoading ? 'Scanning & Submitting...' : 'Upload & Auto-Fill'}
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── ASK ME PYQ AI TUTOR SESSION MODAL ── */}
+      {aiSessionPaper && (
+        <div className="aurora-modal-overlay" onClick={() => setAiSessionPaper(null)} style={{ zIndex: 99999, backdropFilter: 'blur(16px)', background: 'rgba(5, 8, 18, 0.85)' }}>
+          <div 
+            className="ai-pyq-modal-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              background: 'linear-gradient(180deg, #0b1120 0%, #070a14 100%)', 
+              border: '1px solid rgba(16, 185, 129, 0.28)',
+              overflow: 'hidden',
+              boxShadow: '0 25px 70px rgba(0, 0, 0, 0.75), 0 0 40px rgba(16, 185, 129, 0.12)'
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{ padding: '1.25rem 1.75rem', background: 'linear-gradient(90deg, rgba(16, 185, 129, 0.12), rgba(6, 182, 212, 0.08))', borderBottom: '1px solid rgba(16, 185, 129, 0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '14px', background: 'linear-gradient(135deg, #10b981, #06b6d4)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 0 20px rgba(16, 185, 129, 0.4)' }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="10" rx="2" />
+                    <circle cx="12" cy="5" r="2" />
+                    <path d="M12 7v4M8 16h0M16 16h0" />
+                  </svg>
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.01em' }}>
+                      Ask Me PYQ: {aiSessionPaper.courseCode}
+                    </h3>
+                    <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '0.15rem 0.55rem', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.4)', textTransform: 'uppercase' }}>
+                      AI TUTOR ACTIVE
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 500 }}>
+                    {aiSessionPaper.courseTitle} • {aiSessionPaper.examType} ({aiSessionPaper.year || 'PYQ'})
+                  </span>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setAiSessionPaper(null)}
+                style={{ 
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '10px',
+                  background: 'rgba(239, 68, 68, 0.1)', 
+                  border: '1px solid rgba(239, 68, 68, 0.25)', 
+                  color: '#f87171', 
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s' 
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Quick Action Chips Bar */}
+            <div style={{ padding: '0.75rem 1.25rem', background: 'rgba(15, 23, 42, 0.75)', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', gap: '0.6rem', overflowX: 'auto', scrollbarWidth: 'none' }}>
+              {[
+                { label: 'Step-by-Step Solutions', query: 'Provide a complete step-by-step answer key for all questions in this paper.', mode: 'solutions', icon: '💡' },
+                { label: 'Practice Mock Quiz', query: 'Generate a 5-question practice quiz based on key concepts in this paper.', mode: 'quiz', icon: '📝' },
+                { label: 'High-Weightage Topics', query: 'List the top 5 high-weightage topics and recurring question patterns in this exam.', mode: 'topics', icon: '🎯' },
+                { label: 'Explain Q1 in Detail', query: 'Explain Question 1 and provide a detailed solution with formulas.', mode: 'explain', icon: '❓' }
+              ].map((chip, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleRunAiPyqSession(chip.query, chip.mode)}
+                  style={{
+                    padding: '0.45rem 0.95rem',
+                    borderRadius: '12px',
+                    fontSize: '0.78rem',
+                    fontWeight: '700',
+                    whiteSpace: 'nowrap',
+                    background: 'rgba(255, 255, 255, 0.04)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    color: '#e2e8f0',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = '#10b981';
+                    e.currentTarget.style.background = 'rgba(16, 185, 129, 0.12)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)';
+                  }}
+                >
+                  <span>{chip.icon}</span>
+                  <span>{chip.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Chat Messages Body */}
+            <div style={{ flex: 1, padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {aiSessionHistory.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#64748b', padding: '2.5rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <div style={{ width: '64px', height: '64px', borderRadius: '20px', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.15))', border: '1px solid rgba(16, 185, 129, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981', marginBottom: '1rem', boxShadow: '0 0 30px rgba(16, 185, 129, 0.2)' }}>
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                      <circle cx="12" cy="12" r="4" />
+                    </svg>
+                  </div>
+                  <h4 style={{ color: '#f1f5f9', margin: '0 0 0.4rem 0', fontSize: '1.2rem', fontWeight: 800 }}>Welcome to Ask Me PYQ AI Tutor!</h4>
+                  <p style={{ fontSize: '0.88rem', maxWidth: '480px', margin: '0 auto', lineHeight: 1.6, color: '#94a3b8' }}>
+                    Ask any question about this <strong style={{ color: '#34d399' }}>{aiSessionPaper.courseCode}</strong> paper, request step-by-step solutions, or click one of the quick study chips above!
+                  </p>
+
+                  {/* Math Symbols Skeleton Badges */}
+                  <div style={{ marginTop: '1.75rem', display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+                    <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginRight: '0.4rem' }}>
+                      Math & Science Engine:
+                    </span>
+                    {[
+                      { label: 'x', sub: 'Variables' },
+                      { label: 'e', sub: 'Exponentials' },
+                      { label: '∫', sub: 'Integrals' },
+                      { label: '∑', sub: 'Series' },
+                      { label: 'π', sub: 'Constants' }
+                    ].map((symbol, sIdx) => (
+                      <span key={sIdx} style={{ padding: '0.35rem 0.75rem', borderRadius: '10px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', color: '#a7f3d0', fontSize: '0.82rem', fontFamily: 'monospace', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span style={{ color: '#10b981', fontWeight: 900 }}>{symbol.label}</span>
+                        <span style={{ fontSize: '0.68rem', color: '#64748b', fontFamily: 'sans-serif' }}>{symbol.sub}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                aiSessionHistory.map((msg, idx) => (
+                  <div 
+                    key={idx} 
+                    style={{ 
+                      alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                      maxWidth: '88%',
+                      padding: '1.1rem 1.35rem',
+                      borderRadius: msg.role === 'user' ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
+                      background: msg.role === 'user' ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(15, 23, 42, 0.85)',
+                      color: '#f8fafc',
+                      fontSize: '0.92rem',
+                      lineHeight: 1.65,
+                      border: msg.role === 'assistant' ? '1px solid rgba(16, 185, 129, 0.25)' : 'none',
+                      boxShadow: msg.role === 'user' ? '0 6px 20px rgba(16, 185, 129, 0.3)' : '0 8px 30px rgba(0, 0, 0, 0.35)',
+                      whiteSpace: 'pre-wrap'
+                    }}
+                  >
+                    <div style={{ fontSize: '0.72rem', opacity: 0.8, marginBottom: '0.4rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem', color: msg.role === 'user' ? '#d1fae5' : '#34d399' }}>
+                      {msg.role === 'user' ? (
+                        <>👤 <span>You</span></>
+                      ) : (
+                        <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg> <span>AI PYQ Tutor</span></>
+                      )}
+                    </div>
+                    {msg.text}
+                  </div>
+                ))
+              )}
+
+              {aiSessionLoading && (
+                <div style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.9rem 1.35rem', borderRadius: '20px 20px 20px 4px', background: 'rgba(15, 23, 42, 0.85)', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#34d399', fontSize: '0.85rem', fontWeight: 700 }}>
+                  <span className="aurora-spinner" style={{ width: '20px', height: '20px', borderTopColor: '#10b981' }} />
+                  <span>AI Tutor is formulating step-by-step solution...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Input Bar */}
+            <form 
+              onSubmit={(e) => { e.preventDefault(); handleRunAiPyqSession(aiSessionQuery, 'explain'); }} 
+              style={{ padding: '1rem 1.5rem', background: '#070a12', borderTop: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}
+            >
+              {/* Formula Quick Symbols Toolbar */}
+              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginRight: '0.2rem' }}>
+                  Quick Symbols:
+                </span>
+                {[
+                  { label: 'x', val: 'x' },
+                  { label: 'e^x', val: 'e^x' },
+                  { label: '∫', val: '∫' },
+                  { label: '∑', val: '∑' },
+                  { label: 'd/dx', val: 'd/dx' },
+                  { label: 'π', val: 'π' }
+                ].map((sym, sIdx) => (
+                  <button
+                    key={sIdx}
+                    type="button"
+                    onClick={() => setAiSessionQuery(prev => prev + ' ' + sym.val)}
+                    style={{ padding: '0.2rem 0.55rem', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#60a5fa', fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    {sym.label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  placeholder={`Ask anything about ${aiSessionPaper.courseCode} (e.g. Explain Q2, Give answer key)...`}
+                  value={aiSessionQuery}
+                  onChange={(e) => setAiSessionQuery(e.target.value)}
+                  style={{ flex: 1, padding: '0.85rem 1.2rem', borderRadius: '14px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.12)', color: '#fff', fontSize: '0.92rem', outline: 'none' }}
+                />
+                <button
+                  type="submit"
+                  disabled={aiSessionLoading || !aiSessionQuery.trim()}
+                  style={{ padding: '0.85rem 1.5rem', borderRadius: '14px', background: 'rgba(255, 255, 255, 0.06)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.18)', color: '#f8fafc', fontWeight: 800, cursor: 'pointer', opacity: aiSessionLoading || !aiSessionQuery.trim() ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: '0.5rem', boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)' }}
+                >
+                  <span>Send</span>
+                  <Send size={16} />
+                </button>
+              </div>
             </form>
           </div>
         </div>

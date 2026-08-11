@@ -345,6 +345,42 @@
   transition: transform 0.2s ease;
 }
 
+.btn-skeleton-signin {
+  padding: 3px 10px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #e2e8f0;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.btn-skeleton-signin:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+}
+
+.light-theme .btn-skeleton-signin,
+.light .btn-skeleton-signin {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: #1e293b;
+}
+
+.light-theme .btn-skeleton-signin:hover,
+.light .btn-skeleton-signin:hover {
+  background: rgba(0, 0, 0, 0.12);
+  border-color: rgba(2, 132, 199, 0.4);
+  color: #0284c7;
+}
+
 .contact-action-box.guest-blurred:hover .guest-lock-overlay {
   transform: scale(1.02);
 }

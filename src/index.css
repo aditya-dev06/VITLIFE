@@ -705,16 +705,21 @@ body.light {
 
 .light-theme .btn-primary,
 .light .btn-primary {
-  background: linear-gradient(135deg, #4f46e5, #4338ca) !important;
-  color: #ffffff !important;
-  border: none !important;
-  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.25) !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  color: #0f172a !important;
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08) !important;
 }
 
 .light-theme .btn-primary:hover,
 .light .btn-primary:hover {
-  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.35) !important;
-  transform: translateY(-1px) !important;
+  background: rgba(0, 0, 0, 0.1) !important;
+  border-color: rgba(2, 132, 199, 0.4) !important;
+  color: #0284c7 !important;
+  box-shadow: 0 6px 20px rgba(2, 132, 199, 0.15) !important;
+  transform: translateY(-2px) !important;
 }
 
 /* Student Chat Mobile Responsive Architecture */
@@ -2240,14 +2245,17 @@ a {
 
 .btn-primary {
   padding: 0.75rem 1.5rem;
-  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
-  color: #fff;
-  border: none;
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
   font-weight: 700;
+  letter-spacing: 0.02em;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 15px hsla(var(--primary) / 0.3);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.12);
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -4217,13 +4225,15 @@ a {
 .aurora-submit-btn {
   width: 100%;
   padding: 0.95rem;
-  background: #ffffff;
-  color: #000000;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #f8fafc;
   font-family: var(--font-accent, 'Inter', sans-serif);
   font-size: 0.92rem;
   font-weight: 700;
   letter-spacing: 0.03em;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 14px;
   cursor: pointer;
   position: relative;
@@ -4232,15 +4242,17 @@ a {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.15);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.12);
   margin-top: 0.5rem;
 }
 
-.aurora-submit-btn:hover {
-  background: #f4f4f5;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(255, 255, 255, 0.25);
+.aurora-submit-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #38bdf8;
+  transform: translateY(-2px);
+  box-shadow: 0 0 30px rgba(56, 189, 248, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 @keyframes auroraGradient {
@@ -7707,38 +7719,6 @@ a {
     background: rgba(255, 255, 255, 0.1);
   }
 
-  .wa-chat-header {
-    padding: 0.4rem 0.6rem !important;
-    min-height: 58px !important;
-    background-color: #202c33 !important;
-    gap: 0.4rem !important;
-  }
-
-  /* ── Messages Area ── */
-  .wa-chat-messages-area {
-    padding: 0.75rem 0.65rem !important;
-    gap: 0.3rem !important;
-    /* WhatsApp mobile: smaller gap between messages */
-  }
-
-  /* ── Message Bubbles ── */
-  .wa-msg-bubble {
-    max-width: 88% !important;
-    border-radius: 8px !important;
-  }
-
-  /* Sent bubbles - WhatsApp dark green */
-  .wa-msg-row.sent .ui-bubble-root {
-    background: #005c4b !important;
-    border-radius: 8px 0px 8px 8px !important;
-  }
-
-  /* Received bubbles - WhatsApp dark grey */
-  .wa-msg-row.received .ui-bubble-root {
-    background: #202c33 !important;
-    border-radius: 0px 8px 8px 8px !important;
-  }
-
   /* Tail triangle for sent bubbles */
   .wa-msg-row.sent .ui-bubble-root::after {
     content: '';
@@ -7787,6 +7767,39 @@ a {
     justify-content: flex-end !important;
   }
 
+  .wa-chat-header {
+    padding: 0.4rem 0.6rem !important;
+    min-height: 58px !important;
+    background-color: #202c33 !important;
+    gap: 0.4rem !important;
+  }
+
+  /* ── Messages Area ── */
+  .wa-chat-messages-area {
+    padding: 0.75rem 0.65rem !important;
+    gap: 0.3rem !important;
+    /* WhatsApp mobile: smaller gap between messages */
+  }
+
+  /* ── Message Bubbles ── */
+  .wa-msg-bubble {
+    max-width: 88% !important;
+    border-radius: 8px !important;
+  }
+
+  /* Sent bubbles - WhatsApp dark green */
+  .wa-msg-row.sent .ui-bubble-root {
+    background: #005c4b !important;
+    border-radius: 8px 0px 8px 8px !important;
+  }
+
+  /* Received bubbles - WhatsApp dark grey */
+  .wa-msg-row.received .ui-bubble-root {
+    background: #202c33 !important;
+    border-radius: 0px 8px 8px 8px !important;
+  }
+
+
   /* ── Date Divider ── */
   .wa-date-divider {
     background: rgba(17, 27, 33, 0.85) !important;
@@ -7809,8 +7822,9 @@ a {
     background: #111b21 !important;
     border-top: none !important;
     align-items: center !important;
-    /* Safe area for bottom notch */
-    padding-bottom: max(0.4rem, env(safe-area-inset-bottom)) !important;
+    /* Robust safe area: 14px base covers Android gesture bars that don't
+       report env(); env() adds extra on iPhones with home indicator */
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)) !important;
   }
 
   /* Message input pill */
@@ -7950,4 +7964,38 @@ a {
 }
 
 
+
+
+.ai-pyq-modal-card {
+  width: 95%;
+  max-width: 820px;
+  height: 84vh;
+  max-height: 92vh;
+  border-radius: 24px;
+}
+@media (max-width: 768px) {
+  .ai-pyq-modal-card {
+    width: 100%;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+}
+
+.smooth-fade-in-up {
+  contain: layout style;
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  animation: smoothFadeInUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes smoothFadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
