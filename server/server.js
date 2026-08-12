@@ -3050,8 +3050,7 @@ const isStrongPassword = (password) => {
 // Custom Session Token generation and validation (with password hash segment for session revocation)
 const generateToken = async (email, passwordHash) => {
   const secret = await ensureJwtSecret();
-  // Tokens now effectively never expire based on time (10 years) because single-device policy limits concurrent use.
-  const expiresAt = Date.now() + 10 * 365 * 24 * 60 * 60 * 1000;
+  const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
   
   // Create a high-entropy, secure hash piece of the password hash to prevent exposing the hash format/value
   const hashPiece = crypto.createHash('sha256').update(passwordHash).digest('hex').substring(0, 16);
