@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-08-11 11:32:21",
+  "lastUpdated": "2026-08-12 18:20:15",
   "count": 46,
   "opportunities": [
     {
@@ -264,7 +264,7 @@
       "type": "hackathon",
       "organization": "XPRIZE",
       "link": "https://xprize.devpost.com/",
-      "deadline": "May 19 - Aug 17, 2026 (7 days left)",
+      "deadline": "May 19 - Aug 17, 2026 (5 days left)",
       "matchScore": 85,
       "description": "Themes: Machine Learning/AI, Education, Productivity. Host: XPRIZE",
       "tags": [
@@ -296,7 +296,7 @@
       "type": "hackathon",
       "organization": "Google",
       "link": "https://agentic-cinema.devpost.com/",
-      "deadline": "Jul 27 - Sep 07, 2026 (28 days left)",
+      "deadline": "Jul 27 - Sep 07, 2026 (26 days left)",
       "matchScore": 85,
       "description": "Themes: Databases, Machine Learning/AI, Open Ended. Host: Google",
       "tags": [
@@ -312,7 +312,7 @@
       "type": "hackathon",
       "organization": "Cockroach Labs",
       "link": "https://cockroachdb-ai.devpost.com/",
-      "deadline": "Jun 30 - Aug 18, 2026 (8 days left)",
+      "deadline": "Jun 30 - Aug 18, 2026 (6 days left)",
       "matchScore": 85,
       "description": "Themes: Machine Learning/AI, Databases, DevOps. Host: Cockroach Labs",
       "tags": [
@@ -323,33 +323,33 @@
       ]
     },
     {
-      "id": "devpost-30218",
-      "title": "Arm Create: AI Optimization Challenge",
-      "type": "hackathon",
-      "organization": "arm",
-      "link": "https://arm-ai-optimization-challenge.devpost.com/",
-      "deadline": "Jun 04 - Aug 14, 2026 (4 days left)",
-      "matchScore": 85,
-      "description": "Themes: Machine Learning/AI. Host: arm",
-      "tags": [
-        "Hackathon",
-        "Remote",
-        "Machine Learning/AI"
-      ]
-    },
-    {
       "id": "devpost-30845",
       "title": "All Things Agentic Hackathon",
       "type": "hackathon",
       "organization": "Google",
       "link": "https://allthingsagentichackathon.devpost.com/",
-      "deadline": "Aug 04 - 31, 2026 (21 days left)",
+      "deadline": "Aug 04 - 31, 2026 (19 days left)",
       "matchScore": 85,
       "description": "Themes: Enterprise, Machine Learning/AI, Productivity. Host: Google",
       "tags": [
         "Hackathon",
         "Remote",
         "Enterprise",
+        "Machine Learning/AI"
+      ]
+    },
+    {
+      "id": "devpost-30218",
+      "title": "Arm Create: AI Optimization Challenge",
+      "type": "hackathon",
+      "organization": "arm",
+      "link": "https://arm-ai-optimization-challenge.devpost.com/",
+      "deadline": "Jun 04 - Aug 14, 2026 (2 days left)",
+      "matchScore": 85,
+      "description": "Themes: Machine Learning/AI. Host: arm",
+      "tags": [
+        "Hackathon",
+        "Remote",
         "Machine Learning/AI"
       ]
     },
@@ -375,7 +375,7 @@
       "type": "hackathon",
       "organization": "Perfect Corp",
       "link": "https://youcam-api.devpost.com/",
-      "deadline": "Jul 06 - Aug 17, 2026 (6 days left)",
+      "deadline": "Jul 06 - Aug 17, 2026 (5 days left)",
       "matchScore": 85,
       "description": "Themes: Machine Learning/AI, AR/VR, E-commerce/Retail. Host: Perfect Corp",
       "tags": [
@@ -383,102 +383,6 @@
         "Remote",
         "Machine Learning/AI",
         "AR/VR"
-      ]
-    },
-    {
-      "id": "devpost-30091",
-      "title": "Africa Deep Tech Challenge 2026",
-      "type": "hackathon",
-      "organization": "Africa Deep Tech Foundation",
-      "link": "https://adtc-2026.devpost.com/",
-      "deadline": "Jun 17 - Aug 25, 2026 (14 days left)",
-      "matchScore": 85,
-      "description": "Themes: Machine Learning/AI, Productivity. Host: Africa Deep Tech Foundation",
-      "tags": [
-        "Hackathon",
-        "Remote",
-        "Machine Learning/AI",
-        "Productivity"
-      ]
-    },
-    {
-      "id": "devpost-29884",
-      "title": "VoltHacks",
-      "type": "hackathon",
-      "organization": "Dialogate",
-      "link": "https://volthacks.devpost.com/",
-      "deadline": "May 22 - Sep 05, 2026 (26 days left)",
-      "matchScore": 85,
-      "description": "Themes: IoT, Machine Learning/AI, Beginner Friendly. Host: Dialogate",
-      "tags": [
-        "Hackathon",
-        "Remote",
-        "IoT",
-        "Machine Learning/AI"
-      ]
-    },
-    {
-      "id": "devpost-30198",
-      "title": "Reverie Hacks 2026",
-      "type": "hackathon",
-      "organization": "ReverieHacks",
-      "link": "https://reverie-hacks-2026.devpost.com/",
-      "deadline": "Aug 02 - 17, 2026 (6 days left)",
-      "matchScore": 85,
-      "description": "Themes: Beginner Friendly, Machine Learning/AI, Open Ended. Host: ReverieHacks",
-      "tags": [
-        "Hackathon",
-        "Remote",
-        "Beginner Friendly",
-        "Machine Learning/AI"
-      ]
-    },
-    {
-      "id": "devpost-30501",
-      "title": "3D Websites Hackathon",
-      "type": "hackathon",
-      "organization": "high school",
-      "link": "https://3d-websites-hackathon.devpost.com/",
-      "deadline": "Jun 22 - Aug 31, 2026 (21 days left)",
-      "matchScore": 75,
-      "description": "Themes: Design, Web, Beginner Friendly. Host: high school",
-      "tags": [
-        "Hackathon",
-        "Remote",
-        "Design",
-        "Web"
-      ]
-    },
-    {
-      "id": "devpost-30468",
-      "title": "Build Beyond Hackathon",
-      "type": "hackathon",
-      "organization": "BuildBeyond",
-      "link": "https://build-beyond-hackathon.devpost.com/",
-      "deadline": "Jun 18 - Aug 16, 2026 (5 days left)",
-      "matchScore": 75,
-      "description": "Themes: Beginner Friendly, Low/No Code, Open Ended. Host: BuildBeyond",
-      "tags": [
-        "Hackathon",
-        "Remote",
-        "Beginner Friendly",
-        "Low/No Code"
-      ]
-    },
-    {
-      "id": "devpost-30586",
-      "title": "ML Empowerment Build Challenge 2.0",
-      "type": "hackathon",
-      "organization": "ML Empowerment Foundation",
-      "link": "https://ml-empowerment-2.devpost.com/",
-      "deadline": "Jun 30 - Aug 15, 2026 (4 days left)",
-      "matchScore": 85,
-      "description": "Themes: Beginner Friendly, Machine Learning/AI, Social Good. Host: ML Empowerment Foundation",
-      "tags": [
-        "Hackathon",
-        "Remote",
-        "Beginner Friendly",
-        "Machine Learning/AI"
       ]
     },
     {
@@ -498,12 +402,124 @@
       ]
     },
     {
+      "id": "devpost-30091",
+      "title": "Africa Deep Tech Challenge 2026",
+      "type": "hackathon",
+      "organization": "Africa Deep Tech Foundation",
+      "link": "https://adtc-2026.devpost.com/",
+      "deadline": "Jun 17 - Aug 25, 2026 (13 days left)",
+      "matchScore": 85,
+      "description": "Themes: Machine Learning/AI, Productivity. Host: Africa Deep Tech Foundation",
+      "tags": [
+        "Hackathon",
+        "Remote",
+        "Machine Learning/AI",
+        "Productivity"
+      ]
+    },
+    {
+      "id": "devpost-29884",
+      "title": "VoltHacks",
+      "type": "hackathon",
+      "organization": "Dialogate",
+      "link": "https://volthacks.devpost.com/",
+      "deadline": "May 22 - Sep 05, 2026 (24 days left)",
+      "matchScore": 85,
+      "description": "Themes: IoT, Machine Learning/AI, Beginner Friendly. Host: Dialogate",
+      "tags": [
+        "Hackathon",
+        "Remote",
+        "IoT",
+        "Machine Learning/AI"
+      ]
+    },
+    {
+      "id": "devpost-30198",
+      "title": "Reverie Hacks 2026",
+      "type": "hackathon",
+      "organization": "ReverieHacks",
+      "link": "https://reverie-hacks-2026.devpost.com/",
+      "deadline": "Aug 02 - 24, 2026 (12 days left)",
+      "matchScore": 85,
+      "description": "Themes: Beginner Friendly, Machine Learning/AI, Open Ended. Host: ReverieHacks",
+      "tags": [
+        "Hackathon",
+        "Remote",
+        "Beginner Friendly",
+        "Machine Learning/AI"
+      ]
+    },
+    {
+      "id": "devpost-30501",
+      "title": "3D Websites Hackathon",
+      "type": "hackathon",
+      "organization": "high school",
+      "link": "https://3d-websites-hackathon.devpost.com/",
+      "deadline": "Jun 22 - Aug 31, 2026 (19 days left)",
+      "matchScore": 75,
+      "description": "Themes: Design, Web, Beginner Friendly. Host: high school",
+      "tags": [
+        "Hackathon",
+        "Remote",
+        "Design",
+        "Web"
+      ]
+    },
+    {
+      "id": "devpost-30586",
+      "title": "ML Empowerment Build Challenge 2.0",
+      "type": "hackathon",
+      "organization": "ML Empowerment Foundation",
+      "link": "https://ml-empowerment-2.devpost.com/",
+      "deadline": "Jun 30 - Aug 15, 2026 (3 days left)",
+      "matchScore": 85,
+      "description": "Themes: Beginner Friendly, Machine Learning/AI, Social Good. Host: ML Empowerment Foundation",
+      "tags": [
+        "Hackathon",
+        "Remote",
+        "Beginner Friendly",
+        "Machine Learning/AI"
+      ]
+    },
+    {
+      "id": "devpost-30468",
+      "title": "Build Beyond Hackathon",
+      "type": "hackathon",
+      "organization": "BuildBeyond",
+      "link": "https://build-beyond-hackathon.devpost.com/",
+      "deadline": "Jun 18 - Aug 16, 2026 (4 days left)",
+      "matchScore": 75,
+      "description": "Themes: Beginner Friendly, Low/No Code, Open Ended. Host: BuildBeyond",
+      "tags": [
+        "Hackathon",
+        "Remote",
+        "Beginner Friendly",
+        "Low/No Code"
+      ]
+    },
+    {
+      "id": "unstop-1734263",
+      "title": "DevCrest Buildathon '26",
+      "type": "hackathon",
+      "organization": "DevCrest",
+      "link": "https://unstop.com/hackathons/devcrest-buildathon-26-devcrest-1734263",
+      "deadline": "Aug 24, 2026 (2 days left)",
+      "matchScore": 80,
+      "description": "DevCrest Buildathon 2026 :\nThe DevCrest Buildathon is a two-day virtual hackathon combining collaborative team development with individual technical competition. Participants first build a working Web...",
+      "tags": [
+        "Hackathon",
+        "India",
+        "Communication Skills",
+        "Project Management"
+      ]
+    },
+    {
       "id": "unstop-1734496",
       "title": "MARKATHON 2026 \u2013 India's Biggest Marketing Innovation Challenge",
       "type": "hackathon",
       "organization": "IcyPluto",
       "link": "https://unstop.com/hackathons/markathon-2026-indias-biggest-marketing-innovation-challenge-icypluto-1734496",
-      "deadline": "Aug 23, 2026 (9 days left)",
+      "deadline": "Aug 23, 2026 (8 days left)",
       "matchScore": 80,
       "description": "Guidelines:\n\nEligibility: Open to college students from across India.\nTeam Size: Participants can compete individually or in teams of 2&ndash;4 members.\nInter-College Teams: Students from different co...",
       "tags": [
@@ -519,9 +535,9 @@
       "type": "hackathon",
       "organization": "AAA College of Engineering and Technology (AAACET), Sivakasi, Tamil Nadu",
       "link": "https://unstop.com/hackathons/zyrora-24-hour-national-level-inter-college-hackathon-aaa-college-of-engineering-and-technology-aaacet-sivaka-1734489",
-      "deadline": "Aug 24, 2026 (12 days left)",
+      "deadline": "Aug 24, 2026 (11 days left)",
       "matchScore": 80,
-      "description": "&nbsp;\nGuidelines:\n\nThe event is open to external college participants.\nParticipants can form teams with members from the same or different colleges.\nInter-specialization/team members are allowed.\nEac...",
+      "description": "Guidelines:\n\nThe event is open to external college participants.\nParticipants can form teams with members from the same or different colleges.\nInter-specialization/team members are allowed.\nEach team ...",
       "tags": [
         "Hackathon",
         "India",
@@ -535,7 +551,7 @@
       "type": "hackathon",
       "organization": "National Institute of Technology (NIT), Delhi",
       "link": "https://unstop.com/hackathons/washing-app-debug-challenge-national-institute-of-technology-nit-delhi-1734301",
-      "deadline": "Aug 24, 2026 (12 days left)",
+      "deadline": "Aug 24, 2026 (Ended)",
       "matchScore": 80,
       "description": "Welcome to the Washing App Debug Challenge - by National Institute of Technology (NIT), DelhiAn online coding challenge focused on debugging for teams.\nAbout the Opportunity:\n\nDive into the world of s...",
       "tags": [
@@ -551,7 +567,7 @@
       "type": "hackathon",
       "organization": "Gamnexis",
       "link": "https://unstop.com/hackathons/startupx-hackathon-2026-gamnexis-1733546",
-      "deadline": "Sep 25, 2026 (24 days left)",
+      "deadline": "Sep 25, 2026 (23 days left)",
       "matchScore": 80,
       "description": "About the Hackathon:\nStartupX Hackathon 2026, organized by Gamnexis, is a free online innovation and startup-focused hackathon for students with an innovative idea who want to transform it into a work...",
       "tags": [
@@ -567,7 +583,7 @@
       "type": "hackathon",
       "organization": "Hackathon Raptors",
       "link": "https://unstop.com/hackathons/zero-dependency-72-hour-hackathon-hackathon-raptors-1733673",
-      "deadline": "Aug 28, 2026 (17 days left)",
+      "deadline": "Aug 28, 2026 (16 days left)",
       "matchScore": 80,
       "description": "About the Hackathon:\nZero Dependency 2026 is a 72-hour online hackathon built around one deceptively simple rule: your dependency manifest must be empty. No third-party runtime packages. No frameworks...",
       "tags": [
@@ -583,7 +599,7 @@
       "type": "hackathon",
       "organization": "Modern Education Society's College of Engineering - (MES), Pune",
       "link": "https://unstop.com/hackathons/webverse-hackathon-modern-education-societys-college-of-engineering-mes-pune-1733529",
-      "deadline": "Sep 10, 2026 (13 days left)",
+      "deadline": "Sep 10, 2026 (12 days left)",
       "matchScore": 80,
       "description": "IMPORTANT NOTE:-&nbsp;all the participant are requested to join the the whatsapp group and also register in the google form link given below&nbsp;\nAbout the Hackathon:&nbsp;\nWEBVERSE 2026 is a nationa...",
       "tags": [
@@ -598,7 +614,7 @@
       "type": "hackathon",
       "organization": "DevTech It Solution",
       "link": "https://unstop.com/hackathons/pitchx-2026-indias-biggest-startup-pitch-challenge-devtech-it-solution-1729843",
-      "deadline": "Aug 17, 2026 (5 days left)",
+      "deadline": "Aug 17, 2026 (4 days left)",
       "matchScore": 80,
       "description": "Overview\n\nPitchX 2026 is India's premier startup pitch competition where great ideas meet great opportunities.\nWhether you're building your first MVP, validating a business model, or already running a...",
       "tags": [
@@ -614,7 +630,7 @@
       "type": "hackathon",
       "organization": "Chandigah University",
       "link": "https://unstop.com/hackathons/bytebuilt-10-chandigah-university-1733940",
-      "deadline": "Aug 20, 2026 (8 days left)",
+      "deadline": "Aug 20, 2026 (7 days left)",
       "matchScore": 80,
       "description": "About the Opportunity:\nbyteBuilt 1.0 is a 24-hour innovation hackathon presented by Chandigarh University in collaboration with byteXL. The hackathon provides a platform for students to develop innova...",
       "tags": [
@@ -630,7 +646,7 @@
       "type": "hackathon",
       "organization": "Indian Institute of Technology (IIT), Guwahati",
       "link": "https://unstop.com/hackathons/quantstorm-iit-guwahati-1733840",
-      "deadline": "Sep 25, 2026 (5 days left)",
+      "deadline": "Sep 25, 2026 (4 days left)",
       "matchScore": 80,
       "description": "About the Opportunity:\nQuantStorm 2026 is a national quantitative finance and market-making competition jointly organized by QATC, IIT Delhi, Quant Club, IIT Bombay, and Finance and Economics Club, II...",
       "tags": [
@@ -646,14 +662,14 @@
       "type": "hackathon",
       "organization": "St.Joseph's Institute of Technology (STJIT), Chennai",
       "link": "https://unstop.com/hackathons/sn1phers-30-capture-the-flagctf-stjosephs-institute-of-technology-stjit-chennai-1732038",
-      "deadline": "Aug 22, 2026 (8 days left)",
+      "deadline": "Aug 22, 2026 (7 days left)",
       "matchScore": 80,
       "description": "About the Competition:\n$N1PH&euro;RS 3.0 is the third edition of the flagship Capture The Flag (CTF) competition hosted by Ex0rcists in collaboration with TamilCTF. The competition is designed to test...",
       "tags": [
         "Hackathon",
         "India",
-        "Linux",
-        "Cybersecurity Frameworks"
+        "Problem Solving",
+        "Linux"
       ]
     },
     {
@@ -662,7 +678,7 @@
       "type": "hackathon",
       "organization": "CoArena",
       "link": "https://unstop.com/hackathons/coarena-hackathon-coarena-1733431",
-      "deadline": "Aug 21, 2026 (9 days left)",
+      "deadline": "Aug 21, 2026 (8 days left)",
       "matchScore": 80,
       "description": "About the Hackathon:\nCoarena Hackathon is an AI challenge where participants can use leading AI models, including Fable, GPT-5.6, and Sol, at no cost. No API keys, subscriptions, or credit card are re...",
       "tags": [
@@ -678,7 +694,7 @@
       "type": "hackathon",
       "organization": "Nexploit",
       "link": "https://unstop.com/hackathons/evil-corp-ctf-v2-nexploit-1733381",
-      "deadline": "Aug 21, 2026 (7 days left)",
+      "deadline": "Aug 21, 2026 (6 days left)",
       "matchScore": 80,
       "description": "About the Competition:\nEVIL CORP CTF 2026 is a 6-hour online Capture The Flag (CTF) competition organized by Nexploit. The event is designed for students, cybersecurity enthusiasts, ethical hackers, a...",
       "tags": [
@@ -694,7 +710,7 @@
       "type": "hackathon",
       "organization": "GE HealthCare",
       "link": "https://unstop.com/hackathons/crp-precision-care-challenge-2026-ge-healthcare-1731208",
-      "deadline": "Oct 01, 2026 (15 days left)",
+      "deadline": "Oct 01, 2026 (14 days left)",
       "matchScore": 80,
       "description": "Organized by GE HealthCare, the Precision Care Challenge is a hackathon designed to inspire young innovators, problem solvers, and technology enthusiasts to tackle real-world healthcare challenges. Th...",
       "tags": [
@@ -710,7 +726,7 @@
       "type": "hackathon",
       "organization": "CENTRAL UNIVERSITY OF RAJASTHAN, AJMER KISHANGARDH",
       "link": "https://unstop.com/hackathons/aethon-2026-24-hour-national-hackathon-enac-3-day-innovation-entrepreneurship-fest-2026-central-university-of-1731459",
-      "deadline": "Aug 24, 2026 (13 days left)",
+      "deadline": "Aug 24, 2026 (11 days left)",
       "matchScore": 80,
       "description": "About the Opportunity:\nAethon 2026 | 24-Hour National Hackathon\nOrganized by ENAC &ndash; Engineers Network at the Central University of Rajasthan, Aethon 2026 is the flagship innovation challenge of ...",
       "tags": [
@@ -718,22 +734,6 @@
         "India",
         "Artificial Intelligence (AI)",
         "Machine Learning Concepts"
-      ]
-    },
-    {
-      "id": "unstop-1733064",
-      "title": "TEJAS India Hackathon 2026",
-      "type": "hackathon",
-      "organization": "Government Engineering College(GEC), Jamui",
-      "link": "https://unstop.com/hackathons/tejas-india-hackathon-2026-government-engineering-collegegec-jamui-1733064",
-      "deadline": "Aug 21, 2026 (5 days left)",
-      "matchScore": 80,
-      "description": "About the Hackathon:\nTEJAS India Hackathon 2026 is a National Level Hackathon organized by the Startup Cell, Government Engineering College, Jamui, in association with the Department of Computer Scien...",
-      "tags": [
-        "Hackathon",
-        "India",
-        "Artificial Intelligence (AI)",
-        "Git Version Control"
       ]
     }
   ]

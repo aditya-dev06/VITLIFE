@@ -8044,3 +8044,31 @@ a {
   }
 }
 
+
+/* Custom Message Scroller for Ask AI */
+.custom-message-scroller::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-message-scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-message-scroller::-webkit-scrollbar-thumb {
+  background-color: rgba(16, 185, 129, 0.2);
+  border-radius: 10px;
+}
+.custom-message-scroller:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(16, 185, 129, 0.4);
+}
+.custom-message-scroller {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(16, 185, 129, 0.2) transparent;
+}
+
+/* Fix mobile viewport for Ask AI Modal */
+.ai-pyq-modal-card {
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-height: 100vh !important;
+  max-height: 100dvh !important;
+}
+

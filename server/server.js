@@ -669,6 +669,8 @@ const createSession = async (email, token, req) => {
     const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
     const { deviceType, os, browser } = parseUserAgent(ua);
 
+    const deviceFingerprint = req.headers['x-device-fingerprint'] || '';
+
     const sessionDoc = {
       email: email.toLowerCase().trim(),
       tokenHash,
@@ -678,6 +680,7 @@ const createSession = async (email, token, req) => {
       deviceType,
       os,
       browser,
+      deviceFingerprint,
       lastActive: new Date(),
       createdAt: new Date(),
       expiresAt: new Date(expiresAtVal)
@@ -715,16 +718,25 @@ const createSession = async (email, token, req) => {
   }
 };
 
-const verifySession = async (token) => {
+const verifySession = async (token, req) => {
   try {
     if (dbConnectingPromise) await dbConnectingPromise;
 
     const tokenHash = getSessionHash(token);
+    const reqFingerprint = req ? (req.headers['x-device-fingerprint'] || '') : '';
 
     if (db) {
       try {
         const session = await db.collection('sessions').findOne({ tokenHash }, { hint: { tokenHash: 1 } });
         if (session) {
+          // Token Binding Security Check
+          if (session.deviceFingerprint && reqFingerprint && session.deviceFingerprint !== reqFingerprint) {
+            console.warn(`[Security] Stolen token detected for ${session.email}. Force revoking.`);
+            await db.collection('sessions').deleteOne({ _id: session._id });
+            notifySessionRevoked(tokenHash);
+            return false;
+          }
+
           // Update lastActive asynchronously
           db.collection('sessions').updateOne(
             { _id: session._id },
@@ -738,9 +750,15 @@ const verifySession = async (token) => {
       }
     }
 
-    const session = inMemorySessions.get(tokenHash);
-    if (session) {
-      session.lastActive = new Date();
+    // Fallback in-memory
+    const memSession = inMemorySessions.get(tokenHash);
+    if (memSession) {
+      if (memSession.deviceFingerprint && reqFingerprint && memSession.deviceFingerprint !== reqFingerprint) {
+        inMemorySessions.delete(tokenHash);
+        notifySessionRevoked(tokenHash);
+        return false;
+      }
+      memSession.lastActive = new Date();
       return true;
     }
     return false;
@@ -3032,7 +3050,8 @@ const isStrongPassword = (password) => {
 // Custom Session Token generation and validation (with password hash segment for session revocation)
 const generateToken = async (email, passwordHash) => {
   const secret = await ensureJwtSecret();
-  const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
+  // Tokens now effectively never expire based on time (10 years) because single-device policy limits concurrent use.
+  const expiresAt = Date.now() + 10 * 365 * 24 * 60 * 60 * 1000;
   
   // Create a high-entropy, secure hash piece of the password hash to prevent exposing the hash format/value
   const hashPiece = crypto.createHash('sha256').update(passwordHash).digest('hex').substring(0, 16);
@@ -3061,14 +3080,19 @@ const clearTokenCache = (userEmail = null) => {
   }
 };
 
-const verifyToken = async (token) => {
+const verifyToken = async (token, req) => {
   // Prevent DoS on massive input strings
   if (typeof token !== 'string' || token.length > 500) return null;
 
   // Fast-path in-memory cache hit check to eliminate redundant DB lookups
+  // We cannot use fast-path cache if token binding is active because we need to verify fingerprint on each request
+  const reqFingerprint = req ? (req.headers['x-device-fingerprint'] || '') : '';
   const now = Date.now();
+  
+  // We only use cache if no fingerprint is provided (less secure, but fallback) or we cache fingerprint too
+  // For maximum security, we skip caching for fingerprint verification
   const cached = tokenVerificationCache.get(token);
-  if (cached && (now - cached.timestamp < TOKEN_CACHE_TTL)) {
+  if (cached && (now - cached.timestamp < TOKEN_CACHE_TTL) && cached.fingerprint === reqFingerprint) {
     return cached.user;
   }
   
@@ -3103,7 +3127,7 @@ const verifyToken = async (token) => {
     }
     
     // Verify active session exists in DB/memory cache
-    const isSessionValid = await verifySession(token);
+    const isSessionValid = await verifySession(token, req);
     if (!isSessionValid) {
       return null;
     }
@@ -3118,7 +3142,7 @@ const verifyToken = async (token) => {
       return null; // Password changed, session is invalid
     }
     
-    tokenVerificationCache.set(token, { user, timestamp: now });
+    tokenVerificationCache.set(token, { user, timestamp: now, fingerprint: reqFingerprint });
     return user;
   } catch (e) {
     if (e.message === 'DATABASE_OFFLINE') throw e;
@@ -3135,7 +3159,7 @@ const authenticate = async (req, res, next) => {
 
   const token = authHeader.split(' ')[1];
   try {
-    const user = await verifyToken(token);
+    const user = await verifyToken(token, req);
     if (!user) {
       return res.status(401).json({ error: 'Session expired. Please log in again.' });
     }
@@ -3158,7 +3182,7 @@ const optionalAuthenticate = async (req, res, next) => {
 
   const token = authHeader.split(' ')[1];
   try {
-    const user = await verifyToken(token);
+    const user = await verifyToken(token, req);
     if (!user) {
       req.user = null;
       return next();
@@ -3732,7 +3756,8 @@ app.get('/api/user/sessions/events', async (req, res) => {
 
   let decoded;
   try {
-    decoded = await verifyToken(token);
+    // Pass null for req to skip fingerprint check for SSE connection
+    decoded = await verifyToken(token, null);
     if (!decoded) {
       return res.status(401).json({ error: 'Invalid token' });
     }

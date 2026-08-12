@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, memo, startTransition } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, X, Send } from 'lucide-react';
+import { Search, X, Send, Sparkles } from 'lucide-react';
 import Pusher from 'pusher-js';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -4308,7 +4308,16 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
   const [aiSessionQuery, setAiSessionQuery] = useState('');
   const [aiSessionLoading, setAiSessionLoading] = useState(false);
   const [aiSessionHistory, setAiSessionHistory] = useState([]);
+  const aiScrollRef = useRef(null);
 
+  useEffect(() => {
+    if (aiScrollRef.current) {
+      aiScrollRef.current.scrollTo({
+        top: aiScrollRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  }, [aiSessionHistory, aiSessionLoading]);
   const handleRunAiPyqSession = useCallback(async (queryText, mode = 'explain') => {
     if (!queryText || !queryText.trim() || !aiSessionPaper) return;
     const q = queryText.trim();
@@ -4972,10 +4981,40 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
                 >
                   ← Back to Courses
                 </button>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                  <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800, color: 'hsl(var(--text-primary))', fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }}>
-                    {selectedCourseGroup.courseCode}
-                  </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800, color: 'hsl(var(--text-primary))', fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }}>
+                      {selectedCourseGroup.courseCode}
+                    </h3>
+                    <button
+                      onClick={() => {
+                        setAiSessionPaper({ 
+                          courseCode: selectedCourseGroup.courseCode, 
+                          courseTitle: selectedCourseGroup.courseTitle, 
+                          examType: 'Full Course Context', 
+                          year: '' 
+                        });
+                        setAiSessionHistory([]);
+                        setAiSessionQuery('');
+                      }}
+                      style={{ 
+                        padding: '0.4rem 0.9rem', 
+                        fontSize: '0.78rem', 
+                        borderRadius: '12px', 
+                        background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.15))', 
+                        border: '1px solid rgba(16, 185, 129, 0.4)', 
+                        color: '#34d399', 
+                        fontWeight: 800, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '0.4rem',
+                        cursor: 'pointer',
+                        boxShadow: '0 0 20px rgba(16, 185, 129, 0.15)'
+                      }}
+                    >
+                      <Sparkles size={14} /> Ask AI (All Papers)
+                    </button>
+                  </div>
                   <span style={{ fontSize: '0.92rem', color: 'hsl(var(--text-secondary))', fontWeight: '500' }}>
                     {selectedCourseGroup.courseTitle}
                   </span>
@@ -5244,170 +5283,156 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
         </div>
       )}
 
-      {/* ── ASK ME PYQ AI TUTOR SESSION MODAL ── */}
+      {/* ── ASK ME PYQ AI TUTOR SESSION MODAL (GEMINI UI) ── */}
       {aiSessionPaper && (
-        <div className="aurora-modal-overlay" onClick={() => setAiSessionPaper(null)} style={{ zIndex: 99999, backdropFilter: 'blur(16px)', background: 'rgba(5, 8, 18, 0.85)' }}>
-          <div 
-            className="ai-pyq-modal-card"
-            onClick={(e) => e.stopPropagation()}
-            style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              background: 'linear-gradient(180deg, #0b1120 0%, #070a14 100%)', 
-              border: '1px solid rgba(16, 185, 129, 0.28)',
-              overflow: 'hidden',
-              boxShadow: '0 25px 70px rgba(0, 0, 0, 0.75), 0 0 40px rgba(16, 185, 129, 0.12)'
-            }}
-          >
-            {/* Modal Header */}
-            <div style={{ padding: '1.25rem 1.75rem', background: 'linear-gradient(90deg, rgba(16, 185, 129, 0.12), rgba(6, 182, 212, 0.08))', borderBottom: '1px solid rgba(16, 185, 129, 0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                <div style={{ width: '42px', height: '42px', borderRadius: '14px', background: 'linear-gradient(135deg, #10b981, #06b6d4)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 0 20px rgba(16, 185, 129, 0.4)' }}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="10" rx="2" />
-                    <circle cx="12" cy="5" r="2" />
-                    <path d="M12 7v4M8 16h0M16 16h0" />
-                  </svg>
-                </div>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.01em' }}>
-                      Ask Me PYQ: {aiSessionPaper.courseCode}
-                    </h3>
-                    <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '0.15rem 0.55rem', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.4)', textTransform: 'uppercase' }}>
-                      AI TUTOR ACTIVE
-                    </span>
-                  </div>
-                  <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 500 }}>
-                    {aiSessionPaper.courseTitle} • {aiSessionPaper.examType} ({aiSessionPaper.year || 'PYQ'})
-                  </span>
-                </div>
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 99999,
+          background: '#131314', // Gemini dark theme background
+          display: 'flex',
+          flexDirection: 'column',
+          color: '#e3e3e3',
+          fontFamily: 'system-ui, -apple-system, sans-serif'
+        }}>
+          {/* Header */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '1rem 1.5rem',
+            background: 'transparent'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+              <div style={{
+                color: '#fff',
+                fontSize: '1.2rem',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                <Sparkles size={20} color="#a8c7fa" />
+                Ask Me PYQ
+                <span style={{ fontSize: '0.85rem', color: '#a8c7fa', background: 'rgba(168, 199, 250, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 600 }}>
+                  {aiSessionPaper.courseCode}
+                </span>
               </div>
+            </div>
+            
+            <button 
+              onClick={() => setAiSessionPaper(null)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#c4c7c5',
+                cursor: 'pointer',
+                padding: '0.5rem',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            >
+              <X size={24} />
+            </button>
+          </div>
 
-              <button 
-                onClick={() => setAiSessionPaper(null)}
-                style={{ 
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '10px',
-                  background: 'rgba(239, 68, 68, 0.1)', 
-                  border: '1px solid rgba(239, 68, 68, 0.25)', 
-                  color: '#f87171', 
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+          {/* Quick Action Chips Bar */}
+          <div style={{
+            padding: '0.5rem 1.5rem',
+            display: 'flex',
+            gap: '0.5rem',
+            overflowX: 'auto',
+            scrollbarWidth: 'none',
+            flexShrink: 0
+          }}>
+            {[
+              { label: 'Step-by-Step Solutions', query: 'Provide a complete step-by-step answer key for all questions in this paper.', mode: 'solutions' },
+              { label: 'Practice Mock Quiz', query: 'Generate a 5-question practice quiz based on key concepts in this paper.', mode: 'quiz' },
+              { label: 'High-Weightage Topics', query: 'List the top 5 high-weightage topics and recurring question patterns in this exam.', mode: 'topics' },
+              { label: 'Explain Q1 in Detail', query: 'Explain Question 1 and provide a detailed solution with formulas.', mode: 'explain' }
+            ].map((chip, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleRunAiPyqSession(chip.query, chip.mode)}
+                style={{
+                  padding: '0.5rem 1rem',
+                  borderRadius: '16px',
+                  fontSize: '0.85rem',
+                  fontWeight: '500',
+                  whiteSpace: 'nowrap',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#e3e3e3',
                   cursor: 'pointer',
-                  transition: 'all 0.2s' 
+                  transition: 'background 0.2s'
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; }}
               >
-                <X size={18} />
+                {chip.label}
               </button>
-            </div>
+            ))}
+          </div>
 
-            {/* Quick Action Chips Bar */}
-            <div style={{ padding: '0.75rem 1.25rem', background: 'rgba(15, 23, 42, 0.75)', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', gap: '0.6rem', overflowX: 'auto', scrollbarWidth: 'none' }}>
-              {[
-                { label: 'Step-by-Step Solutions', query: 'Provide a complete step-by-step answer key for all questions in this paper.', mode: 'solutions', icon: '💡' },
-                { label: 'Practice Mock Quiz', query: 'Generate a 5-question practice quiz based on key concepts in this paper.', mode: 'quiz', icon: '📝' },
-                { label: 'High-Weightage Topics', query: 'List the top 5 high-weightage topics and recurring question patterns in this exam.', mode: 'topics', icon: '🎯' },
-                { label: 'Explain Q1 in Detail', query: 'Explain Question 1 and provide a detailed solution with formulas.', mode: 'explain', icon: '❓' }
-              ].map((chip, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleRunAiPyqSession(chip.query, chip.mode)}
-                  style={{
-                    padding: '0.45rem 0.95rem',
-                    borderRadius: '12px',
-                    fontSize: '0.78rem',
-                    fontWeight: '700',
-                    whiteSpace: 'nowrap',
-                    background: 'rgba(255, 255, 255, 0.04)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    color: '#e2e8f0',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = '#10b981';
-                    e.currentTarget.style.background = 'rgba(16, 185, 129, 0.12)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)';
-                  }}
-                >
-                  <span>{chip.icon}</span>
-                  <span>{chip.label}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Chat Messages Body */}
-            <div style={{ flex: 1, padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              {aiSessionHistory.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#64748b', padding: '2.5rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <div style={{ width: '64px', height: '64px', borderRadius: '20px', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.15))', border: '1px solid rgba(16, 185, 129, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981', marginBottom: '1rem', boxShadow: '0 0 30px rgba(16, 185, 129, 0.2)' }}>
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-                      <circle cx="12" cy="12" r="4" />
-                    </svg>
-                  </div>
-                  <h4 style={{ color: '#f1f5f9', margin: '0 0 0.4rem 0', fontSize: '1.2rem', fontWeight: 800 }}>Welcome to Ask Me PYQ AI Tutor!</h4>
-                  <p style={{ fontSize: '0.88rem', maxWidth: '480px', margin: '0 auto', lineHeight: 1.6, color: '#94a3b8' }}>
-                    Ask any question about this <strong style={{ color: '#34d399' }}>{aiSessionPaper.courseCode}</strong> paper, request step-by-step solutions, or click one of the quick study chips above!
-                  </p>
-
-                  {/* Math Symbols Skeleton Badges */}
-                  <div style={{ marginTop: '1.75rem', display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
-                    <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginRight: '0.4rem' }}>
-                      Math & Science Engine:
-                    </span>
-                    {[
-                      { label: 'x', sub: 'Variables' },
-                      { label: 'e', sub: 'Exponentials' },
-                      { label: '∫', sub: 'Integrals' },
-                      { label: '∑', sub: 'Series' },
-                      { label: 'π', sub: 'Constants' }
-                    ].map((symbol, sIdx) => (
-                      <span key={sIdx} style={{ padding: '0.35rem 0.75rem', borderRadius: '10px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', color: '#a7f3d0', fontSize: '0.82rem', fontFamily: 'monospace', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <span style={{ color: '#10b981', fontWeight: 900 }}>{symbol.label}</span>
-                        <span style={{ fontSize: '0.68rem', color: '#64748b', fontFamily: 'sans-serif' }}>{symbol.sub}</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                aiSessionHistory.map((msg, idx) => (
-                  <div 
-                    key={idx} 
-                    style={{ 
-                      alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                      maxWidth: '88%',
-                      padding: '1.1rem 1.35rem',
-                      borderRadius: msg.role === 'user' ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
-                      background: msg.role === 'user' ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(15, 23, 42, 0.85)',
-                      color: '#f8fafc',
-                      fontSize: '0.92rem',
-                      lineHeight: 1.65,
-                      border: msg.role === 'assistant' ? '1px solid rgba(16, 185, 129, 0.25)' : 'none',
-                      boxShadow: msg.role === 'user' ? '0 6px 20px rgba(16, 185, 129, 0.3)' : '0 8px 30px rgba(0, 0, 0, 0.35)',
-                      whiteSpace: 'pre-wrap'
-                    }}
-                  >
-                    <div style={{ fontSize: '0.72rem', opacity: 0.8, marginBottom: '0.4rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem', color: msg.role === 'user' ? '#d1fae5' : '#34d399' }}>
-                      {msg.role === 'user' ? (
-                        <>👤 <span>You</span></>
-                      ) : (
-                        <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg> <span>AI PYQ Tutor</span></>
-                      )}
+          {/* Chat Messages Body */}
+          <div style={{
+            flex: 1,
+            padding: '1.5rem',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.5rem',
+            maxWidth: '900px',
+            margin: '0 auto',
+            width: '100%',
+            scrollBehavior: 'smooth'
+          }}>
+            {aiSessionHistory.length === 0 ? (
+              <div style={{ textAlign: 'center', marginTop: '10vh' }}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>✨</div>
+                <h2 style={{ fontSize: '2rem', fontWeight: 400, color: '#e3e3e3', margin: '0 0 1rem 0' }}>
+                  Hello, how can I help with <span style={{ color: '#a8c7fa' }}>{aiSessionPaper.courseCode}</span>?
+                </h2>
+                <p style={{ color: '#c4c7c5', fontSize: '1.1rem' }}>
+                  Ask questions, request solutions, or summarize topics for {aiSessionPaper.examType} {aiSessionPaper.year}.
+                </p>
+              </div>
+            ) : (
+              aiSessionHistory.map((msg, idx) => (
+                <div key={idx} style={{
+                  display: 'flex',
+                  gap: '1rem',
+                  alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                  maxWidth: msg.role === 'user' ? '80%' : '100%',
+                  flexDirection: msg.role === 'user' ? 'row-reverse' : 'row'
+                }}>
+                  {msg.role === 'assistant' && (
+                    <div style={{ flexShrink: 0, marginTop: '2px' }}>
+                      <Sparkles size={24} color="#a8c7fa" />
                     </div>
+                  )}
+                  
+                  <div style={{
+                    padding: msg.role === 'user' ? '0.75rem 1.25rem' : '0',
+                    borderRadius: msg.role === 'user' ? '24px' : '0',
+                    background: msg.role === 'user' ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                    color: '#e3e3e3',
+                    fontSize: '1rem',
+                    lineHeight: 1.6,
+                    whiteSpace: 'pre-wrap',
+                    overflowX: 'auto',
+                    maxWidth: '100%'
+                  }}>
                     {msg.role === 'assistant' ? (
-                      <div className="ai-pyq-markdown">
+                      <div className="gemini-markdown-content" style={{ color: '#e3e3e3' }}>
                         <ReactMarkdown 
                           remarkPlugins={[remarkMath]} 
                           rehypePlugins={[rehypeKatex]}
@@ -5419,68 +5444,106 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
                       msg.text
                     )}
                   </div>
-                ))
-              )}
-
-              {aiSessionLoading && (
-                <div style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.9rem 1.35rem', borderRadius: '20px 20px 20px 4px', background: 'rgba(15, 23, 42, 0.85)', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#34d399', fontSize: '0.85rem', fontWeight: 700 }}>
-                  <span className="aurora-spinner" style={{ width: '20px', height: '20px', borderTopColor: '#10b981' }} />
-                  <span>AI Tutor is formulating step-by-step solution...</span>
                 </div>
-              )}
-            </div>
+              ))
+            )}
 
-            {/* Input Bar */}
+            {aiSessionLoading && (
+              <div style={{ display: 'flex', gap: '1rem', alignSelf: 'flex-start' }}>
+                <div style={{ flexShrink: 0, marginTop: '2px' }}>
+                  <Sparkles size={24} color="#a8c7fa" style={{ animation: 'pulse 1.5s infinite' }} />
+                </div>
+                <div style={{ color: '#c4c7c5', fontSize: '1rem', display: 'flex', alignItems: 'center' }}>
+                  Thinking...
+                </div>
+              </div>
+            )}
+            
+            {/* Invisible div for auto-scrolling */}
+            <div ref={aiScrollRef} style={{ height: '1px' }} />
+          </div>
+
+          {/* Input Area */}
+          <div style={{
+            padding: '1rem 1.5rem calc(1rem + env(safe-area-inset-bottom))',
+            background: 'transparent',
+            maxWidth: '900px',
+            margin: '0 auto',
+            width: '100%'
+          }}>
             <form 
-              onSubmit={(e) => { e.preventDefault(); handleRunAiPyqSession(aiSessionQuery, 'explain'); }} 
-              style={{ padding: '1rem 1.5rem', background: '#070a12', borderTop: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}
+              onSubmit={(e) => { e.preventDefault(); handleRunAiPyqSession(aiSessionQuery, 'explain'); }}
+              style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: '24px',
+                padding: '0.5rem 1rem',
+                display: 'flex',
+                alignItems: 'flex-end',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+              }}
             >
-              {/* Formula Quick Symbols Toolbar */}
-              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginRight: '0.2rem' }}>
-                  Quick Symbols:
-                </span>
-                {[
-                  { label: 'x', val: 'x' },
-                  { label: 'e^x', val: 'e^x' },
-                  { label: '∫', val: '∫' },
-                  { label: '∑', val: '∑' },
-                  { label: 'd/dx', val: 'd/dx' },
-                  { label: 'π', val: 'π' }
-                ].map((sym, sIdx) => (
-                  <button
-                    key={sIdx}
-                    type="button"
-                    onClick={() => setAiSessionQuery(prev => prev + ' ' + sym.val)}
-                    style={{ padding: '0.2rem 0.55rem', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#60a5fa', fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 700, cursor: 'pointer' }}
-                  >
-                    {sym.label}
-                  </button>
-                ))}
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                <input
-                  type="text"
-                  placeholder={`Ask anything about ${aiSessionPaper.courseCode} (e.g. Explain Q2, Give answer key)...`}
-                  value={aiSessionQuery}
-                  onChange={(e) => setAiSessionQuery(e.target.value)}
-                  style={{ flex: 1, padding: '0.85rem 1.2rem', borderRadius: '14px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.12)', color: '#fff', fontSize: '0.92rem', outline: 'none' }}
-                />
-                <button
-                  type="submit"
-                  disabled={aiSessionLoading || !aiSessionQuery.trim()}
-                  style={{ padding: '0.85rem 1.5rem', borderRadius: '14px', background: 'rgba(255, 255, 255, 0.06)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.18)', color: '#f8fafc', fontWeight: 800, cursor: 'pointer', opacity: aiSessionLoading || !aiSessionQuery.trim() ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: '0.5rem', boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)' }}
-                >
-                  <span>Send</span>
-                  <Send size={16} />
-                </button>
-              </div>
+              <textarea
+                value={aiSessionQuery}
+                onChange={(e) => {
+                  setAiSessionQuery(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = Math.min(e.target.scrollHeight, 150) + 'px';
+                }}
+                placeholder="Ask anything..."
+                style={{
+                  flex: 1,
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#e3e3e3',
+                  fontSize: '1rem',
+                  outline: 'none',
+                  resize: 'none',
+                  padding: '0.75rem 0',
+                  maxHeight: '150px',
+                  minHeight: '44px',
+                  lineHeight: '1.5',
+                  fontFamily: 'inherit'
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!aiSessionLoading && aiSessionQuery.trim()) {
+                      handleRunAiPyqSession(aiSessionQuery, 'explain');
+                    }
+                  }
+                }}
+                rows={1}
+              />
+              <button
+                type="submit"
+                disabled={aiSessionLoading || !aiSessionQuery.trim()}
+                style={{
+                  background: aiSessionLoading || !aiSessionQuery.trim() ? 'rgba(255, 255, 255, 0.1)' : '#fff',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '40px',
+                  height: '40px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: aiSessionLoading || !aiSessionQuery.trim() ? 'default' : 'pointer',
+                  color: aiSessionLoading || !aiSessionQuery.trim() ? '#666' : '#131314',
+                  marginLeft: '0.5rem',
+                  marginBottom: '0.2rem',
+                  flexShrink: 0
+                }}
+              >
+                <Send size={18} />
+              </button>
             </form>
+            <div style={{ textAlign: 'center', color: '#c4c7c5', fontSize: '0.75rem', marginTop: '0.75rem' }}>
+              Ask Me PYQ can make mistakes. Verify important academic information. History is cleared when closed.
+            </div>
           </div>
         </div>
       )}
-    </div>
+\n    </div>
   );
 }
 

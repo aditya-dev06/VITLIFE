@@ -8,6 +8,7 @@ import AppSidebar from './components/AppSidebar';
 import FullPageLoader from './components/FullPageLoader';
 import { useTheme } from './components/theme-provider';
 import { cachedFetch } from './utils/apiClient';
+import { getSynchronousHardwareDeviceId } from './utils/deviceFingerprint';
 
 const safeLazy = (importFn) =>
   lazy(() =>
@@ -42,6 +43,21 @@ if (!window.fetch.__isWrapped) {
   const originalFetch = window.fetch;
   window.fetch = async function (...args) {
     let requestToken = null;
+    
+    // Inject x-device-fingerprint into all API requests
+    const urlStr = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+    if (urlStr.includes('/api/')) {
+      const fp = getSynchronousHardwareDeviceId();
+      if (!args[1]) args[1] = {};
+      if (!args[1].headers) args[1].headers = {};
+      
+      if (args[1].headers instanceof Headers) {
+        args[1].headers.set('x-device-fingerprint', fp);
+      } else {
+        args[1].headers['x-device-fingerprint'] = fp;
+      }
+    }
+
     if (args[1] && args[1].headers) {
       const headers = args[1].headers;
       let authHeader = null;
