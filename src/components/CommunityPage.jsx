@@ -5066,6 +5066,10 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
                     </h3>
                     <button
                       onClick={() => {
+                        if (!user) {
+                          if (onRequireAuth) onRequireAuth();
+                          return;
+                        }
                         setAiSessionPaper({ 
                           courseCode: selectedCourseGroup.courseCode, 
                           courseTitle: selectedCourseGroup.courseTitle, 
@@ -5117,6 +5121,10 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
                       user={user}
                       onDelete={handleDeletePaper}
                       onOpenAskAi={(p) => {
+                        if (!user) {
+                          if (onRequireAuth) onRequireAuth();
+                          return;
+                        }
                         setAiSessionPaper(p);
                         setAiSessionHistory([]);
                         setAiSessionQuery('');
