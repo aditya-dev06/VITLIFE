@@ -4295,6 +4295,77 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
 function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp }) {
   const [activeSubTab, setActiveSubTab] = useState(initialSubTab); // 'pyq' | 'chats' | 'marketplace'
+  const [screenshotWarning, setScreenshotWarning] = useState(false);
+
+  // Anti-Screenshot & Anti-Copy System (Only active when in Chat mode)
+  useEffect(() => {
+    if (activeSubTab !== 'chats') {
+      setScreenshotWarning(false);
+      return;
+    }
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'PrintScreen') {
+        e.preventDefault();
+        triggerWarning();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        triggerWarning();
+      }
+      if (e.metaKey && e.shiftKey && ['3', '4', '5'].includes(e.key)) {
+        e.preventDefault();
+        triggerWarning();
+      }
+      if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        triggerWarning();
+      }
+    };
+
+    const handleBlur = () => {
+      setScreenshotWarning(true);
+    };
+
+    const handleFocus = () => {
+      setScreenshotWarning(false);
+    };
+
+    const triggerWarning = () => {
+      setScreenshotWarning(true);
+      setTimeout(() => setScreenshotWarning(false), 3000);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+    
+    const handleContextMenu = (e) => {
+      if (e.target.closest('.wa-chat-panel') || e.target.closest('.wa-chat-sidebar')) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('contextmenu', handleContextMenu);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, [activeSubTab]);
+
+  const watermarkSvg = useMemo(() => {
+    if (!user) return '';
+    const encoded = encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="300" height="150" viewBox="0 0 300 150">
+        <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="currentColor" opacity="0.12" transform="rotate(-30 150 75)">
+          ${user.email}
+        </text>
+      </svg>
+    `.trim());
+    return `url("data:image/svg+xml,${encoded}")`;
+  }, [user]);
 
   useEffect(() => {
     if (initialSubTab) setActiveSubTab(initialSubTab);
@@ -4895,7 +4966,14 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
   }, []);
 
   return (
-    <div className={`community-container ${activeSubTab === 'chats' ? 'chats-mode-active' : ''}`}>
+    <div className={`community-container ${activeSubTab === 'chats' ? 'chats-mode-active' : ''} ${screenshotWarning ? 'screenshot-blocked' : ''}`}>
+      {/* Identity Watermark Overlay */}
+      {activeSubTab === 'chats' && user && (
+        <div 
+          className="drm-watermark-overlay"
+          style={{ backgroundImage: watermarkSvg }}
+        ></div>
+      )}
       {/* Upper Navigation Tabs */}
       <div className="community-tabs">
         <button
@@ -5543,7 +5621,7 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
           </div>
         </div>
       )}
-\n    </div>
+    </div>
   );
 }
 

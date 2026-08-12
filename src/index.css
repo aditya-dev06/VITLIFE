@@ -8072,3 +8072,56 @@ a {
   max-height: 100dvh !important;
 }
 
+
+/* =========================================================================
+   ANTI-SCREENSHOT & DRM (DIGITAL RIGHTS MANAGEMENT) WATERMARK
+   ========================================================================= */
+
+/* Triggers when Snipping Tool or PrintScreen is detected */
+.screenshot-blocked {
+  filter: blur(25px) grayscale(100%);
+  pointer-events: none;
+  user-select: none;
+}
+
+.screenshot-blocked::after {
+  content: "Security Policy: Screenshots and Snipping Tools are blocked in Chat.";
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(220, 38, 38, 0.95);
+  color: white;
+  padding: 24px 40px;
+  border-radius: 12px;
+  font-size: 1.25rem;
+  font-weight: bold;
+  z-index: 999999;
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+}
+
+/* Prevent text copying in chat mode */
+.chats-mode-active .wa-chat-panel,
+.chats-mode-active .wa-chat-sidebar,
+.chats-mode-active .message-text {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* 
+  Identity Watermark: Invisible to the eye normally, but creates moire 
+  patterns and contrast interference when photographed by a phone camera. 
+*/
+.drm-watermark-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: 999;
+  overflow: hidden;
+  opacity: 1; /* The SVG itself handles the 0.12 opacity */
+  background-repeat: repeat;
+  background-position: center;
+}
