@@ -446,21 +446,28 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
 
       onWindowResize() {
         if (this.disposed || !this.container) return;
-        const width = this.container.offsetWidth;
-        const height = this.container.offsetHeight;
+        
+        requestAnimationFrame(() => {
+          if (this.disposed || !this.container) return;
+          const width = this.container.offsetWidth;
+          const height = this.container.offsetHeight;
+          
+          requestAnimationFrame(() => {
+            if (this.disposed) return;
+            if (width <= 0 || height <= 0) {
+              this.hasValidSize = false;
+              return;
+            }
 
-        if (width <= 0 || height <= 0) {
-          this.hasValidSize = false;
-          return;
-        }
-
-        if (this.renderer) this.renderer.setSize(width, height);
-        if (this.camera) {
-          this.camera.aspect = width / height;
-          this.camera.updateProjectionMatrix();
-        }
-        if (this.composer) this.composer.setSize(width, height);
-        this.hasValidSize = true;
+            if (this.renderer) this.renderer.setSize(width, height);
+            if (this.camera) {
+              this.camera.aspect = width / height;
+              this.camera.updateProjectionMatrix();
+            }
+            if (this.composer) this.composer.setSize(width, height);
+            this.hasValidSize = true;
+          });
+        });
       }
 
       initPasses() {
