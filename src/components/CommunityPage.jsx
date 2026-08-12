@@ -4391,7 +4391,7 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
   }, [aiSessionHistory, aiSessionLoading]);
   const handleRunAiPyqSession = useCallback(async (queryText, mode = 'explain') => {
     if (!user) {
-      if (onRequireAuth) onRequireAuth();
+      setAiSessionHistory(prev => [...prev, { role: 'auth-prompt' }]);
       return;
     }
     if (!queryText || !queryText.trim() || !aiSessionPaper) return;
@@ -4418,8 +4418,7 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
       });
 
       if (res.status === 401 || res.status === 403) {
-        setAiSessionHistory(prev => prev.slice(0, -1)); // Remove the user message
-        if (onRequireAuth) onRequireAuth();
+        setAiSessionHistory(prev => prev.slice(0, -1).concat({ role: 'auth-prompt' }));
         return;
       }
 
@@ -5074,17 +5073,13 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
                 </div>
 
                 {/* Course Header & AI Button Row */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center', textAlign: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
                     <h3 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800, color: 'hsl(var(--text-primary))', fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }}>
                       {selectedCourseGroup.courseCode}
                     </h3>
                     <button
                       onClick={() => {
-                        if (!user) {
-                          if (onRequireAuth) onRequireAuth();
-                          return;
-                        }
                         setAiSessionPaper({ 
                           courseCode: selectedCourseGroup.courseCode, 
                           courseTitle: selectedCourseGroup.courseTitle, 
@@ -5136,10 +5131,6 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
                       user={user}
                       onDelete={handleDeletePaper}
                       onOpenAskAi={(p) => {
-                        if (!user) {
-                          if (onRequireAuth) onRequireAuth();
-                          return;
-                        }
                         setAiSessionPaper(p);
                         setAiSessionHistory([]);
                         setAiSessionQuery('');
@@ -5530,9 +5521,48 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
                     lineHeight: 1.6,
                     whiteSpace: 'pre-wrap',
                     overflowX: 'auto',
-                    maxWidth: '100%'
+                    maxWidth: '100%',
+                    width: msg.role === 'auth-prompt' ? '100%' : 'auto'
                   }}>
-                    {msg.role === 'assistant' ? (
+                    {msg.role === 'auth-prompt' ? (
+                      <div style={{
+                        background: 'rgba(239, 68, 68, 0.08)',
+                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                        padding: '1.5rem',
+                        borderRadius: '16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '1rem',
+                        alignItems: 'center',
+                        textAlign: 'center',
+                        maxWidth: '400px',
+                        margin: '0 auto'
+                      }}>
+                        <div style={{ fontSize: '2rem' }}>🔒</div>
+                        <div>
+                          <h4 style={{ margin: '0 0 0.5rem 0', color: '#fca5a5', fontSize: '1.1rem' }}>Sign In Required</h4>
+                          <p style={{ margin: 0, color: '#e3e3e3', fontSize: '0.95rem' }}>You need to be logged in to chat with the AI Tutor.</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (onRequireAuth) onRequireAuth();
+                          }}
+                          style={{
+                            background: '#f87171',
+                            color: '#131314',
+                            border: 'none',
+                            padding: '0.6rem 1.5rem',
+                            borderRadius: '30px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            fontSize: '0.95rem',
+                            marginTop: '0.5rem'
+                          }}
+                        >
+                          Sign In Now
+                        </button>
+                      </div>
+                    ) : msg.role === 'assistant' ? (
                       <div className="gemini-markdown-content" style={{ color: '#e3e3e3' }}>
                         <ReactMarkdown 
                           remarkPlugins={[remarkMath]} 
