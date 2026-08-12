@@ -2197,35 +2197,118 @@ const saveFeedback = async (feedbackObj) => {
   return id;
 };
 
+// Helper function to process OCR using Gemini
+async function performVisionOCR(cleanBase64, mimeType) {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.Gemini_API_Key || process.env.GOOGLE_AI_KEY || process.env.gemini_api_key;
+  if (!apiKey) {
+    throw new Error('AI Vision OCR API key is not configured on the server.');
+  }
+
+  const payload = {
+    contents: [{
+      parts: [
+        { inlineData: { mimeType, data: cleanBase64 } },
+        { text: `You are a precise university exam document text extraction engine. Extract ALL visible text from this image/document header and body.
+Return ONLY a raw valid JSON object (no markdown formatting, no backticks) with these exact fields:
+{
+  "courseCode": "The subject/course code if visible (e.g. MAT2005, CSE2001, ECE3004), or 'UNKNOWN' if not found",
+  "courseTitle": "The full course/subject title if visible, or 'Unknown' if not found",
+  "examType": "CAT-1 if header states CAT-1 / CAT 1 / Continuous Assessment Test 1. CAT-2 if header states CAT-2 / CAT 2 / Continuous Assessment Test 2. MTE if header states Mid Term / MTE. TEE if header states Term End / TEE. Otherwise 'UNKNOWN'",
+  "year": "Academic year if visible (e.g. 2025-26, 2024-25), or 'UNKNOWN'",
+  "month": "Month if visible (e.g. Jul, Nov, Dec, May), or null",
+  "semester": "Semester number 1-8 if visible, or 0",
+  "fullText": "Complete verbatim text extracted from the document, preserving structure"
+}
+Extract ONLY what is actually visible in the document. Do NOT invent or guess information that is not present.` }
+      ]
+    }],
+    generationConfig: { responseMimeType: "application/json", temperature: 0.05 }
+  };
+
+  const candidateEndpoints = [
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`
+  ];
+
+  let apiRes = null;
+  let lastErrText = '';
+
+  for (const apiUrl of candidateEndpoints) {
+    try {
+      const fetchRes = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (fetchRes.ok) {
+        apiRes = fetchRes;
+        break;
+      } else {
+        lastErrText = await fetchRes.text();
+      }
+    } catch (e) {
+      lastErrText = e.message;
+    }
+  }
+
+  if (!apiRes) {
+    try {
+      const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        const availableModels = (listData.models || []).filter(m => m.supportedGenerationMethods?.includes('generateContent')).map(m => m.name);
+        for (const fullModelName of availableModels) {
+          const apiUrl = `https://generativelanguage.googleapis.com/v1beta/${fullModelName}:generateContent?key=${apiKey}`;
+          const fetchRes = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (fetchRes.ok) {
+            apiRes = fetchRes;
+            break;
+          }
+        }
+      }
+    } catch (discErr) {
+      console.warn('Model discovery error:', discErr.message);
+    }
+  }
+
+  if (!apiRes) {
+    throw new Error(`Vision AI service error: ${lastErrText}`);
+  }
+
+  const result = await apiRes.json();
+  const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+  return JSON.parse(jsonText);
+}
+
+// Helper for Jaccard similarity to detect duplicate PYQs by content
+function calculateTextSimilarity(text1, text2) {
+  if (!text1 || !text2) return 0;
+  const set1 = new Set(text1.toLowerCase().match(/\b\w{4,}\b/g) || []);
+  const set2 = new Set(text2.toLowerCase().match(/\b\w{4,}\b/g) || []);
+  if (set1.size === 0 || set2.size === 0) return 0;
+  let intersection = 0;
+  for (const word of set1) {
+    if (set2.has(word)) intersection++;
+  }
+  const union = set1.size + set2.size - intersection;
+  return intersection / union;
+}
+
 const syncPassVitianPapers = async () => {
   lastPassVitianSyncTime = Date.now();
   try {
     console.log('[Sync] Starting papers sync...');
-    
-    // Clean up any old PassVitian references from database to ensure no info leaks
-    if (db) {
-      try {
-        await db.collection('papers').deleteMany({
-          $or: [
-            { _id: /^pv_/ },
-            { uploadedBy: 'PassVitian' }
-          ]
-        });
-      } catch (err) {
-        console.error('[Sync] Error cleaning old papers from DB:', err.message);
-      }
-    }
-    
-    // Clean up local papers.json as well
-    if (fs.existsSync(PAPERS_FILE)) {
-      try {
-        let list = JSON.parse(fs.readFileSync(PAPERS_FILE, 'utf-8')) || [];
-        const cleanList = list.filter(p => !p._id.startsWith('pv_') && p.uploadedBy !== 'PassVitian');
-        if (cleanList.length !== list.length) {
-          fs.writeFileSync(PAPERS_FILE, JSON.stringify(cleanList, null, 2), 'utf-8');
-        }
-      } catch (e) {}
-    }
 
     const response = await fetch('https://passvitian.in/api/list-papers');
     if (!response.ok) {
@@ -2240,27 +2323,96 @@ const syncPassVitianPapers = async () => {
       existingPapers.map(p => (p.url || '').trim().toLowerCase()).filter(Boolean)
     );
     const deletedUrls = await getDeletedPaperUrls();
+    // Remove existingSignatures logic as we now need to check fullText for similarity
 
     let savedCount = 0;
     for (const paper of fetchedPapers) {
       const paperUrl = (paper.secure_url || paper.url || '').trim();
-      if (!paperUrl) {
-        continue;
-      }
+      if (!paperUrl) continue;
 
-      // Check if paper already exists by URL or was deleted by admin
       if (existingUrls.has(paperUrl.toLowerCase()) || deletedUrls.has(paperUrl.toLowerCase())) {
         continue;
       }
 
-      // Map subjectCode to courseCode
-      const courseCode = (paper.subjectCode || '').trim().toUpperCase();
-      if (!courseCode) continue;
+      let courseCode = (paper.subjectCode || '').trim().toUpperCase();
+      let courseTitle = (paper.subjectName || '').trim() || courseCode;
+      let examType = (paper.paperType || '').trim().toUpperCase() === 'TEE' ? 'TEE' : 'MTE';
+      let year = '2025-26'; // Fallback
+      
+      if (paper.paperName) {
+        const match = paper.paperName.match(/\b(202[0-9])\b/);
+        if (match) {
+          const fullYear = parseInt(match[1], 10);
+          year = `${fullYear - 1}-${String(fullYear).slice(-2)}`;
+        }
+      }
 
-      // Map subjectName to courseTitle
-      const courseTitle = (paper.subjectName || '').trim() || courseCode;
+      // We MUST run OCR first to get the fullText for duplicate detection!
+      console.log(`[Sync] Running OCR for new PassVitian paper: ${paperUrl}`);
+      let fullText = '';
+      
+      try {
+        const fileRes = await fetch(paperUrl);
+        if (fileRes.ok) {
+          const arrayBuffer = await fileRes.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          const mimeType = paperUrl.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg';
+          const base64 = buffer.toString('base64');
+          
+          const ocrResult = await performVisionOCR(base64, mimeType);
+          
+          // Override PassVitian metadata with our superior OCR results
+          if (ocrResult.courseCode && ocrResult.courseCode !== 'UNKNOWN') {
+            courseCode = ocrResult.courseCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+          }
+          if (ocrResult.courseTitle && ocrResult.courseTitle !== 'UNKNOWN' && ocrResult.courseTitle.length > 3) {
+            courseTitle = ocrResult.courseTitle.trim();
+          }
+          if (ocrResult.examType && ocrResult.examType !== 'UNKNOWN') {
+            examType = ocrResult.examType.toUpperCase();
+          }
+          if (ocrResult.year && ocrResult.year !== 'UNKNOWN') {
+            year = ocrResult.year.trim();
+          }
+          if (ocrResult.fullText && ocrResult.fullText.length > 10) {
+            fullText = ocrResult.fullText;
+          }
+        }
+      } catch (ocrErr) {
+        console.warn(`[Sync] OCR failed for ${paperUrl}, falling back to PassVitian metadata:`, ocrErr.message);
+      }
 
-      // Infer department from the prefix of subjectCode
+      // Content-Aware Deduplication Check
+      // Find any existing paper with the same courseCode, year, and examType
+      let isDuplicate = false;
+      const potentialDuplicates = existingPapers.filter(p => 
+        (p.courseCode || '').toUpperCase() === courseCode &&
+        (p.year || '').toUpperCase() === year.toUpperCase() &&
+        (p.examType || '').toUpperCase() === examType
+      );
+
+      for (const existingPaper of potentialDuplicates) {
+        if (!existingPaper.fullText || !fullText) {
+          // If either lacks fullText, we can't reliably compare.
+          // Since the user said courseCode+year+examType can be the same for MULTIPLE papers,
+          // we should NOT blindly assume they are duplicates without text evidence.
+          continue; 
+        }
+        
+        // If similarity is > 60%, they are definitely the same questions
+        const similarity = calculateTextSimilarity(existingPaper.fullText, fullText);
+        if (similarity > 0.6) {
+          console.log(`[Sync] Skipping duplicate paper! Match found with ${(similarity * 100).toFixed(1)}% similarity.`);
+          isDuplicate = true;
+          break;
+        }
+      }
+
+      if (isDuplicate) {
+        continue;
+      }
+
+      // Infer department from the prefix of courseCode
       let department = 'CSE';
       if (courseCode.startsWith('MAT3002') || courseCode.startsWith('MAT2003')) {
         department = 'DSA';
@@ -2292,23 +2444,8 @@ const syncPassVitianPapers = async () => {
       else if (firstDigit === 3) semester = 5;
       else if (firstDigit === 4) semester = 7;
 
-      // Infer year from paperName (must match a 4-digit year like 2023, 2024, 2025, 2026; avoids course codes like CSE2006)
-      let year = '2025-26'; // Fallback
-      if (paper.paperName) {
-        const match = paper.paperName.match(/\b(202[0-9])\b/);
-        if (match) {
-          const fullYear = parseInt(match[1], 10);
-          const prevYear = fullYear - 1;
-          const shortYearStr = String(fullYear).slice(-2);
-          year = `${prevYear}-${shortYearStr}`;
-        }
-      }
-
-      // Map paperType to examType (MTE, TEE)
-      const examType = (paper.paperType || '').trim().toUpperCase() === 'TEE' ? 'TEE' : 'MTE';
-
-      // Generate a unique ID (p_ prefix instead of pv_)
-      const uniqueId = `p_${paper.id || crypto.randomBytes(8).toString('hex')}`;
+      // Generate a unique ID (pv_ prefix)
+      const uniqueId = `pv_${crypto.randomBytes(8).toString('hex')}`;
 
       const mappedPaper = {
         courseCode,
@@ -2318,13 +2455,18 @@ const syncPassVitianPapers = async () => {
         year,
         semester,
         url: paperUrl,
-        uploadedBy: 'Community',
+        fullText,
+        uploadedBy: 'PassVitian',
         status: 'approved',
         createdAt: new Date().toISOString()
       };
 
       await savePaper(uniqueId, mappedPaper);
-      existingUrls.add(paperUrl.toLowerCase()); // Avoid duplicates in the same run
+      existingUrls.add(paperUrl.toLowerCase());
+      
+      // Update existingPapers so subsequent iterations in this run can match against it
+      existingPapers.push(mappedPaper);
+      
       savedCount++;
     }
 
@@ -4609,119 +4751,7 @@ app.post('/api/ocr/vision', ocrLimiter, optionalAuthenticate, async (req, res) =
     if (!fileContent) {
       return res.status(400).json({ error: 'Please provide imageBase64 or pdfBuffer for Vision OCR scan.' });
     }
-
-    const apiKey = process.env.GEMINI_API_KEY || process.env.Gemini_API_Key || process.env.GOOGLE_AI_KEY || process.env.gemini_api_key;
-    if (!apiKey) {
-      return res.status(503).json({ error: 'AI Vision OCR API key is not configured on the server.' });
-    }
-
-    const cleanBase64 = fileContent.replace(/^data:[^;]+;base64,/, '');
-    const mimeType = imageBase64 ? (fileContent.match(/^data:([^;]+);/)?.[1] || 'image/jpeg') : 'application/pdf';
-
-    // Gemini prompt: EXTRACTION ONLY — no validation decisions.
-    // Content validation is done deterministically AFTER extraction.
-    const payload = {
-      contents: [
-        {
-          parts: [
-            {
-              inlineData: {
-                mimeType,
-                data: cleanBase64
-              }
-            },
-            {
-              text: `You are a precise university exam document text extraction engine. Extract ALL visible text from this image/document header and body.
-Return ONLY a raw valid JSON object (no markdown formatting, no backticks) with these exact fields:
-{
-  "courseCode": "The subject/course code if visible (e.g. MAT2005, CSE2001, ECE3004), or 'UNKNOWN' if not found",
-  "courseTitle": "The full course/subject title if visible, or 'Unknown' if not found",
-  "examType": "CAT-1 if header states CAT-1 / CAT 1 / Continuous Assessment Test 1. CAT-2 if header states CAT-2 / CAT 2 / Continuous Assessment Test 2. MTE if header states Mid Term / MTE. TEE if header states Term End / TEE. Otherwise 'UNKNOWN'",
-  "year": "Academic year if visible (e.g. 2025-26, 2024-25), or 'UNKNOWN'",
-  "month": "Month if visible (e.g. Jul, Nov, Dec, May), or null",
-  "semester": "Semester number 1-8 if visible, or 0",
-  "fullText": "Complete verbatim text extracted from the document, preserving structure"
-}
-Extract ONLY what is actually visible in the document. Do NOT invent or guess information that is not present.`
-            }
-          ]
-        }
-      ],
-      generationConfig: {
-        responseMimeType: "application/json",
-        temperature: 0.05
-      }
-    };
-
-    // Try Gemini 3.5 Flash Lite & 2.5 Flash Lite first (highest throughput & rate limits), then fall back
-    const candidateEndpoints = [
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`,
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`,
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`
-    ];
-
-    let apiRes = null;
-    let lastErrText = '';
-
-    for (const apiUrl of candidateEndpoints) {
-      try {
-        const fetchRes = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        if (fetchRes.ok) {
-          apiRes = fetchRes;
-          break;
-        } else {
-          lastErrText = await fetchRes.text();
-        }
-      } catch (e) {
-        lastErrText = e.message;
-      }
-    }
-
-    if (!apiRes) {
-      // Auto-discover available models for this API key
-      try {
-        const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-        if (listRes.ok) {
-          const listData = await listRes.json();
-          const availableModels = (listData.models || [])
-            .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
-            .map(m => m.name);
-          
-          for (const fullModelName of availableModels) {
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/${fullModelName}:generateContent?key=${apiKey}`;
-            const fetchRes = await fetch(apiUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
-            if (fetchRes.ok) {
-              apiRes = fetchRes;
-              break;
-            }
-          }
-        }
-      } catch (discErr) {
-        console.warn('Model discovery error:', discErr.message);
-      }
-    }
-
-    if (!apiRes) {
-      throw new Error(`Vision AI service error: ${lastErrText}`);
-    }
-
-    const result = await apiRes.json();
-    const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-    const parsedData = JSON.parse(jsonText);
+    const parsedData = await performVisionOCR(cleanBase64, mimeType);
 
     // ── DETERMINISTIC CONTENT VALIDATION (immune to prompt injection) ──
     const validation = validatePYQContent(parsedData.fullText, parsedData.courseCode);
