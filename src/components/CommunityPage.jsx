@@ -4390,6 +4390,10 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
     }
   }, [aiSessionHistory, aiSessionLoading]);
   const handleRunAiPyqSession = useCallback(async (queryText, mode = 'explain') => {
+    if (!user) {
+      if (onRequireAuth) onRequireAuth();
+      return;
+    }
     if (!queryText || !queryText.trim() || !aiSessionPaper) return;
     const q = queryText.trim();
     
@@ -4412,6 +4416,12 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
           mode
         })
       });
+
+      if (res.status === 401 || res.status === 403) {
+        setAiSessionHistory(prev => prev.slice(0, -1)); // Remove the user message
+        if (onRequireAuth) onRequireAuth();
+        return;
+      }
 
       const data = await res.json();
       if (res.ok && data.answer) {
@@ -5027,41 +5037,46 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
           {selectedCourseGroup ? (
             /* Sub-page view for the selected course's papers */
             <div className="pyq-subpage-container animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginTop: '1rem', width: '100%' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', borderBottom: '1px solid hsla(var(--border-glass))', paddingBottom: '1.25rem', flexWrap: 'wrap' }}>
-                <button 
-                  onClick={() => setSelectedCourseCode(null)}
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    border: '1px solid hsla(var(--border-glass))',
-                    color: 'hsl(var(--text-secondary))',
-                    fontSize: '0.8rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.45rem',
-                    padding: '0.5rem 1.1rem',
-                    borderRadius: '30px',
-                    fontWeight: '600',
-                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-                    backdropFilter: 'blur(10px)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
-                    e.currentTarget.style.color = 'hsl(var(--text-primary))';
-                    e.currentTarget.style.borderColor = 'hsla(var(--primary) / 0.4)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
-                    e.currentTarget.style.color = 'hsl(var(--text-secondary))';
-                    e.currentTarget.style.borderColor = 'hsla(var(--border-glass))';
-                  }}
-                >
-                  ← Back to Courses
-                </button>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800, color: 'hsl(var(--text-primary))', fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', borderBottom: '1px solid hsla(var(--border-glass))', paddingBottom: '1.25rem' }}>
+                {/* Back Button Row */}
+                <div>
+                  <button 
+                    onClick={() => setSelectedCourseCode(null)}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid hsla(var(--border-glass))',
+                      color: 'hsl(var(--text-secondary))',
+                      fontSize: '0.8rem',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.45rem',
+                      padding: '0.5rem 1.1rem',
+                      borderRadius: '30px',
+                      fontWeight: '600',
+                      transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                      backdropFilter: 'blur(10px)',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                      e.currentTarget.style.color = 'hsl(var(--text-primary))';
+                      e.currentTarget.style.borderColor = 'hsla(var(--primary) / 0.4)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+                      e.currentTarget.style.color = 'hsl(var(--text-secondary))';
+                      e.currentTarget.style.borderColor = 'hsla(var(--border-glass))';
+                    }}
+                  >
+                    ← Back to Courses
+                  </button>
+                </div>
+
+                {/* Course Header & AI Button Row */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800, color: 'hsl(var(--text-primary))', fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }}>
                       {selectedCourseGroup.courseCode}
                     </h3>
                     <button
@@ -5097,7 +5112,7 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
                       <Sparkles size={14} /> Ask AI (All Papers)
                     </button>
                   </div>
-                  <span style={{ fontSize: '0.92rem', color: 'hsl(var(--text-secondary))', fontWeight: '500' }}>
+                  <span style={{ fontSize: '1.05rem', color: 'hsl(var(--text-secondary))', fontWeight: '500' }}>
                     {selectedCourseGroup.courseTitle}
                   </span>
                 </div>
