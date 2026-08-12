@@ -1856,7 +1856,7 @@ const findUserByEmail = async (email) => {
   }
   if (!db) {
     console.error('[DB Error] MongoDB connection is not active.');
-    return null;
+    throw new Error('DATABASE_OFFLINE');
   }
   try {
     const user = await db.collection('users').findOne({ email: lowerEmail }, { hint: { email: 1 } });
@@ -1864,10 +1864,11 @@ const findUserByEmail = async (email) => {
       userCache.set(lowerEmail, { user, timestamp: now });
       return user;
     }
+    return null;
   } catch (err) {
     console.error('[DB Error] MongoDB findUserByEmail error:', err);
+    throw new Error('DATABASE_OFFLINE');
   }
-  return null;
 };
 
 let cachedAdminEmails = null;
@@ -3120,6 +3121,7 @@ const verifyToken = async (token) => {
     tokenVerificationCache.set(token, { user, timestamp: now });
     return user;
   } catch (e) {
+    if (e.message === 'DATABASE_OFFLINE') throw e;
     return null;
   }
 };
@@ -3132,13 +3134,19 @@ const authenticate = async (req, res, next) => {
   }
 
   const token = authHeader.split(' ')[1];
-  const user = await verifyToken(token);
-  if (!user) {
+  try {
+    const user = await verifyToken(token);
+    if (!user) {
+      return res.status(401).json({ error: 'Session expired. Please log in again.' });
+    }
+    req.user = user;
+    next();
+  } catch (err) {
+    if (err.message === 'DATABASE_OFFLINE') {
+      return res.status(503).json({ error: 'Database is temporarily offline.' });
+    }
     return res.status(401).json({ error: 'Session expired. Please log in again.' });
   }
-
-  req.user = user;
-  next();
 };
 
 const optionalAuthenticate = async (req, res, next) => {
@@ -3149,14 +3157,21 @@ const optionalAuthenticate = async (req, res, next) => {
   }
 
   const token = authHeader.split(' ')[1];
-  const user = await verifyToken(token);
-  if (!user) {
+  try {
+    const user = await verifyToken(token);
+    if (!user) {
+      req.user = null;
+      return next();
+    }
+    req.user = user;
+    next();
+  } catch (err) {
+    if (err.message === 'DATABASE_OFFLINE') {
+      return res.status(503).json({ error: 'Database is temporarily offline.' });
+    }
     req.user = null;
-    return next();
+    next();
   }
-
-  req.user = user;
-  next();
 };
 
 
@@ -3700,6 +3715,9 @@ app.post('/api/auth/login', authLimiter, authRateLimiter(10, 15 * 60 * 1000), as
 
     res.json({ token, user: sanitizeUser(user) });
   } catch (error) {
+    if (error.message === 'DATABASE_OFFLINE') {
+      return res.status(503).json({ error: 'Database is currently offline. Please try again later.' });
+    }
     console.error('Server authentication error:', error);
     res.status(500).json({ error: 'An unexpected server error occurred.' });
   }
@@ -3940,6 +3958,12 @@ app.post('/api/auth/forgot-password', authLimiter, authRateLimiter(5, 15 * 60 * 
     const isDev = process.env.NODE_ENV === 'development' || (!process.env.NODE_ENV && !process.env.VERCEL);
     if (!smtpHealthy && !isDev) {
       return res.status(503).json({ error: '🔧 Password reset is temporarily unavailable due to maintenance. Please try again later.' });
+    }
+    
+    // We explicitly check if DB is connected first before parsing email,
+    // to give a 503 error if the DB is down, avoiding the "User not found" silent failure.
+    if (!db) {
+      return res.status(503).json({ error: 'Database is temporarily offline. Please try again later.' });
     }
     const { email } = req.body;
     if (!email) {
