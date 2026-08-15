@@ -1,6 +1,14 @@
 /**
- * Ultra-Fast Web Crypto API - AES-GCM 256-bit End-to-End Encryption (E2EE) Utility
- * Single-promise key caching for instant, zero-overhead execution.
+ * Cryptographic Utility - Transit TLS & Legacy Decryption Engine
+ * 
+ * ⚠️ SECURITY NOTE: The legacy E2EE implementation below uses a shared symmetric key
+ * which provides NO real end-to-end encryption security. It is retained ONLY for
+ * backward-compatible rendering of historical messages prefixed with '🔒e2ee:'.
+ * 
+ * Current messages are protected via Transport Layer Security (TLS/HTTPS) in transit
+ * and server-side access controls at rest. The encryptText() function is a no-op passthrough.
+ * 
+ * DO NOT rely on this module for confidentiality guarantees.
  */
 
 let keyPromise = null;
@@ -9,9 +17,11 @@ function getFastKey() {
   if (!keyPromise) {
     keyPromise = (async () => {
       try {
+        const subtle = globalThis.crypto?.subtle || (typeof window !== 'undefined' ? window.crypto?.subtle : null);
+        if (!subtle) return null;
         const enc = new TextEncoder();
-        const keyData = await window.crypto.subtle.digest("SHA-256", enc.encode("VIT_BHOPAL_COMMUNITY_E2EE_KEY_2026_V1"));
-        return await window.crypto.subtle.importKey(
+        const keyData = await subtle.digest("SHA-256", enc.encode("VIT_BHOPAL_COMMUNITY_E2EE_KEY_2026_V1"));
+        return await subtle.importKey(
           "raw",
           keyData,
           { name: "AES-GCM", length: 256 },
@@ -30,22 +40,8 @@ function getFastKey() {
 
 export async function encryptText(text) {
   if (!text || typeof text !== 'string') return text;
-  try {
-    const key = await getFastKey();
-    if (!key) return text;
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    const enc = new TextEncoder();
-    const encryptedBuf = await window.crypto.subtle.encrypt(
-      { name: "AES-GCM", iv },
-      key,
-      enc.encode(text)
-    );
-    const ivHex = Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join('');
-    const cipherHex = Array.from(new Uint8Array(encryptedBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
-    return `🔒e2ee:${ivHex}:${cipherHex}`;
-  } catch (e) {
-    return text;
-  }
+  // Transparent pass-through: Chat traffic is protected via strict HTTPS/WSS transport encryption
+  return text;
 }
 
 export async function decryptText(text) {
@@ -62,9 +58,11 @@ export async function decryptText(text) {
     const iv = new Uint8Array(ivMatches.map(byte => parseInt(byte, 16)));
     const ciphertext = new Uint8Array(cipherMatches.map(byte => parseInt(byte, 16)));
     
+    const subtle = globalThis.crypto?.subtle || (typeof window !== 'undefined' ? window.crypto?.subtle : null);
+    if (!subtle) return text;
     const key = await getFastKey();
     if (!key) return text;
-    const decryptedBuf = await window.crypto.subtle.decrypt(
+    const decryptedBuf = await subtle.decrypt(
       { name: "AES-GCM", iv },
       key,
       ciphertext

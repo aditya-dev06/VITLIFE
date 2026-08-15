@@ -15,6 +15,7 @@ import { getSynchronousHardwareDeviceId } from '../utils/deviceFingerprint.js';
 import { WhatsAppPollModal } from './WhatsAppPollModal';
 import { WhatsAppPollVotingCard } from './WhatsAppPollVotingCard';
 import { WhatsAppVoterListDrawer } from './WhatsAppVoterListDrawer';
+import { WhatsAppGifPicker } from './WhatsAppGifPicker';
 import { ForwardMessageModal } from './ForwardMessageModal';
 import { useToast } from '../hooks/useToast';
 import { useTheme } from './theme-provider';
@@ -28,13 +29,8 @@ const ACADEMIC_YEARS = ['2023-24', '2024-25', '2025-26'];
 const getPaperUrls = (url) => {
   if (!url) return [];
   if (Array.isArray(url)) return url;
-  if (typeof url === 'string') {
-    if (url.includes(',')) {
-      return url.split(',').map(u => u.trim()).filter(Boolean);
-    }
-    return [url];
-  }
-  return [];
+  if (typeof url !== 'string') return [];
+  return url.split(',').map(u => u.trim()).filter(Boolean);
 };
 
 const isImageUrl = (url) => {
@@ -58,51 +54,166 @@ const isDocumentUrl = (url) => {
   return docRegex.test(trimmed);
 };
 
-// --- WHATSAPP STYLE LOCAL FILE DB ---
-const initFileDB = () => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('VITLife_WhatsApp_Files', 1);
-    request.onupgradeneeded = (e) => {
-      e.target.result.createObjectStore('chatMedia');
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
+const isGifUrl = (url) => {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim().toLowerCase();
+  return trimmed.includes('.gif') || trimmed.includes('giphy.com') || trimmed.includes('tenor.com') || trimmed.includes('gifer.com');
 };
 
-export const storeLocalFile = async (id, base64Data) => {
+const isOnlyEmojis = (str) => {
+  if (!str || typeof str !== 'string') return false;
+  const trimmed = str.trim();
+  if (!trimmed) return false;
+  const emojiRegex = /^(\p{Extended_Pictographic}|\p{Emoji_Presentation}|\p{Emoji_Modifier}|\p{Emoji_Component}|\uFE0F|\u200D|\s)+$/u;
+  if (!emojiRegex.test(trimmed)) return false;
   try {
-    const db = await initFileDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction('chatMedia', 'readwrite');
-      tx.objectStore('chatMedia').put(base64Data, id);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch(e) {
-    console.error("Local DB store error:", e);
+    const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
+    const segments = [...segmenter.segment(trimmed)].filter(s => s.segment.trim().length > 0);
+    return segments.length >= 1 && segments.length <= 3;
+  } catch (e) {
+    const chars = [...trimmed].filter(c => c.trim().length > 0);
+    return chars.length >= 1 && chars.length <= 6;
   }
 };
 
-export const getLocalFile = async (id) => {
+// --- WHATSAPP STYLE LOCAL FILE DB (Singleton + Memory Cache + LRU) ---
+let fileDBPromise = null;
+const mediaMemoryCache = new Map();
+
+const initFileDB = () => {
+  if (fileDBPromise) return fileDBPromise;
+  fileDBPromise = new Promise((resolve) => {
+    try {
+      const request = indexedDB.open('VITLife_WhatsApp_Files', 1);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('chatMedia')) {
+          db.createObjectStore('chatMedia');
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => {
+        fileDBPromise = null;
+        resolve(null);
+      };
+    } catch (e) {
+      fileDBPromise = null;
+      resolve(null);
+    }
+  });
+  return fileDBPromise;
+};
+
+const storeLocalFile = async (id, base64Data) => {
+  if (!id || !base64Data) return;
+  mediaMemoryCache.set(id, base64Data);
   try {
     const db = await initFileDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction('chatMedia', 'readonly');
-      const req = tx.objectStore('chatMedia').get(id);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
+    if (!db) return;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction('chatMedia', 'readwrite');
+        tx.objectStore('chatMedia').put(base64Data, id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      } catch (err) {
+        resolve();
+      }
     });
-  } catch(e) {
-    console.error("Local DB get error:", e);
+  } catch (e) {
+    console.warn("Local DB store warning:", e);
+  }
+};
+
+const getLocalFile = async (id) => {
+  if (!id) return null;
+  if (mediaMemoryCache.has(id)) return mediaMemoryCache.get(id);
+  try {
+    const db = await initFileDB();
+    if (!db) return null;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction('chatMedia', 'readonly');
+        const req = tx.objectStore('chatMedia').get(id);
+        req.onsuccess = () => {
+          if (req.result) mediaMemoryCache.set(id, req.result);
+          resolve(req.result || null);
+        };
+        req.onerror = () => resolve(null);
+      } catch (err) {
+        resolve(null);
+      }
+    });
+  } catch (e) {
     return null;
   }
 };
+
+// Client-Side Canvas Compression (Max 1280px WebP + 16px Blur Preview)
+const compressImageForRelay = async (file) => {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ data: reader.result, blurThumbnail: null, contentType: file.type });
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      img.onload = () => {
+        try {
+          const maxDim = 1280;
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedBase64 = canvas.toDataURL('image/webp', 0.82);
+
+          // 16px Blur Thumbnail for instantaneous placeholder rendering
+          const blurCanvas = document.createElement('canvas');
+          blurCanvas.width = 16;
+          blurCanvas.height = Math.max(1, Math.round((height * 16) / width));
+          const bCtx = blurCanvas.getContext('2d');
+          bCtx.drawImage(canvas, 0, 0, blurCanvas.width, blurCanvas.height);
+          const blurThumbnail = blurCanvas.toDataURL('image/jpeg', 0.45);
+
+          resolve({
+            data: compressedBase64,
+            blurThumbnail,
+            contentType: 'image/webp'
+          });
+        } catch (canvasErr) {
+          resolve({ data: e.target.result, blurThumbnail: null, contentType: file.type });
+        }
+      };
+      img.onerror = () => resolve({ data: e.target.result, blurThumbnail: null, contentType: file.type });
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
 // ------------------------------------
 
-const RelayImage = ({ src, alt, onClick, style }) => {
+const RelayImage = ({ src, blurThumbnail, alt, onClick, style }) => {
   const [actualSrc, setActualSrc] = useState('');
+  const [isExpired, setIsExpired] = useState(false);
   const [error, setError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -110,20 +221,26 @@ const RelayImage = ({ src, alt, onClick, style }) => {
     const resolveSrc = async () => {
       if (!src) return;
       if (!src.startsWith('relay://')) {
-        setActualSrc(src);
+        if (isMounted) {
+          setActualSrc(src);
+          setIsLoading(false);
+        }
         return;
       }
       
       const id = src.replace('relay://', '');
       
-      // Check local device storage (user as host)
+      // 1. Check local device storage (user as host)
       const cached = await getLocalFile(id);
       if (cached) {
-        if (isMounted) setActualSrc(cached);
+        if (isMounted) {
+          setActualSrc(cached);
+          setIsLoading(false);
+        }
         return;
       }
       
-      // Fetch from ephemeral relay
+      // 2. Fetch from distributed 7-day ephemeral relay
       try {
         const token = localStorage.getItem('ds_ai_token');
         const res = await fetch(`/api/relay/${id}`, {
@@ -131,14 +248,28 @@ const RelayImage = ({ src, alt, onClick, style }) => {
         });
         const data = await res.json();
         if (data.success && data.data) {
-          if (isMounted) setActualSrc(data.data);
-          // Save to local device storage to act as host
+          if (isMounted) {
+            setActualSrc(data.data);
+            setIsLoading(false);
+          }
+          // Save to local device storage permanently
           await storeLocalFile(id, data.data);
+        } else if (res.status === 404) {
+          if (isMounted) {
+            setIsExpired(true);
+            setIsLoading(false);
+          }
         } else {
-          if (isMounted) setError(true);
+          if (isMounted) {
+            setError(true);
+            setIsLoading(false);
+          }
         }
-      } catch(e) {
-        if (isMounted) setError(true);
+      } catch (e) {
+        if (isMounted) {
+          setError(true);
+          setIsLoading(false);
+        }
       }
     };
     
@@ -146,12 +277,56 @@ const RelayImage = ({ src, alt, onClick, style }) => {
     return () => { isMounted = false; };
   }, [src]);
 
+  if (isExpired) {
+    return (
+      <div style={{
+        padding: '0.6rem 0.8rem',
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px dashed rgba(255,255,255,0.15)',
+        borderRadius: '10px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '0.3rem',
+        maxWidth: '220px',
+        color: '#94a3b8'
+      }}>
+        {blurThumbnail && (
+          <img 
+            src={blurThumbnail} 
+            alt="Expired thumbnail" 
+            style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '6px', filter: 'blur(8px)', opacity: 0.6 }} 
+          />
+        )}
+        <span style={{ fontSize: '0.72rem', textAlign: 'center' }}>⏳ File expired on server (7d retention)</span>
+      </div>
+    );
+  }
+
   if (error) {
-    return <div style={{ fontSize: '0.75rem', color: '#fb7185', padding: '0.3rem 0.5rem', background: 'rgba(239,68,68,0.1)', borderRadius: '6px' }}>⚠️ Preview Unavailable</div>;
+    return (
+      <div style={{ fontSize: '0.75rem', color: '#fb7185', padding: '0.3rem 0.5rem', background: 'rgba(239,68,68,0.1)', borderRadius: '6px' }}>
+        ⚠️ Preview Unavailable
+      </div>
+    );
   }
   
-  if (!actualSrc) {
-    return <div style={{ width: '150px', height: '100px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ opacity: 0.5 }}>Loading...</span></div>;
+  if (isLoading || !actualSrc) {
+    return (
+      <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px', ...style }}>
+        {blurThumbnail ? (
+          <img 
+            src={blurThumbnail} 
+            alt="Blur preview" 
+            style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(10px)', transform: 'scale(1.08)' }} 
+          />
+        ) : (
+          <div style={{ width: '150px', height: '100px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ opacity: 0.5, fontSize: '0.75rem' }}>Loading...</span>
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -159,7 +334,7 @@ const RelayImage = ({ src, alt, onClick, style }) => {
       src={sanitizeImageSrc(actualSrc)} 
       alt={alt} 
       onClick={() => onClick && onClick(actualSrc)}
-      style={style}
+      style={{ ...style, transition: 'filter 0.3s ease' }}
     />
   );
 };
@@ -854,7 +1029,7 @@ const PaperFileItem = memo(function PaperFileItem({ paper, user, onDelete, onOpe
           )}
         </div>
         <span style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-          👤 Contributed by {paper.uploadedBy || 'Community'}
+          👤 Contributed by {(!paper.uploadedBy || paper.uploadedBy.toLowerCase().includes('pass')) ? 'Community' : paper.uploadedBy}
         </span>
       </div>
       
@@ -1519,9 +1694,15 @@ const ChatMessageItem = memo(function ChatMessageItem({
             </div>
           ) : (
             message.content && (
-              <div style={{ color: theme === 'light' ? '#0f172a' : (isOwner ? '#ffffff' : '#e9edef'), fontSize: '0.9rem', lineHeight: '1.45', wordBreak: 'break-word' }}>
-                {message.content}
-              </div>
+              isOnlyEmojis(message.content) ? (
+                <div style={{ fontSize: '2.4rem', lineHeight: '2.8rem', padding: '0.15rem 0.3rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }}>
+                  {message.content}
+                </div>
+              ) : (
+                <div style={{ color: theme === 'light' ? '#0f172a' : (isOwner ? '#ffffff' : '#e9edef'), fontSize: '0.9rem', lineHeight: '1.45', wordBreak: 'break-word' }}>
+                  {message.content}
+                </div>
+              )
             )
           )}
 
@@ -1550,9 +1731,40 @@ const ChatMessageItem = memo(function ChatMessageItem({
                   <span>📄 Document Attachment</span>
                   <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>↗ View</span>
                 </a>
+              ) : (message.isGif || isGifUrl(message.attachment || message.imageUrl)) ? (
+                <div style={{ position: 'relative', display: 'inline-block', borderRadius: '12px', overflow: 'hidden' }}>
+                  <img
+                    src={sanitizeImageSrc(message.imageUrl || message.attachment)}
+                    alt="GIF"
+                    onClick={() => onPreviewImage && onPreviewImage(message.imageUrl || message.attachment)}
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: '260px',
+                      borderRadius: '12px',
+                      display: 'block',
+                      cursor: 'pointer',
+                      border: '1px solid rgba(255,255,255,0.1)'
+                    }}
+                  />
+                  <span style={{
+                    position: 'absolute',
+                    bottom: '6px',
+                    left: '6px',
+                    background: 'rgba(0, 0, 0, 0.75)',
+                    color: '#ffffff',
+                    fontSize: '0.65rem',
+                    fontWeight: 800,
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    letterSpacing: '0.5px'
+                  }}>
+                    GIF
+                  </span>
+                </div>
               ) : (
                 <RelayImage 
                   src={message.imageUrl || message.attachment}
+                  blurThumbnail={message.blurThumbnail}
                   alt="Chat attachment"
                   onClick={onPreviewImage}
                   style={{
@@ -2254,6 +2466,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
   // Interactive Popup States for WhatsApp Buttons
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
@@ -2680,35 +2893,35 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
           }));
 
           setMessages(prev => {
-            const existingMap = new Map();
-            prev.forEach(m => {
-              if (m.id) existingMap.set(m.id, m);
-              if (m.tempId) existingMap.set(m.tempId, m);
-            });
-
             let hasChanges = false;
             let merged = [...prev];
 
             for (const serverMsg of decryptedMsgs) {
-              const existingById = existingMap.get(serverMsg.id);
-              const existingByTemp = serverMsg.tempId ? existingMap.get(serverMsg.tempId) : null;
-              const existing = existingById || existingByTemp;
+              if (!serverMsg || !serverMsg.id) continue;
+              const idx = merged.findIndex(m =>
+                m.id === serverMsg.id ||
+                (serverMsg.tempId && m.tempId === serverMsg.tempId) ||
+                (m.tempId && serverMsg.id === m.tempId)
+              );
 
-              if (existing) {
-                const idx = merged.findIndex(m => m === existing || m.id === existing.id);
-                if (idx !== -1) {
-                  const needsUpdate = merged[idx].status === 'sending' ||
-                    JSON.stringify(merged[idx].reactions) !== JSON.stringify(serverMsg.reactions) ||
-                    merged[idx].content !== serverMsg.content ||
-                    merged[idx].isEdited !== serverMsg.isEdited;
-                  if (needsUpdate) {
-                    merged[idx] = { ...serverMsg, status: 'sent' };
-                    hasChanges = true;
-                  }
+              if (idx !== -1) {
+                const existing = merged[idx];
+                const needsUpdate =
+                  existing.status === 'sending' ||
+                  existing.id !== serverMsg.id ||
+                  existing.content !== serverMsg.content ||
+                  existing.isEdited !== serverMsg.isEdited ||
+                  JSON.stringify(existing.reactions) !== JSON.stringify(serverMsg.reactions) ||
+                  JSON.stringify(existing.poll) !== JSON.stringify(serverMsg.poll);
+
+                if (needsUpdate) {
+                  merged[idx] = { ...serverMsg, status: 'sent' };
+                  hasChanges = true;
                 }
               } else {
                 const optMatchIdx = merged.findIndex(m =>
                   m.status === 'sending' &&
+                  m.channel === serverMsg.channel &&
                   m.authorId === serverMsg.authorId &&
                   m.content === serverMsg.content
                 );
@@ -2722,19 +2935,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
               }
             }
 
-            const serverIds = new Set(decryptedMsgs.map(m => m.id));
-            const now = Date.now();
-            const afterDelete = merged.filter(m => {
-              if (m.status === 'sending' || !m.id || serverIds.has(m.id)) return true;
-              if (m.id && m.id.startsWith('msg_')) {
-                const ts = parseInt(m.id.split('_')[1], 10);
-                if (!isNaN(ts) && (now - ts < 30000)) return true; // keep if newer than 30s to shield from race conditions
-              }
-              return false;
-            });
-            if (afterDelete.length !== merged.length) hasChanges = true;
-
-            return hasChanges ? afterDelete : prev;
+            return hasChanges ? merged : prev;
           });
         }
       } catch (err) {
@@ -2982,6 +3183,13 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
   // Poll Vote Handler
   const handleVotePoll = useCallback(async (messageId, voteData) => {
+    const isGuest = !user || user.isGuest;
+    const token = localStorage.getItem('ds_ai_token');
+    if (isGuest || !token) {
+      if (onRequireAuth) onRequireAuth();
+      return;
+    }
+
     setMessages(prev => prev.map(m => {
       if (m.id !== messageId || !m.poll) return m;
       if (typeof voteData === 'number') {
@@ -3000,12 +3208,8 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     }));
 
     try {
-      const token = localStorage.getItem('ds_ai_token');
       const headers = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const guestClientId = getGuestClientId();
-      if (guestClientId) headers['X-Guest-User-Id'] = guestClientId;
 
       await fetch('/api/chat/poll-vote', {
         method: 'POST',
@@ -3019,7 +3223,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     } catch (err) {
       console.error('Failed to submit poll vote:', err);
     }
-  }, [activeChannel]);
+  }, [user, activeChannel, onRequireAuth]);
 
   // Forward Message Handler — opens modal
   const handleForwardMessage = useCallback((msgToForward) => {
@@ -3072,30 +3276,67 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
   };
 
   // Submit Poll Creator
-  const handleCreatePollSubmit = (e) => {
+  const handleCreatePollSubmit = async (e) => {
     e.preventDefault();
     if (!pollQuestion.trim() || !pollOpt1.trim() || !pollOpt2.trim()) return;
     const currentAuthorId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
+    const tempId = generateSecureId('poll_temp');
+    const pollObj = {
+      id: generateSecureId('poll'),
+      question: pollQuestion.trim(),
+      options: [pollOpt1.trim(), pollOpt2.trim()],
+      votes: [],
+      allowMultipleAnswers: false
+    };
+
     const pollMsg = {
-      id: String(Date.now()),
+      id: tempId,
+      tempId: tempId,
       channel: activeChannel,
       author: getSafeAuthorName(user),
       authorId: currentAuthorId,
       avatar: user && user.name ? user.name.charAt(0).toUpperCase() : 'G',
       role: user && !user.isGuest ? (user.role === 'admin' ? 'Admin' : (user.program || 'Student')) : 'Guest User',
-      poll: {
-        question: pollQuestion.trim(),
-        options: [pollOpt1.trim(), pollOpt2.trim()],
-        votes: [0, 0]
-      },
+      content: `📊 Poll: ${pollQuestion.trim()}`,
+      poll: pollObj,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      rawTimestamp: new Date().toISOString(),
+      status: 'sending',
       reactions: { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] }
     };
+
     setMessages(prev => [...prev, pollMsg]);
     setPollQuestion('');
     setPollOpt1('');
     setPollOpt2('');
     setShowPollModal(false);
+
+    try {
+      const token = localStorage.getItem('ds_ai_token');
+      const res = await fetch('/api/chat/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-guest-user-id': getGuestClientId(),
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          tempId: tempId,
+          channel: activeChannel,
+          content: `📊 Poll: ${pollObj.question}`,
+          poll: pollObj,
+          authorName: pollMsg.author,
+          authorRole: pollMsg.role,
+          userId: currentAuthorId
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.message) {
+        setMessages(prev => prev.map(m => (m.id === tempId || m.tempId === tempId) ? { ...data.message, status: 'sent' } : m));
+      }
+    } catch (err) {
+      console.error("Failed to post poll:", err);
+    }
   };
 
   // Send Message
@@ -3112,17 +3353,20 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
     setUploading(true);
     let attachmentUrl = null;
+    let blurThumbnail = null;
 
     if (selectedAttachment) {
       const token = localStorage.getItem('ds_ai_token');
       try {
-        const base64Data = await readAsDataURL(selectedAttachment);
+        // 1. Offscreen Canvas Compression (~250KB WebP + 16px blur preview)
+        const compressed = await compressImageForRelay(selectedAttachment);
         const relayId = generateSecureId('relay');
+        blurThumbnail = compressed.blurThumbnail;
         
-        // Save to our local "host" IndexedDB immediately
-        await storeLocalFile(relayId, base64Data);
+        // 2. Save to local device storage permanently
+        await storeLocalFile(relayId, compressed.data);
         
-        // Relay to server (ephemeral)
+        // 3. Upload to distributed 7-Day Redis Relay first
         const res = await fetch('/api/relay', {
           method: 'POST',
           headers: {
@@ -3131,21 +3375,22 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
           },
           body: JSON.stringify({
             id: relayId,
-            data: base64Data,
-            contentType: selectedAttachment.type
+            data: compressed.data,
+            contentType: compressed.contentType,
+            blurThumbnail: compressed.blurThumbnail
           })
         });
         const data = await res.json();
         
         if (data.success) {
-          // Tell others to fetch from this relay ID
           attachmentUrl = `relay://${relayId}`;
         } else {
-          attachmentUrl = base64Data; // fallback
+          attachmentUrl = compressed.data; // fallback
         }
       } catch (err) {
         try {
-          attachmentUrl = await readAsDataURL(selectedAttachment);
+          const rawBase64 = await readAsDataURL(selectedAttachment);
+          attachmentUrl = rawBase64;
         } catch (readErr) {
           attachmentUrl = null;
         }
@@ -3172,6 +3417,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       content: rawText,
       attachment: attachmentUrl,
       imageUrl: attachmentUrl,
+      blurThumbnail: blurThumbnail,
       replyTo: replyingToMessage ? { author: replyingToMessage.author, content: replyingToMessage.content } : null,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       rawTimestamp: new Date().toISOString(),
@@ -3201,6 +3447,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         content: encryptedContent,
         attachment: attachmentUrl,
         imageUrl: attachmentUrl,
+        blurThumbnail: blurThumbnail,
         authorName: msg.author,
         authorRole: msg.role,
         userId: currentAuthorId,
@@ -3223,6 +3470,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
           content: encryptedContent, 
           attachment: attachmentUrl,
           imageUrl: attachmentUrl,
+          blurThumbnail: blurThumbnail,
           authorName: msg.author,
           authorRole: msg.role,
           userId: currentAuthorId,
@@ -3265,11 +3513,95 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     }).catch(err => console.error('Edit sync failed:', err));
   }, [showToast, activeChannel]);
 
+  // Send Animated GIF Handler
+  const handleSendGif = useCallback(async (gifUrl) => {
+    const isGuest = !user || user.isGuest;
+    if (isGuest) {
+      if (onRequireAuth) onRequireAuth();
+      return;
+    }
+    if (!gifUrl) return;
+
+    const tempId = generateSecureId('temp');
+    const currentAuthorId = user._id || user.id || user.email;
+    const encryptedContent = await encryptText('👾 GIF');
+
+    const optimisticMsg = {
+      id: tempId,
+      tempId,
+      channel: activeChannel,
+      author: getSafeAuthorName(user),
+      authorId: currentAuthorId,
+      avatar: user && user.name ? user.name.charAt(0).toUpperCase() : 'U',
+      role: user ? user.role : 'student',
+      content: '👾 GIF',
+      attachment: gifUrl,
+      imageUrl: gifUrl,
+      isGif: true,
+      reactions: { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] },
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      rawTimestamp: new Date().toISOString(),
+      status: 'sending'
+    };
+
+    setMessages(prev => [...prev, optimisticMsg]);
+    setShowGifPicker(false);
+    setTimeout(() => {
+      if (chatScrollRef.current) {
+        chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+      }
+    }, 50);
+
+    try {
+      const token = localStorage.getItem('ds_ai_token');
+      const res = await fetch('/api/chat/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          tempId,
+          channel: activeChannel,
+          content: encryptedContent,
+          attachment: gifUrl,
+          imageUrl: gifUrl,
+          isGif: true,
+          authorName: optimisticMsg.author,
+          authorRole: optimisticMsg.role,
+          userId: currentAuthorId
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.message) {
+        setMessages(prev => prev.map(m => (m.id === tempId || m.tempId === tempId) ? { ...data.message, content: '👾 GIF', status: 'sent' } : m));
+      }
+    } catch (err) {
+      console.error('Failed to send GIF:', err);
+    }
+  }, [user, activeChannel, onRequireAuth]);
+
 
 
   const filteredMessages = useMemo(() => {
     let list = (Array.isArray(messages) ? messages : []).filter(m => m && m.channel === activeChannel && !deletedForMeIds.includes(m.id));
     
+    // Strict Deduplication: Ensure each message id and tempId only appears once
+    const seenIds = new Set();
+    const seenTempIds = new Set();
+    const uniqueList = [];
+    for (const m of list) {
+      if (!m) continue;
+      const keyId = m.id;
+      const keyTemp = m.tempId;
+      if (keyId && seenIds.has(keyId)) continue;
+      if (keyTemp && seenTempIds.has(keyTemp)) continue;
+      if (keyId) seenIds.add(keyId);
+      if (keyTemp) seenTempIds.add(keyTemp);
+      uniqueList.push(m);
+    }
+    list = uniqueList;
+
     // Sort chronologically (oldest first, newest last) to guarantee chat order
     list.sort((a, b) => {
       const getTs = (m) => {
@@ -3496,7 +3828,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {onlineStats.onlineCount} online • {onlineStats.totalMembers} {onlineStats.totalMembers === 1 ? 'member' : 'members'}
                     </span>
-                    <span style={{ color: '#00a884', background: 'rgba(0,168,132,0.12)', padding: '1px 5px', borderRadius: '4px', fontSize: '0.62rem', fontWeight: 600, flexShrink: 0 }}>🔒 E2EE</span>
+                    <span style={{ color: '#00a884', background: 'rgba(0,168,132,0.12)', padding: '1px 5px', borderRadius: '4px', fontSize: '0.62rem', fontWeight: 600, flexShrink: 0 }}>🔒 Verified</span>
                   </>
                 )}
               </div>
@@ -3748,6 +4080,9 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   <div className="wa-dropdown-item" onClick={() => { setShowAttachMenu(false); if (fileInputRef.current) fileInputRef.current.click(); }}>
                     <span>📷 Photos &amp; Videos</span>
                   </div>
+                  <div className="wa-dropdown-item" onClick={() => { setShowAttachMenu(false); setShowGifPicker(true); }}>
+                    <span>👾 GIFs &amp; Reactions</span>
+                  </div>
                   <div className="wa-dropdown-item" onClick={() => { setShowAttachMenu(false); if (fileInputRef.current) fileInputRef.current.click(); }}>
                     <span>📄 PYQ Document</span>
                   </div>
@@ -3757,12 +4092,19 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                 </div>
               )}
 
+              {/* WhatsApp GIF Picker */}
+              <WhatsAppGifPicker
+                isOpen={showGifPicker}
+                onClose={() => setShowGifPicker(false)}
+                onSelectGif={handleSendGif}
+              />
+
               {/* Input pill container */}
               <div className="wa-input-container">
                 {/* Emoji Picker Trigger */}
                 <span 
                   title="Emojis" 
-                  onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(!showEmojiPicker); setShowAttachMenu(false); }}
+                  onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(!showEmojiPicker); setShowGifPicker(false); setShowAttachMenu(false); }}
                   style={{ color: '#8696a0', fontSize: '1.3rem', cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0, padding: '8px' }}
                 >
                   <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#8696a0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -3772,6 +4114,30 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                     <line x1="15" y1="9" x2="15.01" y2="9"></line>
                   </svg>
                 </span>
+
+                {/* GIF Picker Trigger Button */}
+                <button
+                  type="button"
+                  title="GIFs"
+                  onClick={(e) => { e.stopPropagation(); setShowGifPicker(!showGifPicker); setShowEmojiPicker(false); setShowAttachMenu(false); }}
+                  style={{
+                    background: showGifPicker ? '#00a884' : 'rgba(255,255,255,0.08)',
+                    border: 'none',
+                    color: showGifPicker ? '#ffffff' : '#8696a0',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '3px 7px',
+                    marginRight: '4px',
+                    borderRadius: '6px',
+                    fontWeight: 800,
+                    fontSize: '0.72rem',
+                    letterSpacing: '0.5px'
+                  }}
+                >
+                  GIF
+                </button>
 
                 {/* WhatsApp Message Field */}
                 <input
@@ -3790,7 +4156,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   <button
                     type="button"
                     title="Attach"
-                    onClick={(e) => { e.stopPropagation(); setShowAttachMenu(!showAttachMenu); setShowEmojiPicker(false); }}
+                    onClick={(e) => { e.stopPropagation(); setShowAttachMenu(!showAttachMenu); setShowEmojiPicker(false); setShowGifPicker(false); }}
                     style={{ background: 'none', border: 'none', color: '#8696a0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', flexShrink: 0, position: 'relative' }}
                   >
                     <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#8696a0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -3866,7 +4232,15 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         isOpen={showPollModal}
         onClose={() => setShowPollModal(false)}
         onSubmitPoll={async ({ question, options, allowMultipleAnswers }) => {
-          const currentAuthorId = user && !user.isGuest ? (user._id || user.id || user.email) : getGuestClientId();
+          const isGuest = !user || user.isGuest;
+          if (isGuest) {
+            setShowPollModal(false);
+            if (onRequireAuth) onRequireAuth();
+            return;
+          }
+
+          const currentAuthorId = user._id || user.id || user.email;
+          const tempId = generateSecureId('poll_temp');
           const pollObj = {
             id: generateSecureId('poll'),
             question,
@@ -3885,11 +4259,30 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
           const guestClientId = getGuestClientId();
           if (guestClientId) headers['X-Guest-User-Id'] = guestClientId;
 
+          // Optimistic local state
+          const optimisticPollMsg = {
+            id: tempId,
+            tempId: tempId,
+            channel: activeChannel,
+            author: getSafeAuthorName(user),
+            authorId: currentAuthorId,
+            avatar: user && user.name ? user.name.charAt(0).toUpperCase() : 'G',
+            role: user && !user.isGuest ? (user.role === 'admin' ? 'Admin' : (user.program || 'Student')) : 'Guest User',
+            content: `📊 Poll: ${question}`,
+            poll: pollObj,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            rawTimestamp: new Date().toISOString(),
+            status: 'sending',
+            reactions: { '👍': [], '❤️': [], '😂': [], '😮': [], '😢': [], '🙏': [], '💡': [], '🔥': [], '🚀': [] }
+          };
+          setMessages(prev => [...prev, optimisticPollMsg]);
+
           try {
             const res = await fetch('/api/chat/messages', {
               method: 'POST',
               headers,
               body: JSON.stringify({
+                tempId: tempId,
                 channel: activeChannel,
                 content: `📊 Poll: ${question}`,
                 poll: pollObj,
@@ -3901,27 +4294,13 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
             if (res.ok) {
               const data = await res.json();
               if (data.success && data.message) {
-                setMessages(prev => [...prev, data.message]);
+                setMessages(prev => prev.map(m => (m.id === tempId || m.tempId === tempId || m.id === data.message.id) ? { ...data.message, status: 'sent' } : m));
               }
-            } else {
-              const fallbackMsg = {
-                id: generateSecureId('poll_msg'),
-                channel: activeChannel,
-                author: getSafeAuthorName(user),
-                authorId: currentAuthorId,
-                avatar: user && user.name ? user.name.charAt(0).toUpperCase() : 'G',
-                role: user && !user.isGuest ? (user.role === 'admin' ? 'Admin' : (user.program || 'Student')) : 'Guest User',
-                poll: pollObj,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                reactions: { '👍': [], '❤️': [], '😂': [], '😮': [], '😢': [], '🙏': [], '💡': [], '🔥': [], '🚀': [] }
-              };
-              setMessages(prev => [...prev, fallbackMsg]);
             }
           } catch (e) {
             console.error('Failed to post poll message:', e);
           }
         }}
-
       />
 
       <WhatsAppVoterListDrawer

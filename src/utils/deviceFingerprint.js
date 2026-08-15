@@ -14,7 +14,10 @@ export function getSynchronousHardwareDeviceId() {
   const screenSpec = (typeof screen !== 'undefined') ? `${screen.width}x${screen.height}x${screen.colorDepth}` : '1024x768x24';
   const devicePixelRatio = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
 
-  const rawSignal = `${cpuCores}:::${maxTouchPoints}:::${screenSpec}:::${devicePixelRatio}`;
+  const timezone = Intl?.DateTimeFormat?.()?.resolvedOptions?.()?.timeZone || 'unknown';
+  const lang = (typeof navigator !== 'undefined' && navigator.language) || 'en';
+  const platform = (typeof navigator !== 'undefined' && navigator.platform) || 'unknown';
+  const rawSignal = `${cpuCores}:::${maxTouchPoints}:::${screenSpec}:::${devicePixelRatio}:::${timezone}:::${lang}:::${platform}`;
 
   // 2. Fast Deterministic Bit-Shift Hash
   let hash = 0;

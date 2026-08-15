@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import AppSidebar from './components/AppSidebar';
 import FullPageLoader from './components/FullPageLoader';
 import { useTheme } from './components/theme-provider';
+import ErrorBoundary from './components/ErrorBoundary';
 import { cachedFetch } from './utils/apiClient';
 import { getSynchronousHardwareDeviceId } from './utils/deviceFingerprint';
 
@@ -696,7 +697,7 @@ function App() {
   const renderActiveComponent = () => {
     switch (activeTab) {
       case 'faculty':
-        return <FacultyDirectory />;
+        return <FacultyDirectory user={user} onRequireAuth={handleRequireAuth} onBackToApp={() => setActiveTab('dashboard')} />;
       case 'opportunities':
         return (
           <Opportunities 
@@ -730,32 +731,38 @@ function App() {
         );
       case 'chats':
         return (
-          <CommunityPage 
-            key="chats"
-            user={user}
-            onRequireAuth={handleRequireAuth}
-            initialSubTab="chats"
-            onBackToApp={() => setActiveTab('dashboard')}
-          />
+          <ErrorBoundary>
+            <CommunityPage 
+              key="chats"
+              user={user}
+              onRequireAuth={handleRequireAuth}
+              initialSubTab="chats"
+              onBackToApp={() => setActiveTab('dashboard')}
+            />
+          </ErrorBoundary>
         );
       case 'community':
         return (
-          <CommunityPage 
-            key="community"
-            user={user}
-            onRequireAuth={handleRequireAuth}
-            initialSubTab="pyq"
-            onBackToApp={() => setActiveTab('dashboard')}
-          />
+          <ErrorBoundary>
+            <CommunityPage 
+              key="community"
+              user={user}
+              onRequireAuth={handleRequireAuth}
+              initialSubTab="pyq"
+              onBackToApp={() => setActiveTab('dashboard')}
+            />
+          </ErrorBoundary>
         );
       case 'marketplace':
         return (
-          <MarketplacePage 
-            key="marketplace"
-            user={user}
-            onRequireAuth={handleRequireAuth}
-            onBackToApp={() => setActiveTab('dashboard')}
-          />
+          <ErrorBoundary>
+            <MarketplacePage 
+              key="marketplace"
+              user={user}
+              onRequireAuth={handleRequireAuth}
+              onBackToApp={() => setActiveTab('dashboard')}
+            />
+          </ErrorBoundary>
         );
       case 'campus':
         if (!user) {
@@ -763,40 +770,44 @@ function App() {
           return null;
         }
         return (
-          <CampusLife 
-            user={user} 
-            token={token} 
-            clubs={clubs}
-            events={events}
-            fetchClubs={fetchClubs}
-            fetchEvents={fetchEvents}
-            initialSelectedEventId={highlightedEventId}
-            clearInitialSelectedEvent={() => setHighlightedEventId(null)}
-            eventsLocked={eventsLocked}
-            onToggleEventsLock={handleToggleEventsLock}
-          />
+          <ErrorBoundary>
+            <CampusLife 
+              user={user} 
+              token={token} 
+              clubs={clubs}
+              events={events}
+              fetchClubs={fetchClubs}
+              fetchEvents={fetchEvents}
+              initialSelectedEventId={highlightedEventId}
+              clearInitialSelectedEvent={() => setHighlightedEventId(null)}
+              eventsLocked={eventsLocked}
+              onToggleEventsLock={handleToggleEventsLock}
+            />
+          </ErrorBoundary>
         );
       default:
         return (
-          <Dashboard 
-            stats={stats} 
-            user={user}
-            opportunities={opportunities} 
-            onNavigate={setActiveTab}
-            onUpdateSemester={handleUpdateSemester}
-            clubs={clubs}
-            events={events}
-            fetchEvents={fetchEvents}
-            token={token}
-            theme={theme}
-            eventsLocked={eventsLocked}
-            onToggleEventsLock={handleToggleEventsLock}
-            isAdmin={user && user.role === 'admin'}
-            onNavigateToEvent={(eventId) => {
-              setHighlightedEventId(eventId);
-              setActiveTab('campus');
-            }}
-          />
+          <ErrorBoundary>
+            <Dashboard 
+              stats={stats} 
+              user={user}
+              opportunities={opportunities} 
+              onNavigate={setActiveTab}
+              onUpdateSemester={handleUpdateSemester}
+              clubs={clubs}
+              events={events}
+              fetchEvents={fetchEvents}
+              token={token}
+              theme={theme}
+              eventsLocked={eventsLocked}
+              onToggleEventsLock={handleToggleEventsLock}
+              isAdmin={user && user.role === 'admin'}
+              onNavigateToEvent={(eventId) => {
+                setHighlightedEventId(eventId);
+                setActiveTab('campus');
+              }}
+            />
+          </ErrorBoundary>
         );
     }
   };

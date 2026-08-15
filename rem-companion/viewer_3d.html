@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💙 Chibi Rem 3D - Skeletal Studio & Anatomical Mobility Rig</title>
+    <script>
+        if (window.location.protocol === 'file:') {
+            window.location.replace('http://127.0.0.1:8990/viewer_3d.html');
+        }
+    </script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: radial-gradient(circle at center, #1b2842 0%, #080b12 100%);
+            color: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            user-select: none;
+        }
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            display: block;
+            position: relative;
+        }
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(15, 23, 42, 0.94);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(56, 189, 248, 0.45);
+            border-radius: 16px;
+            padding: 18px;
+            width: 330px;
+            max-height: 94vh;
+            overflow-y: auto;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.65);
+            z-index: 100;
+        }
+        #ui-panel::-webkit-scrollbar { width: 4px; }
+        #ui-panel::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 4px; }
+        
+        h2 {
+            font-size: 17px;
+            color: #38bdf8;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section-title {
+            font-size: 11px;
+            color: #94a3b8;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            margin-top: 14px;
+            margin-bottom: 6px;
+            border-bottom: 1px solid #1e293b;
+            padding-bottom: 4px;
+        }
+        .button-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+        button, select {
+            width: 100%;
+            padding: 7px 10px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #f8fafc;
+            border-radius: 8px;
+            font-size: 11px;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+        button:hover, select:hover {
+            border-color: #38bdf8;
+            background: #24324a;
+        }
+        button.active {
+            background: #0284c7;
+            border-color: #38bdf8;
+            font-weight: bold;
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+        }
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #cbd5e1;
+        }
+        .toggle-row input {
+            cursor: pointer;
+            accent-color: #38bdf8;
+            width: 16px;
+            height: 16px;
+        }
+        .slider-group {
+            margin-top: 8px;
+        }
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #94a3b8;
+            margin-bottom: 2px;
+        }
+        input[type=range] {
+            width: 100%;
+            accent-color: #38bdf8;
+            cursor: pointer;
+        }
+
+        /* 3D Floating Character Nametag HUD */
+        #floating-nametag {
+            position: absolute;
+            transform: translate(-50%, -100%);
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            z-index: 50;
+            transition: opacity 0.2s ease;
+        }
+        .nametag-card {
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(10px);
+            border: 1.5px solid rgba(56, 189, 248, 0.7);
+            border-radius: 12px;
+            padding: 6px 14px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(56, 189, 248, 0.35);
+            text-align: center;
+            min-width: 140px;
+        }
+        .nametag-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #38bdf8;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .nametag-badges {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 3px;
+        }
+        .nametag-badge {
+            font-size: 9px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(56, 189, 248, 0.18);
+            color: #7dd3fc;
+            border: 1px solid rgba(56, 189, 248, 0.4);
+        }
+        .nametag-hp-bar {
+            width: 100%;
+            height: 4px;
+            background: #1e293b;
+            border-radius: 2px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+        .nametag-hp-fill {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #38bdf8, #818cf8);
+            border-radius: 2px;
+        }
+
+        /* 3D Joint Overlay Badges */
+        .joint-marker {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid #38bdf8;
+            color: #f8fafc;
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-size: 9px;
+            font-weight: 600;
+            pointer-events: auto;
+            cursor: pointer;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            transition: transform 0.15s, background 0.15s;
+            z-index: 40;
+        }
+        .joint-marker:hover {
+            transform: translate(-50%, -50%) scale(1.15);
+            background: #0284c7;
+            border-color: #7dd3fc;
+        }
+        .joint-marker.selected {
+            background: #0ea5e9;
+            border-color: #ffffff;
+            box-shadow: 0 0 10px #38bdf8;
+        }
+
+        #loading-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(15, 23, 42, 0.96);
+            padding: 28px 40px;
+            border-radius: 16px;
+            border: 1px solid #38bdf8;
+            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
+            z-index: 200;
+            max-width: 480px;
+        }
+        #loading-title {
+            font-size: 18px;
+            color: #38bdf8;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        #loading-desc {
+            font-size: 13px;
+            color: #94a3b8;
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+        #progress-bar-container {
+            width: 100%;
+            height: 8px;
+            background: #1e293b;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+        #progress-bar {
+            width: 0%;
+            height: 100%;
+            background: #38bdf8;
+            transition: width 0.2s;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="rem_skeletal_engine.js"></script>
+</head>
+<body>
+    <div id="loading-overlay">
+        <div id="loading-title">Loading Chibi Rem 3D... 💙</div>
+        <div id="loading-desc">Calibrating anatomical mobility rig & joint nametags...</div>
+        <div id="progress-bar-container">
+            <div id="progress-bar"></div>
+        </div>
+    </div>
+
+    <!-- Floating 3D Character Nametag -->
+    <div id="floating-nametag">
+        <div class="nametag-card">
+            <div class="nametag-title">
+                <span>💙 Rem</span>
+                <span style="font-size: 10px; color: #94a3b8;">(レム)</span>
+            </div>
+            <div class="nametag-badges">
+                <span class="nametag-badge" id="nametag-emotion">✨ Service Maid</span>
+                <span class="nametag-badge" style="background: rgba(129, 140, 248, 0.2); color: #c7d2fe;">Lv. 99</span>
+            </div>
+            <div class="nametag-hp-bar">
+                <div class="nametag-hp-fill" id="nametag-hp"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3D Joint Overlay Container -->
+    <div id="joint-markers-container"></div>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-panel">
+        <h2>💙 Rem Skeletal Studio</h2>
+        
+        <!-- Timeline Controls -->
+        <div class="section-title">⏱️ Animation Timeline & Speed</div>
+        <div style="display: flex; gap: 6px; margin-top: 4px;">
+            <button id="btn-play-pause" style="flex: 1;">⏸️ Pause</button>
+            <button id="btn-restart" style="flex: 1;">⏮️ Reset</button>
+        </div>
+        <div class="slider-group">
+            <div class="slider-label">
+                <span>Speed Multiplier</span>
+                <span id="speed-val">1.0x</span>
+            </div>
+            <input type="range" id="speed-slider" min="20" max="250" value="100">
+        </div>
+
+        <!-- Character Nametag & HUD -->
+        <div class="section-title">🏷️ Character Nametag & HUD</div>
+        <div class="toggle-row">
+            <span>Show Character Nametag</span>
+            <input type="checkbox" id="toggle-nametag" checked>
+        </div>
+        <div class="toggle-row">
+            <span>Show 3D Joint Nametags</span>
+            <input type="checkbox" id="toggle-joint-tags">
+        </div>
+
+        <!-- Mobility & Bone Rig Mapper -->
+        <div class="section-title">🦴 Anatomical Mobility Rig</div>
+        <div class="toggle-row">
+            <span>🔒 Enforce Mobility Limits</span>
+            <input type="checkbox" id="toggle-mobility" checked>
+        </div>
+        <div class="toggle-row">
+            <span>Show Skeletal Wireframe</span>
+            <input type="checkbox" id="toggle-bones">
+        </div>
+        <div class="toggle-row">
+            <span>Head & Eye Cursor Tracking</span>
+            <input type="checkbox" id="toggle-tracking" checked>
+        </div>
+        
+        <div style="margin-top: 8px;">
+            <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 3px;">Select Bone / Joint</label>
+            <select id="bone-select">
+                <option value="">-- Choose Bone --</option>
+            </select>
+        </div>
+
+        <div class="slider-group" id="bone-controls" style="display: none; margin-top: 6px;">
+            <div id="mobility-range-hint" style="font-size: 10px; color: #38bdf8; margin-bottom: 6px; padding: 4px 8px; background: rgba(56, 189, 248, 0.1); border-radius: 6px;"></div>
+            
+            <div class="slider-label"><span>Pitch (X-Axis)</span><span id="bx-val">0°</span></div>
+            <input type="range" id="bone-rot-x" min="-180" max="180" value="0">
+            
+            <div class="slider-label" style="margin-top:4px;"><span>Yaw (Y-Axis)</span><span id="by-val">0°</span></div>
+            <input type="range" id="bone-rot-y" min="-180" max="180" value="0">
+            
+            <div class="slider-label" style="margin-top:4px;"><span>Roll (Z-Axis)</span><span id="bz-val">0°</span></div>
+            <input type="range" id="bone-rot-z" min="-180" max="180" value="0">
+            
+            <div style="display: flex; gap: 6px; margin-top: 8px;">
+                <button id="btn-reset-bone" style="flex: 1;">🔄 Reset Bone</button>
+                <button id="btn-reset-all-bones" style="flex: 1;">🧍 Natural Pose</button>
+            </div>
+        </div>
+
+        <!-- Animation Library -->
+        <div class="section-title">🎭 Expressions & Motions</div>
+        <div class="button-grid" id="anim-buttons"></div>
+
+        <!-- Nutty & FK Procedural Combos -->
+        <div class="section-title">🌪️ FK Procedural Combos</div>
+        <div class="button-grid">
+            <button class="anim-btn" onclick="playProcedural('cheer')">🎉 Victory Cheer</button>
+            <button class="anim-btn" onclick="playProcedural('karate')">🥋 Karate Kick</button>
+            <button class="anim-btn" onclick="playProcedural('magic')">🪄 Magic Spell</button>
+            <button class="anim-btn" onclick="playProcedural('guitar')">🎸 Air Guitar</button>
+            <button class="anim-btn" onclick="playProcedural('backflip')">🤸‍♀️ Backflip</button>
+            <button class="anim-btn" onclick="playProcedural('neko')">🐱 Neko Dance</button>
+            <button class="anim-btn" onclick="playProcedural('curtsy')">👑 Royal Curtsy</button>
+            <button class="anim-btn" onclick="playProcedural('tea')">☕ Tea Service</button>
+            <button class="anim-btn" onclick="playProcedural('rocket')">🚀 Rocket</button>
+            <button class="anim-btn" onclick="playProcedural('tornado')">🌪️ Tornado Spin</button>
+            <button class="anim-btn" onclick="playProcedural('meditate')">🧘‍♀️ Meditate</button>
+        </div>
+
+        <!-- Camera Presets -->
+        <div class="section-title">🎥 Camera & Display</div>
+        <div class="button-grid">
+            <button id="btn-face-cam">🔍 Face Close-Up</button>
+            <button id="btn-body-cam">👗 Full Body</button>
+        </div>
+        <div class="toggle-row">
+            <span>Transparent Background</span>
+            <input type="checkbox" id="toggle-transparent">
+        </div>
+        <div class="toggle-row">
+            <span>Auto Rotate</span>
+            <input type="checkbox" id="toggle-rotate">
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, controls, mixer, clock;
+        let animations = [], actions = {};
+        let remModel = null, skeletonHelper = null;
+        let isPlaying = true, speedMultiplier = 1.0;
+        let mappedBones = {}, selectedBoneName = null;
+        let mousePos = new THREE.Vector2(0, 0);
+        let skeletalEngine = null;
+        let activeProceduralMode = null;
+        let currentPlayingAction = null;
+        let jointMarkers = {};
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+            clock = new THREE.Clock();
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0b0f19);
+
+            camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.01, 50);
+            setFullBodyCam();
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.06;
+            controls.target.set(0, 0.55, 0);
+            controls.maxDistance = 10;
+            controls.minDistance = 0.3;
+            controls.update();
+
+            // Studio Lighting
+            const ambient = new THREE.AmbientLight(0xffffff, 1.2);
+            scene.add(ambient);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+            dirLight.position.set(2, 4, 3);
+            scene.add(dirLight);
+            const backLight = new THREE.DirectionalLight(0x38bdf8, 0.4);
+            backLight.position.set(-2, 3, -3);
+            scene.add(backLight);
+
+            // Load optimized model with cache buster
+            const loader = new THREE.GLTFLoader();
+            loader.load(
+                'rem_clean.glb?v=' + Date.now(),
+                (gltf) => onModelLoaded(gltf),
+                (xhr) => {
+                    if (xhr.total) {
+                        const pct = Math.round((xhr.loaded / xhr.total) * 100);
+                        document.getElementById('progress-bar').style.width = pct + '%';
+                    }
+                },
+                (err) => console.error('Error loading rem_clean.glb:', err)
+            );
+
+            // Event Listeners
+            setupEventListeners(container);
+            animate();
+        }
+
+        function setFaceCam() {
+            camera.position.set(0, 0.72, 1.15);
+            controls.target.set(0, 0.70, 0);
+            controls.update();
+        }
+
+        function setFullBodyCam() {
+            camera.position.set(0, 0.55, 1.8);
+            if (controls) {
+                controls.target.set(0, 0.55, 0);
+                controls.update();
+            }
+        }
+
+        function onModelLoaded(gltf) {
+            document.getElementById('loading-overlay').style.display = 'none';
+
+            remModel = gltf.scene;
+            scene.add(remModel);
+
+            // Set Materials
+            remModel.traverse((child) => {
+                if (child.isMesh) {
+                    child.frustumCulled = false;
+                    const mat = child.material;
+                    if (mat) {
+                        mat.transparent = true;
+                        mat.alphaTest = 0.05;
+                        mat.depthWrite = true;
+                        mat.depthTest = true;
+                        mat.side = THREE.FrontSide;
+                        mat.roughness = 0.6;
+                        mat.metalness = 0.0;
+                    }
+                }
+                if (child.isBone) {
+                    mappedBones[child.name] = child;
+                }
+            });
+
+            // Initialize 156-Bone Forward Kinematics Engine
+            skeletalEngine = new RemSkeletalEngine(remModel);
+
+            // Populate Bone Dropdown
+            populateBoneSelector();
+
+            // Create Joint Overlay Markers
+            createJointMarkers();
+
+            // Skeleton Helper
+            skeletonHelper = new THREE.SkeletonHelper(remModel);
+            skeletonHelper.visible = false;
+            scene.add(skeletonHelper);
+
+            // Animation Mixer
+            mixer = new THREE.AnimationMixer(remModel);
+            animations = gltf.animations;
+
+            const btnGrid = document.getElementById('anim-buttons');
+            btnGrid.innerHTML = '';
+
+            // Register clips
+            animations.forEach(clip => {
+                if (clip.name !== 'Confession') {
+                    const action = mixer.clipAction(clip);
+                    actions[clip.name] = action;
+
+                    const btn = document.createElement('button');
+                    btn.className = 'anim-btn';
+                    btn.textContent = clip.name;
+                    btn.onclick = () => playAnimation(clip.name);
+                    btnGrid.appendChild(btn);
+                }
+            });
+
+            // Start directly in Happy / VictoryCheer
+            playAnimation('VictoryCheer');
+        }
+
+        function populateBoneSelector() {
+            const select = document.getElementById('bone-select');
+            select.innerHTML = '<option value="">-- Choose Bone --</option>';
+
+            const mobilityTable = window.ANATOMICAL_MOBILITY || {};
+            for (const bname in mobilityTable) {
+                if (mappedBones[bname]) {
+                    const opt = document.createElement('option');
+                    opt.value = bname;
+                    opt.textContent = `${mobilityTable[bname].name} (${bname.replace('DEF-', '')})`;
+                    select.appendChild(opt);
+                }
+            }
+
+            select.addEventListener('change', (e) => {
+                selectBone(e.target.value);
+            });
+        }
+
+        function selectBone(bname) {
+            selectedBoneName = bname;
+            const select = document.getElementById('bone-select');
+            select.value = bname;
+
+            const ctl = document.getElementById('bone-controls');
+            const hint = document.getElementById('mobility-range-hint');
+
+            // Highlight corresponding joint marker
+            for (const k in jointMarkers) {
+                jointMarkers[k].classList.toggle('selected', k === bname);
+            }
+
+            if (bname && mappedBones[bname]) {
+                ctl.style.display = 'block';
+                const bone = mappedBones[bname];
+                const mob = window.ANATOMICAL_MOBILITY?.[bname];
+
+                if (mob && mob.limits) {
+                    hint.textContent = `Mobility Bounds: Pitch [${Math.round(mob.limits.pitch[0]*57.3)}°, ${Math.round(mob.limits.pitch[1]*57.3)}°] | Yaw [${Math.round(mob.limits.yaw[0]*57.3)}°, ${Math.round(mob.limits.yaw[1]*57.3)}°]`;
+                } else {
+                    hint.textContent = 'Free Rotation';
+                }
+
+                document.getElementById('bone-rot-x').value = THREE.MathUtils.radToDeg(bone.rotation.x);
+                document.getElementById('bone-rot-y').value = THREE.MathUtils.radToDeg(bone.rotation.y);
+                document.getElementById('bone-rot-z').value = THREE.MathUtils.radToDeg(bone.rotation.z);
+                updateBoneLabels();
+            } else {
+                ctl.style.display = 'none';
+            }
+        }
+
+        function createJointMarkers() {
+            const container = document.getElementById('joint-markers-container');
+            container.innerHTML = '';
+            jointMarkers = {};
+
+            const mobilityTable = window.ANATOMICAL_MOBILITY || {};
+            for (const bname in mobilityTable) {
+                if (mappedBones[bname]) {
+                    const el = document.createElement('div');
+                    el.className = 'joint-marker';
+                    el.textContent = mobilityTable[bname].name;
+                    el.style.display = 'none';
+                    el.onclick = () => selectBone(bname);
+                    container.appendChild(el);
+                    jointMarkers[bname] = el;
+                }
+            }
+        }
+
+        function updateBoneLabels() {
+            if (!selectedBoneName || !mappedBones[selectedBoneName]) return;
+            const bone = mappedBones[selectedBoneName];
+            document.getElementById('bx-val').textContent = `${Math.round(THREE.MathUtils.radToDeg(bone.rotation.x))}°`;
+            document.getElementById('by-val').textContent = `${Math.round(THREE.MathUtils.radToDeg(bone.rotation.y))}°`;
+            document.getElementById('bz-val').textContent = `${Math.round(THREE.MathUtils.radToDeg(bone.rotation.z))}°`;
+        }
+
+        function playAnimation(name) {
+            activeProceduralMode = null;
+            document.querySelectorAll('.anim-btn').forEach(btn => {
+                const btnName = btn.textContent.trim().toLowerCase();
+                const target = name.toLowerCase();
+                btn.classList.toggle('active', btnName === target || btnName.includes(target));
+            });
+
+            // Update Nametag Emotion Badge
+            const emotionEl = document.getElementById('nametag-emotion');
+            if (emotionEl) emotionEl.textContent = `✨ ${name}`;
+
+            let targetAction = actions[name];
+            if (!targetAction) {
+                for (const k in actions) {
+                    if (k.toLowerCase() === name.toLowerCase()) {
+                        targetAction = actions[k];
+                        break;
+                    }
+                }
+            }
+
+            if (!targetAction) return;
+
+            if (currentPlayingAction && currentPlayingAction !== targetAction) {
+                currentPlayingAction.fadeOut(0.2);
+            }
+
+            targetAction.reset().fadeIn(0.2).play();
+            targetAction.setEffectiveWeight(1.0);
+            currentPlayingAction = targetAction;
+        }
+
+        function playProcedural(mode) {
+            if (currentPlayingAction) {
+                currentPlayingAction.fadeOut(0.2);
+                currentPlayingAction = null;
+            }
+            activeProceduralMode = mode;
+            document.querySelectorAll('.anim-btn').forEach(btn => {
+                const btnName = btn.textContent.trim().toLowerCase();
+                btn.classList.toggle('active', btnName.includes(mode.toLowerCase()));
+            });
+
+            const emotionEl = document.getElementById('nametag-emotion');
+            if (emotionEl) emotionEl.textContent = `🥋 ${mode.toUpperCase()}`;
+        }
+
+        function setupEventListeners(container) {
+            document.getElementById('toggle-transparent').addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    scene.background = null;
+                    document.body.style.background = 'transparent';
+                } else {
+                    scene.background = new THREE.Color(0x0b0f19);
+                    document.body.style.background = 'radial-gradient(circle at center, #1b2842 0%, #080b12 100%)';
+                }
+            });
+
+            document.getElementById('toggle-bones').addEventListener('change', (e) => {
+                if (skeletonHelper) skeletonHelper.visible = e.target.checked;
+            });
+
+            document.getElementById('toggle-mobility').addEventListener('change', (e) => {
+                if (skeletalEngine) skeletalEngine.enforceMobility = e.target.checked;
+            });
+
+            document.getElementById('toggle-nametag').addEventListener('change', (e) => {
+                const el = document.getElementById('floating-nametag');
+                if (el) el.style.display = e.target.checked ? 'flex' : 'none';
+            });
+
+            document.getElementById('toggle-joint-tags').addEventListener('change', (e) => {
+                const show = e.target.checked;
+                for (const k in jointMarkers) {
+                    jointMarkers[k].style.display = show ? 'block' : 'none';
+                }
+            });
+
+            document.getElementById('btn-play-pause').addEventListener('click', (e) => {
+                isPlaying = !isPlaying;
+                e.target.textContent = isPlaying ? '⏸️ Pause' : '▶️ Play';
+            });
+
+            document.getElementById('btn-restart').addEventListener('click', () => {
+                if (skeletalEngine) skeletalEngine.resetToBasePose();
+            });
+
+            document.getElementById('btn-reset-all-bones').addEventListener('click', () => {
+                if (skeletalEngine) skeletalEngine.resetToBasePose();
+                if (selectedBoneName) selectBone(selectedBoneName);
+            });
+
+            document.getElementById('speed-slider').addEventListener('input', (e) => {
+                speedMultiplier = parseInt(e.target.value) / 100;
+                document.getElementById('speed-val').textContent = `${speedMultiplier.toFixed(1)}x`;
+            });
+
+            // Bone Rotation Sliders (Mobility Protected)
+            ['x', 'y', 'z'].forEach(axis => {
+                const slider = document.getElementById(`bone-rot-${axis}`);
+                slider.addEventListener('input', (e) => {
+                    if (selectedBoneName && skeletalEngine) {
+                        const deg = parseFloat(e.target.value);
+                        const rad = THREE.MathUtils.degToRad(deg);
+                        skeletalEngine.rotateBone(selectedBoneName, axis, rad);
+                        updateBoneLabels();
+                    }
+                });
+            });
+
+            document.getElementById('btn-reset-bone').addEventListener('click', () => {
+                if (selectedBoneName && skeletalEngine) {
+                    skeletalEngine.rotateBone(selectedBoneName, 'x', 0);
+                    skeletalEngine.rotateBone(selectedBoneName, 'y', 0);
+                    skeletalEngine.rotateBone(selectedBoneName, 'z', 0);
+                    document.getElementById('bone-rot-x').value = 0;
+                    document.getElementById('bone-rot-y').value = 0;
+                    document.getElementById('bone-rot-z').value = 0;
+                    updateBoneLabels();
+                }
+            });
+
+            document.getElementById('btn-face-cam').addEventListener('click', setFaceCam);
+            document.getElementById('btn-body-cam').addEventListener('click', setFullBodyCam);
+
+            // Smooth Cursor Tracking (Normalized -1 to +1)
+            window.addEventListener('mousemove', (e) => {
+                mousePos.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mousePos.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            });
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        const _tempVec = new THREE.Vector3();
+
+        function updateHUDPositions() {
+            if (!remModel) return;
+
+            // 1. Update Floating Character Nametag above Head
+            const nametagEl = document.getElementById('floating-nametag');
+            if (nametagEl && nametagEl.style.display !== 'none') {
+                const headBone = mappedBones['DEF-head_07'];
+                if (headBone) {
+                    headBone.getWorldPosition(_tempVec);
+                    _tempVec.y += 0.22; // Offset above head crown
+                } else {
+                    _tempVec.set(0, 0.95, 0);
+                }
+
+                _tempVec.project(camera);
+                const isBehind = _tempVec.z > 1.0;
+                if (isBehind) {
+                    nametagEl.style.opacity = '0';
+                } else {
+                    const screenX = (_tempVec.x * 0.5 + 0.5) * window.innerWidth;
+                    const screenY = (-(_tempVec.y * 0.5) + 0.5) * window.innerHeight;
+                    nametagEl.style.left = `${screenX}px`;
+                    nametagEl.style.top = `${screenY}px`;
+                    nametagEl.style.opacity = '1';
+                }
+            }
+
+            // 2. Update 3D Joint Nametag Badges
+            const showJointTags = document.getElementById('toggle-joint-tags')?.checked;
+            if (showJointTags && skeletalEngine) {
+                for (const bname in jointMarkers) {
+                    const bone = mappedBones[bname];
+                    const marker = jointMarkers[bname];
+                    if (bone && marker) {
+                        bone.getWorldPosition(_tempVec);
+                        _tempVec.project(camera);
+                        const isBehind = _tempVec.z > 1.0;
+                        if (isBehind) {
+                            marker.style.display = 'none';
+                        } else {
+                            const sx = (_tempVec.x * 0.5 + 0.5) * window.innerWidth;
+                            const sy = (-(_tempVec.y * 0.5) + 0.5) * window.innerHeight;
+                            marker.style.left = `${sx}px`;
+                            marker.style.top = `${sy}px`;
+                            marker.style.display = 'block';
+                        }
+                    }
+                }
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const elapsedTime = clock.getElapsedTime();
+
+            if (activeProceduralMode && skeletalEngine) {
+                skeletalEngine.update(activeProceduralMode, elapsedTime * speedMultiplier);
+            } else if (mixer && isPlaying) {
+                mixer.update(delta * speedMultiplier);
+            }
+
+            // Safe, NON-ACCUMULATING Anatomical Head & Eye Tracking
+            const isTracking = document.getElementById('toggle-tracking')?.checked;
+            if (isTracking && skeletalEngine && activeProceduralMode !== 'backflip' && activeProceduralMode !== 'tornado') {
+                skeletalEngine.applyHeadLookAt(mousePos.x, mousePos.y, 0.08);
+            }
+
+            if (skeletonHelper && skeletonHelper.visible) {
+                skeletonHelper.update();
+            }
+
+            if (controls) {
+                controls.autoRotate = document.getElementById('toggle-rotate')?.checked;
+                controls.update();
+            }
+
+            updateHUDPositions();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>

@@ -14,7 +14,17 @@ import { SkeletonGrid, FacultyCardSkeleton } from './SkeletonLoader';
 import { InputGroup, InputGroupInput, InputGroupAddon } from './ui/InputGroup';
 import './FacultyDirectory.css';
 
-const FacultyDirectory = memo(function FacultyDirectory({ user, onRequireAuth }) {
+const FacultyDirectory = memo(function FacultyDirectory({ user: propUser, onRequireAuth }) {
+  const user = useMemo(() => {
+    if (propUser && typeof propUser === 'object') return propUser;
+    try {
+      const saved = localStorage.getItem('ds_ai_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  }, [propUser]);
+
   const [search, setSearch] = useState('');
   const [selectedSchool, setSelectedSchool] = useState('ALL');
   const [copiedId, setCopiedId] = useState(null);
@@ -211,7 +221,7 @@ const FacultyDirectory = memo(function FacultyDirectory({ user, onRequireAuth })
                       (!user || user?.isGuest) ? (
                         <div 
                           className="contact-action-box guest-blurred"
-                          onClick={() => setShowAuthModal(true)}
+                          onClick={() => { if (onRequireAuth) onRequireAuth(); else setShowAuthModal(true); }}
                           title="Log in to view phone number"
                         >
                           <div className="guest-blur-content" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', width: '100%', filter: 'blur(5.5px)', select: 'none', userSelect: 'none', pointerEvents: 'none' }}>
@@ -254,7 +264,7 @@ const FacultyDirectory = memo(function FacultyDirectory({ user, onRequireAuth })
                       (!user || user?.isGuest) ? (
                         <div 
                           className="contact-action-box guest-blurred"
-                          onClick={() => setShowAuthModal(true)}
+                          onClick={() => { if (onRequireAuth) onRequireAuth(); else setShowAuthModal(true); }}
                           title="Log in to view email address"
                         >
                           <div className="guest-blur-content" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', width: '100%', filter: 'blur(5.5px)', select: 'none', userSelect: 'none', pointerEvents: 'none' }}>
