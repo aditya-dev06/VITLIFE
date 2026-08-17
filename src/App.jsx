@@ -26,6 +26,8 @@ const safeLazy = (importFn) =>
   );
 
 const Dashboard = safeLazy(() => import('./components/Dashboard'));
+const Hyperspeed = safeLazy(() => import('./components/Hyperspeed'));
+import { DARK_HYPERSPEED_OPTIONS, LIGHT_HYPERSPEED_OPTIONS } from './utils/hyperspeedOptions';
 const Opportunities = safeLazy(() => import('./components/Opportunities'));
 const CampusLife = safeLazy(() => import('./components/CampusLife'));
 const TimetablePage = safeLazy(() => import('./components/TimetablePage'));
@@ -118,6 +120,11 @@ function App() {
   // Offline-first profile sync
   const { syncStatus: profileSyncStatus, saveProfileUpdate } = useProfileSync(token);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  
+  const isMobileDevice = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const hyperspeedOptions = useMemo(() => (
+    theme === 'light' ? LIGHT_HYPERSPEED_OPTIONS : DARK_HYPERSPEED_OPTIONS
+  ), [theme]);
   const [xpPoints, setXpPoints] = useState(() => user?.xpPoints || 0);
   const [skills, setSkills] = useState([]);
   const [opportunities, setOpportunities] = useState([]);
@@ -855,6 +862,24 @@ function App() {
         onToggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
         onEditProfile={() => setShowEditProfile(true)}
       />
+
+      {!isMobileDevice && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          zIndex: 0,
+          opacity: theme === 'light' ? 0.08 : 0.5,
+          pointerEvents: 'none',
+          display: activeTab === 'dashboard' ? 'block' : 'none'
+        }}>
+          <Suspense fallback={null}>
+            <Hyperspeed effectOptions={hyperspeedOptions} />
+          </Suspense>
+        </div>
+      )}
 
       {/* Main Panel View */}
       <main 
