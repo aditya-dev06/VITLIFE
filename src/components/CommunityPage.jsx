@@ -5283,19 +5283,14 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
         }
       }
 
-      const isApproved = user && user.role === 'admin';
-      const successMsg = isApproved 
-        ? `Successfully processed and approved ${successCount} paper(s)!` 
-        : `Successfully processed ${successCount} paper(s)! They will appear in the course page once approved by an administrator.`;
-      
       setSelectedFiles([]);
       setShowUploadModal(false);
-      setSuccess(successMsg);
+      setSuccess(`Successfully processed ${successCount} paper(s)!`);
       
       if (uploadSuccessTimerRef.current) clearTimeout(uploadSuccessTimerRef.current);
       uploadSuccessTimerRef.current = setTimeout(() => {
         setSuccess('');
-      }, 5000);
+      }, 3000);
 
       fetchPapers();
       if (user && user.role === 'admin') {
