@@ -8226,6 +8226,7 @@ wss.on('connection', (ws) => {
           role: sanitizeString(data.authorRole || 'Student', 50),
           content: cleanContent,
           attachment: data.attachment || null,
+          isGif: Boolean(data.isGif),
           replyTo: data.replyTo || null,
           reactions: { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] },
           timestamp: new Date().toISOString()

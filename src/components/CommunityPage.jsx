@@ -58,7 +58,7 @@ const isDocumentUrl = (url) => {
 const isGifUrl = (url) => {
   if (!url || typeof url !== 'string') return false;
   const trimmed = url.trim().toLowerCase();
-  if (trimmed.includes('.gif')) return true;
+  if (trimmed.includes('.gif') || trimmed.includes('image/gif') || trimmed.startsWith('data:image/gif')) return true;
   try {
     const u = new URL(trimmed);
     const host = u.hostname;
@@ -162,7 +162,7 @@ const getLocalFile = async (id) => {
 // Client-Side Canvas Compression (Max 1280px WebP + 16px Blur Preview)
 const compressImageForRelay = async (file) => {
   return new Promise((resolve, reject) => {
-    if (!file || !file.type.startsWith('image/')) {
+    if (!file || !file.type.startsWith('image/') || file.type === 'image/gif') {
       const reader = new FileReader();
       reader.onload = () => resolve({ data: reader.result, blurThumbnail: null, contentType: file.type });
       reader.onerror = reject;
@@ -3126,6 +3126,30 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     setAttachmentPreview(URL.createObjectURL(file));
   };
 
+  // Handle Clipboard Pasting of Images & GIFs (enables keyboard GIFs too)
+  const handleInputPaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (!file) continue;
+        if (file.size > 5 * 1024 * 1024) {
+          showToast('Pasted image must be smaller than 5MB', 'error');
+          continue;
+        }
+        if (attachmentPreview && attachmentPreview.startsWith('blob:')) {
+          URL.revokeObjectURL(attachmentPreview);
+        }
+        setSelectedAttachment(file);
+        setAttachmentPreview(URL.createObjectURL(file));
+        showToast(file.type === 'image/gif' ? 'GIF attached from clipboard 👾' : 'Image attached from clipboard 📸', 'success');
+        e.preventDefault();
+        break;
+      }
+    }
+  };
+
   // React to Message
   const handleReactMessage = useCallback((messageId, emoji) => {
     const token = localStorage.getItem('ds_ai_token');
@@ -3499,6 +3523,8 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       content: await encryptText(replyingToMessage.content)
     } : null;
 
+    const isGif = selectedAttachment && (selectedAttachment.type === 'image/gif' || selectedAttachment.name?.toLowerCase().endsWith('.gif'));
+
     const msg = {
       id: tempId,
       tempId: tempId,
@@ -3507,10 +3533,11 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       authorId: currentAuthorId,
       avatar: user && user.name ? user.name.charAt(0).toUpperCase() : 'G',
       role: user && !user.isGuest ? (user.role === 'admin' ? 'Admin' : (user.program || 'Student')) : 'Guest User',
-      content: rawText,
+      content: rawText || (isGif ? '👾 GIF' : ''),
       attachment: attachmentUrl,
       imageUrl: attachmentUrl,
       blurThumbnail: blurThumbnail,
+      isGif: isGif,
       replyTo: replyingToMessage ? { author: replyingToMessage.author, content: replyingToMessage.content } : null,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       rawTimestamp: new Date().toISOString(),
@@ -3537,10 +3564,11 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         type: 'message',
         tempId: tempId,
         channel: activeChannel,
-        content: encryptedContent,
+        content: encryptedContent || (isGif ? '👾 GIF' : ''),
         attachment: attachmentUrl,
         imageUrl: attachmentUrl,
         blurThumbnail: blurThumbnail,
+        isGif: isGif,
         authorName: msg.author,
         authorRole: msg.role,
         userId: currentAuthorId,
@@ -3560,10 +3588,11 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         body: JSON.stringify({ 
           tempId: tempId,
           channel: activeChannel, 
-          content: encryptedContent, 
+          content: encryptedContent || (isGif ? '👾 GIF' : ''), 
           attachment: attachmentUrl,
           imageUrl: attachmentUrl,
           blurThumbnail: blurThumbnail,
+          isGif: isGif,
           authorName: msg.author,
           authorRole: msg.role,
           userId: currentAuthorId,
@@ -3712,7 +3741,20 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     return list;
   }, [messages, activeChannel, debouncedChatSearch, deletedForMeIds]);
 
-  const EMOJI_LIST = ['😊', '😂', '🔥', '🚀', '👍', '❤️', '💡', '🎉', '🙌', '👏', '💯', '📄', '📚', '🎓', '💻', '⭐', '✅', '📌'];
+  const EMOJI_LIST = [
+    // Smiley & People
+    '😊', '😂', '🤣', '😅', '😆', '😉', '😍', '😘', '😋', '😜', '😎', '😏',
+    '😔', '😢', '😭', '😡', '🤬', '😱', '😰', '🤔', '🙄', '😴', '😷', '🤢',
+    // Hands & Gestures
+    '👍', '👎', '👌', '✌️', '🤞', '🤟', '🤙', '👊', '✊', '🤛', '🤜', '👋',
+    '👏', '🙌', '🙏', '🤝', '💪', '🤳', '✍️', '💅', '👀', '👅', '👄', '🧠',
+    // Hearts & Symbols
+    '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '💖', '💘', '💝', '💔',
+    '🔥', '✨', '🌟', '💥', '🚀', '💡', '🎉', '💯', '✅', '❌', '⚠️', '📌',
+    // College, Tech & Activities
+    '🏫', '🎒', '📚', '📝', '✏️', '🎓', '💻', '💾', '📱', '🔋', '🔌', '📡',
+    '🔬', '🔭', '🩺', '🎨', '🎬', '🎧', '🎮', '⚽', '🍕', '🍿', '☕', '🍺'
+  ];
 
   const handleInsertEmoji = (emoji) => {
     setNewMessage(prev => prev + emoji);
@@ -4142,7 +4184,10 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                     gridTemplateColumns: 'repeat(6, 1fr)',
                     gap: '0.4rem',
                     boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                    zIndex: 200
+                    zIndex: 200,
+                    maxHeight: '190px',
+                    overflowY: 'auto',
+                    width: '235px'
                   }}
                 >
                   {EMOJI_LIST.map(em => (
@@ -4299,6 +4344,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   value={newMessage}
                   onChange={handleInputChange}
                   onFocus={() => setActiveMenuMsgId(null)}
+                  onPaste={handleInputPaste}
                   className="wa-input-field"
                   disabled={isRecordingVoice}
                 />
