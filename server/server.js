@@ -37,7 +37,7 @@ for (const envPath of envFiles) {
         if (firstEqual !== -1) {
           const key = trimmed.substring(0, firstEqual).trim();
           const val = trimmed.substring(firstEqual + 1).trim().replace(/^['"]|['"]$/g, '');
-          if (!process.env[key] || process.env[key] === '[SENSITIVE]') {
+          if (!process.env[key] || process.env[key] === '' || process.env[key] === '[SENSITIVE]') {
             process.env[key] = val;
           }
         }
