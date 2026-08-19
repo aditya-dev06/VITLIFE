@@ -82,8 +82,14 @@ const fetchGoogleConfig = () => {
     return Promise.resolve({ googleClientId: envClientId });
   }
   if (!googleConfigPromise) {
-    googleConfigPromise = fetch('/api/auth/config')
+    googleConfigPromise = fetch('/api/auth/config?t=' + Date.now(), { cache: 'no-store' })
       .then(res => res.json())
+      .then(data => {
+        if (!data || !data.googleClientId) {
+          googleConfigPromise = null; // Don't cache empty results
+        }
+        return data;
+      })
       .catch(err => {
         console.error('Failed to fetch Google Auth configuration:', err);
         googleConfigPromise = null;
