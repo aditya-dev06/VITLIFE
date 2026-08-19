@@ -1,10 +1,10 @@
 /* ==========================================================================
-   Meta AI Assistant Drawer Stylesheet
+   vitChat AI Assistant Drawer Stylesheet
    Theme Palette: Dark Mode with Meta Gradient Glow
    (#0b141a / #111b21 / #182229 with #0084FF, #A033FF, #00a884 accents)
    ========================================================================== */
 
-.meta-ai-drawer-backdrop {
+.vitchat-ai-drawer-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(11, 20, 26, 0.78);
@@ -15,7 +15,7 @@
   animation: metaAiFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.meta-ai-drawer-panel {
+.vitchat-ai-drawer-panel {
   width: 100%;
   max-width: 440px;
   height: 100%;
@@ -41,7 +41,7 @@
 }
 
 /* Header */
-.meta-ai-drawer-header {
+.vitchat-ai-drawer-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -50,13 +50,13 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.meta-ai-header-left {
+.vitchat-ai-header-left {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
-.meta-ai-orb-logo {
+.vitchat-ai-orb-logo {
   width: 38px;
   height: 38px;
   border-radius: 50%;
@@ -75,7 +75,7 @@
   100% { transform: scale(1.04); box-shadow: 0 0 22px rgba(160, 51, 255, 0.7); }
 }
 
-.meta-ai-header-title {
+.vitchat-ai-header-title {
   margin: 0;
   font-size: 1.05rem;
   font-weight: 800;
@@ -87,13 +87,13 @@
   gap: 0.4rem;
 }
 
-.meta-ai-header-subtext {
+.vitchat-ai-header-subtext {
   font-size: 0.76rem;
   color: #8696a0;
   margin-top: 0.15rem;
 }
 
-.meta-ai-close-btn {
+.vitchat-ai-close-btn {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: #8696a0;
@@ -108,14 +108,14 @@
   transition: all 0.2s ease;
 }
 
-.meta-ai-close-btn:hover {
+.vitchat-ai-close-btn:hover {
   background: rgba(251, 113, 133, 0.2);
   color: #fb7185;
   border-color: rgba(251, 113, 133, 0.4);
 }
 
 /* Quoted Target Message */
-.meta-ai-quoted-card {
+.vitchat-ai-quoted-card {
   margin: 1rem 1.25rem 0.5rem 1.25rem;
   background: #182229;
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -124,7 +124,7 @@
   padding: 0.85rem 1rem;
 }
 
-.meta-ai-quoted-author {
+.vitchat-ai-quoted-author {
   font-size: 0.78rem;
   font-weight: 700;
   color: #60a5fa;
@@ -134,7 +134,7 @@
   justify-content: space-between;
 }
 
-.meta-ai-quoted-text {
+.vitchat-ai-quoted-text {
   font-size: 0.86rem;
   color: #d1d5db;
   line-height: 1.45;
@@ -146,7 +146,7 @@
 }
 
 /* Content Body */
-.meta-ai-drawer-body {
+.vitchat-ai-drawer-body {
   flex: 1;
   overflow-y: auto;
   padding: 0.75rem 1.25rem 1.25rem 1.25rem;
@@ -156,14 +156,14 @@
 }
 
 /* Shimmer Loading State */
-.meta-ai-loading-container {
+.vitchat-ai-loading-container {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
   padding: 0.5rem 0;
 }
 
-.meta-ai-loading-orb-bar {
+.vitchat-ai-loading-orb-bar {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -172,7 +172,7 @@
   font-weight: 600;
 }
 
-.meta-ai-pulsing-dot {
+.vitchat-ai-pulsing-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
@@ -186,7 +186,7 @@
   100% { transform: scale(0.8); opacity: 0.4; }
 }
 
-.meta-ai-shimmer-box {
+.vitchat-ai-shimmer-box {
   height: 70px;
   border-radius: 12px;
   background: linear-gradient(90deg, #182229 25%, #202c33 50%, #182229 75%);
@@ -200,14 +200,14 @@
 }
 
 /* Smart Summary Card */
-.meta-ai-summary-card {
+.vitchat-ai-summary-card {
   background: linear-gradient(135deg, rgba(0, 132, 255, 0.08) 0%, rgba(160, 51, 255, 0.08) 100%);
   border: 1px solid rgba(96, 165, 250, 0.25);
   border-radius: 14px;
   padding: 1rem;
 }
 
-.meta-ai-section-badge {
+.vitchat-ai-section-badge {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -238,7 +238,7 @@
   border: 1px solid rgba(0, 168, 132, 0.3);
 }
 
-.meta-ai-summary-text {
+.vitchat-ai-summary-text {
   margin: 0;
   font-size: 0.88rem;
   line-height: 1.5;
@@ -247,14 +247,14 @@
 }
 
 /* Key Insights Card */
-.meta-ai-insights-card {
+.vitchat-ai-insights-card {
   background: #182229;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   padding: 1rem;
 }
 
-.meta-ai-insights-list {
+.vitchat-ai-insights-list {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -263,7 +263,7 @@
   gap: 0.55rem;
 }
 
-.meta-ai-insight-item {
+.vitchat-ai-insight-item {
   display: flex;
   align-items: flex-start;
   gap: 0.6rem;
@@ -272,7 +272,7 @@
   line-height: 1.45;
 }
 
-.meta-ai-insight-icon {
+.vitchat-ai-insight-icon {
   color: #c084fc;
   font-size: 0.9rem;
   margin-top: 0.15rem;
@@ -280,7 +280,7 @@
 }
 
 /* AI Detailed Response Box */
-.meta-ai-response-box {
+.vitchat-ai-response-box {
   background: #182229;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
@@ -292,20 +292,20 @@
 }
 
 /* 1-Click Quick Replies */
-.meta-ai-quick-card {
+.vitchat-ai-quick-card {
   background: #182229;
   border: 1px solid rgba(0, 168, 132, 0.2);
   border-radius: 14px;
   padding: 1rem;
 }
 
-.meta-ai-quick-chips {
+.vitchat-ai-quick-chips {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.meta-ai-quick-btn {
+.vitchat-ai-quick-btn {
   background: rgba(0, 168, 132, 0.12);
   border: 1px solid rgba(0, 168, 132, 0.3);
   color: #2dd4bf;
@@ -321,20 +321,20 @@
   justify-content: space-between;
 }
 
-.meta-ai-quick-btn:hover {
+.vitchat-ai-quick-btn:hover {
   background: rgba(0, 168, 132, 0.25);
   border-color: #00a884;
   color: #ffffff;
   transform: translateY(-1px);
 }
 
-.meta-ai-quick-arrow {
+.vitchat-ai-quick-arrow {
   font-size: 0.9rem;
   opacity: 0.7;
 }
 
 /* Toast Banner inside drawer */
-.meta-ai-toast-banner {
+.vitchat-ai-toast-banner {
   background: rgba(16, 185, 129, 0.2);
   border: 1px solid rgba(16, 185, 129, 0.4);
   color: #6ee7b7;
@@ -349,13 +349,13 @@
 }
 
 /* Follow-up Interactive Chat Area */
-.meta-ai-chat-thread {
+.vitchat-ai-chat-thread {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
-.meta-ai-user-bubble {
+.vitchat-ai-user-bubble {
   align-self: flex-end;
   background: #005c4b;
   color: #e9edef;
@@ -365,7 +365,7 @@
   max-width: 85%;
 }
 
-.meta-ai-assistant-bubble {
+.vitchat-ai-assistant-bubble {
   align-self: flex-start;
   background: #202c33;
   color: #e9edef;
@@ -378,13 +378,13 @@
 }
 
 /* Footer Input */
-.meta-ai-drawer-footer {
+.vitchat-ai-drawer-footer {
   padding: 0.85rem 1.25rem;
   background: #202c33;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.meta-ai-input-form {
+.vitchat-ai-input-form {
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -394,7 +394,7 @@
   padding: 0.35rem 0.4rem 0.35rem 1rem;
 }
 
-.meta-ai-input-field {
+.vitchat-ai-input-field {
   flex: 1;
   background: transparent;
   border: none;
@@ -403,11 +403,11 @@
   font-size: 0.86rem;
 }
 
-.meta-ai-input-field::placeholder {
+.vitchat-ai-input-field::placeholder {
   color: #8696a0;
 }
 
-.meta-ai-send-btn {
+.vitchat-ai-send-btn {
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -421,11 +421,11 @@
   transition: transform 0.15s ease;
 }
 
-.meta-ai-send-btn:hover {
+.vitchat-ai-send-btn:hover {
   transform: scale(1.08);
 }
 
-.meta-ai-send-btn:disabled {
+.vitchat-ai-send-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
@@ -433,64 +433,64 @@
 
 /* Mobile responsive drawer */
 @media (max-width: 640px) {
-  .meta-ai-drawer-panel {
+  .vitchat-ai-drawer-panel {
     max-width: 100%;
   }
 }
 
-/* ── Light Mode Overrides for Meta AI Drawer ── */
-.light-theme .meta-ai-drawer-panel,
-.light .meta-ai-drawer-panel {
+/* ── Light Mode Overrides for vitChat AI Drawer ── */
+.light-theme .vitchat-ai-drawer-panel,
+.light .vitchat-ai-drawer-panel {
   background: #ffffff !important;
   border-left: 1px solid #e2e8f0 !important;
   color: #0f172a !important;
   box-shadow: -12px 0 36px rgba(15, 23, 42, 0.12) !important;
 }
 
-.light-theme .meta-ai-drawer-header,
-.light .meta-ai-drawer-header {
+.light-theme .vitchat-ai-drawer-header,
+.light .vitchat-ai-drawer-header {
   background: #f8fafc !important;
   border-bottom: 1px solid #e2e8f0 !important;
 }
 
-.light-theme .meta-ai-header-subtext,
-.light .meta-ai-header-subtext {
+.light-theme .vitchat-ai-header-subtext,
+.light .vitchat-ai-header-subtext {
   color: #64748b !important;
 }
 
-.light-theme .meta-ai-user-bubble,
-.light .meta-ai-user-bubble {
+.light-theme .vitchat-ai-user-bubble,
+.light .vitchat-ai-user-bubble {
   background: #eef2ff !important;
   color: #3730a3 !important;
   border: 1px solid #c7d2fe !important;
 }
 
-.light-theme .meta-ai-assistant-bubble,
-.light .meta-ai-assistant-bubble {
+.light-theme .vitchat-ai-assistant-bubble,
+.light .vitchat-ai-assistant-bubble {
   background: #f8fafc !important;
   color: #0f172a !important;
   border: 1px solid #e2e8f0 !important;
   border-left: 3px solid #7c3aed !important;
 }
 
-.light-theme .meta-ai-drawer-footer,
-.light .meta-ai-drawer-footer {
+.light-theme .vitchat-ai-drawer-footer,
+.light .vitchat-ai-drawer-footer {
   background: #f8fafc !important;
   border-top: 1px solid #e2e8f0 !important;
 }
 
-.light-theme .meta-ai-input-form,
-.light .meta-ai-input-form {
+.light-theme .vitchat-ai-input-form,
+.light .vitchat-ai-input-form {
   background: #ffffff !important;
   border: 1px solid #cbd5e1 !important;
 }
 
-.light-theme .meta-ai-input-field,
-.light .meta-ai-input-field {
+.light-theme .vitchat-ai-input-field,
+.light .vitchat-ai-input-field {
   color: #0f172a !important;
 }
 
-.light-theme .meta-ai-input-field::placeholder,
-.light .meta-ai-input-field::placeholder {
+.light-theme .vitchat-ai-input-field::placeholder,
+.light .vitchat-ai-input-field::placeholder {
   color: #94a3b8 !important;
 }

@@ -123,13 +123,19 @@ async function fetchPaperImageBase64(paperUrl) {
   try {
     let url = paperUrl;
     if (url.startsWith('/uploads/')) {
-      const localPath = path.join(__dirname, '..', 'server', url);
-      if (fs.existsSync(localPath)) {
+      const baseUploadsDir = path.resolve(__dirname, '..', 'server', 'uploads');
+      const safeFilename = path.basename(url.replace(/\\/g, '/'));
+      const localPath = path.resolve(baseUploadsDir, safeFilename);
+      if (localPath.startsWith(baseUploadsDir) && fs.existsSync(localPath)) {
         const fileBuffer = fs.readFileSync(localPath);
         const ext = path.extname(localPath).toLowerCase();
         const mimeType = ext === '.pdf' ? 'application/pdf' : (ext === '.png' ? 'image/png' : 'image/jpeg');
         return { base64: fileBuffer.toString('base64'), mimeType };
       }
+      return null;
+    }
+
+    if (!url.startsWith('https://') && !url.startsWith('http://')) {
       return null;
     }
 

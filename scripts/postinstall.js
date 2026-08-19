@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -18,9 +18,19 @@ console.log('=========================================');
 console.log('RUNNING POSTINSTALL BUILD & SETUP...');
 console.log('=========================================');
 
+const runCommand = (command, args) => new Promise((resolve, reject) => {
+  const child = spawn(command, args, { stdio: 'inherit', shell: false });
+  child.on('close', (code) => {
+    if (code === 0) resolve();
+    else reject(new Error(`Command failed with exit code ${code}`));
+  });
+  child.on('error', reject);
+});
+
 try {
   console.log('> Building frontend...');
-  execSync('npm run build', { stdio: 'inherit' });
+  const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  await runCommand(npmCmd, ['run', 'build']);
 } catch (err) {
   console.error('Frontend build failed:', err);
   process.exit(1);
@@ -29,7 +39,7 @@ try {
 try {
   console.log('> Setting up Python virtual environment...');
   const setupScript = path.join(__dirname, 'setup-venv.js');
-  execSync(`node "${setupScript}"`, { stdio: 'inherit' });
+  await runCommand(process.execPath, [setupScript]);
 } catch (err) {
   console.warn('Python virtual environment setup failed, proceeding anyway:', err);
 }

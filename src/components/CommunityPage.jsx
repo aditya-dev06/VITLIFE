@@ -4,6 +4,7 @@ import { Search, X, Send, Sparkles } from 'lucide-react';
 import Pusher from 'pusher-js';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
+import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/InputGroup';
@@ -1280,7 +1281,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
   onReply,
   onReplyPrivately,
   onDirectMessageUser,
-  onAskMetaAI,
+  onAskvitchatAi,
   onReportMessage,
   onSelectMessage,
   isSelected,
@@ -1535,7 +1536,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
             <div style={{ fontSize: '0.75rem', fontWeight: 700, color: theme === 'light' ? '#0284c7' : '#38bdf8', marginBottom: '0.15rem', padding: '0.5rem 0.85rem 0 0.85rem' }}>
               {message.author}
               {message.role && (
-                <span style={{ fontSize: '0.65rem', marginLeft: '0.4rem', padding: '0.05rem 0.35rem', borderRadius: '4px', background: theme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)', color: theme === 'light' ? '#475569' : '#aebac1', fontWeight: 400 }}>
+                <span style={{ fontSize: '0.65rem', marginLeft: '0.4rem', padding: '0.05rem 0.35rem', borderRadius: '4px', background: theme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)', color: theme === 'light' ? '#475569' : '#aebac1', fontWeight: 400, display: 'inline-block', maxWidth: '100px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', verticalAlign: 'bottom' }}>
                   {message.role}
                 </span>
               )}
@@ -1949,12 +1950,12 @@ const ChatMessageItem = memo(function ChatMessageItem({
                 Forward
               </DropdownMenuItem>
 
-              {/* 6. Ask Meta AI */}
+              {/* 6. Ask vitChat AI */}
               <DropdownMenuItem
                 icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/></svg>}
-                onClick={() => onAskMetaAI && onAskMetaAI(message)}
+                onClick={() => onAskvitchatAi && onAskvitchatAi(message)}
               >
-                Ask Meta AI
+                Ask vitChat AI
               </DropdownMenuItem>
 
               {/* 7. Star */}
@@ -2474,8 +2475,8 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
   const [showChannelInfoModal, setShowChannelInfoModal] = useState(false);
   const [inHeaderSearch, setInHeaderSearch] = useState(false);
 
-  // States for Context Menu Actions (Meta AI, Report, Select)
-  const [metaAiModalMessage, setMetaAiModalMessage] = useState(null);
+  // States for Context Menu Actions (vitChat AI, Report, Select)
+  const [vitchatAiModalMessage, setvitchatAiModalMessage] = useState(null);
   const [reportModalMessage, setReportModalMessage] = useState(null);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedMsgIds, setSelectedMsgIds] = useState([]);
@@ -2534,8 +2535,8 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     setActiveChannel(dmChannelId);
   }, [user, showToast]);
 
-  const handleAskMetaAI = useCallback((msg) => {
-    setMetaAiModalMessage(msg);
+  const handleAskvitchatAi = useCallback((msg) => {
+    setvitchatAiModalMessage(msg);
   }, []);
 
   const handleReportMessage = useCallback((msg) => {
@@ -2660,6 +2661,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
   const userBatchYear = useMemo(() => getUserBatchYear(user), [user]);
 
+  const [dmToast, setDmToast] = useState(null);
   const [dmChannels, setDmChannels] = useState([]);
 
   useEffect(() => {
@@ -2845,11 +2847,45 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       }
     });
 
+    // Personal User Channel for DM notifications
+    const userRegOrId = user && !user.isGuest ? (user.regNo || user.email?.split('@')[0]) : null;
+    let pusherUserChannel = null;
+    if (userRegOrId) {
+      const safeUserChannel = `user-${userRegOrId}`.replace(/[^a-zA-Z0-9\-_]/g, '-').substring(0, 200);
+      pusherUserChannel = pusher.subscribe(safeUserChannel);
+      pusherUserChannel.bind('new_dm', (data) => {
+        if (data && data.channel) {
+          // Show toast
+          setDmToast(`New message from ${data.senderName || 'someone'}!`);
+          setTimeout(() => setDmToast(null), 4000);
+          
+          // Refresh DM channels to reflect new DM
+          const token = localStorage.getItem('ds_ai_token');
+          fetch('/api/chat/dm-channels', { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(res => res.json())
+            .then(resData => {
+              if (resData.success && resData.channels) {
+                setDmChannels(resData.channels);
+              }
+            }).catch(() => {});
+            
+          // Try native notification if allowed
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification("New Direct Message", { body: `From ${data.senderName}` });
+          }
+        }
+      });
+    }
+
     return () => {
       cancelPeerTyping();
       try {
         pusherChannel.unbind_all();
         pusher.unsubscribe(safeChannelName);
+        if (userRegOrId) {
+          pusherUserChannel?.unbind_all();
+          pusher.unsubscribe(`user-${userRegOrId}`.replace(/[^a-zA-Z0-9\-_]/g, '-').substring(0, 200));
+        }
         pusher.disconnect();
       } catch (e) {}
       pusherRef.current = null;
@@ -2944,7 +2980,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     };
 
     syncMessages(); // fetch immediately on mount / channel switch
-    const interval = setInterval(syncMessages, 10000); // 10s — Pusher handles real-time, this is catch-up only
+    const interval = setInterval(syncMessages, 3000); // 3s — Pusher handles real-time, this is catch-up only
 
     return () => {
       isMounted = false;
@@ -3627,7 +3663,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
   };
 
   const handleClearHistory = () => {
-    if (window.confirm(`Clear all messages in #${activeChannelObj.label}?`)) {
+    if (window.confirm(`Clear all messages in ${activeChannelObj.id.startsWith('dm_') ? activeChannelObj.name : '#' + activeChannelObj.label}?`)) {
       setMessages(prev => prev.filter(m => m.channel !== activeChannel));
       setShowHeaderMenu(false);
     }
@@ -3652,6 +3688,11 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
   return (
     <div className="wa-container animate-fade-in" onClick={() => { setShowHeaderMenu(false); setShowAttachMenu(false); setShowEmojiPicker(false); }}>
+      {dmToast && (
+        <div style={{ position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#00a884', color: 'white', padding: '12px 24px', borderRadius: '8px', zIndex: 999999, boxShadow: '0 4px 12px rgba(0,0,0,0.3)', fontWeight: 600, animation: 'fadeInDown 0.3s ease-out' }}>
+          {dmToast}
+        </div>
+      )}
       {/* WhatsApp Left Sidebar */}
       <div className={`wa-sidebar ${showMobileChat ? 'mobile-hidden' : ''}`}>
         {/* Sidebar Header */}
@@ -3818,7 +3859,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
             </div>
             <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
               <div style={{ color: '#e9edef', fontWeight: 700, fontSize: '0.92rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.2' }}>
-                #{activeChannelObj.label}
+                {activeChannelObj.id.startsWith('dm_') ? activeChannelObj.name : `#${activeChannelObj.label}`}
               </div>
               <div style={{ color: isPeerTyping ? '#00a884' : '#8696a0', fontSize: '0.7rem', fontWeight: isPeerTyping ? 700 : 400, transition: 'color 0.2s ease', display: 'flex', alignItems: 'center', gap: '0.35rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {isPeerTyping ? (
@@ -3904,7 +3945,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
             <div style={{ background: '#202c33', padding: '2.5rem 2rem', borderRadius: '16px', maxWidth: '400px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.08)' }}>
               <span style={{ fontSize: '3rem', display: 'block', marginBottom: '0.8rem' }}>🔒</span>
               <h3 style={{ color: '#e9edef', margin: '0 0 0.5rem 0', fontSize: '1.25rem', fontWeight: 800 }}>
-                #{activeChannelObj.label} is Locked
+                {activeChannelObj.id.startsWith('dm_') ? activeChannelObj.name : `#${activeChannelObj.label}`} is Locked
               </h3>
               <p style={{ color: '#8696a0', fontSize: '0.85rem', lineHeight: 1.5, marginBottom: '1.5rem' }}>
                 Only <strong>#general</strong> is open for guest previews. Please log in to unlock PYQ doubt solvers, study groups, placement QAs, and campus trading.
@@ -3935,7 +3976,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
               {filteredMessages.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#8696a0' }}>
                   <span style={{ fontSize: '2.5rem' }}>💬</span>
-                  <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.88rem' }}>No messages yet in #{activeChannelObj.label}. Send a message to get started!</p>
+                  <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.88rem' }}>No messages yet in {activeChannelObj.id.startsWith('dm_') ? activeChannelObj.name : `#${activeChannelObj.label}`}. Send a message to get started!</p>
                 </div>
               ) : (
                 filteredMessages.map(msg => (
@@ -3951,7 +3992,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                     onReply={(m) => setReplyingToMessage(m)}
                     onReplyPrivately={handleReplyPrivately}
                     onDirectMessageUser={handleDirectMessageUser}
-                    onAskMetaAI={handleAskMetaAI}
+                    onAskvitchatAi={handleAskvitchatAi}
                     onReportMessage={handleReportMessage}
                     onSelectMessage={handleSelectMessage}
                     isSelected={selectedMsgIds.includes(msg.id)}
@@ -4345,27 +4386,27 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       />
 
 
-      {/* Ask Meta AI Assistant Modal */}
-      {metaAiModalMessage && (
-        <div className="aurora-modal-overlay" onClick={() => setMetaAiModalMessage(null)} style={{ zIndex: 99999 }}>
+      {/* Ask vitChat AI Assistant Modal */}
+      {vitchatAiModalMessage && (
+        <div className="aurora-modal-overlay" onClick={() => setvitchatAiModalMessage(null)} style={{ zIndex: 99999 }}>
           <div className="aurora-modal-card glass-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px', padding: '1.6rem', borderRadius: '16px', background: '#111b21', color: '#e9edef', border: '1px solid rgba(255,255,255,0.1)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.6rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span style={{ fontSize: '1.2rem' }}>✨</span>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#00a884' }}>Meta AI Assistant Analysis</h3>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#00a884' }}>vitChat AI Assistant Analysis</h3>
               </div>
-              <button onClick={() => setMetaAiModalMessage(null)} style={{ background: 'none', border: 'none', color: '#fb7185', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+              <button onClick={() => setvitchatAiModalMessage(null)} style={{ background: 'none', border: 'none', color: '#fb7185', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
             </div>
             
             <div style={{ background: '#182229', padding: '0.85rem 1rem', borderRadius: '10px', fontSize: '0.85rem', color: '#8696a0', marginBottom: '1rem', borderLeft: '3px solid #00a884' }}>
-              <div style={{ fontWeight: 700, color: '#e9edef', marginBottom: '0.2rem' }}>Target Message ({metaAiModalMessage.author}):</div>
-              "{metaAiModalMessage.content || 'Attachment / Media'}"
+              <div style={{ fontWeight: 700, color: '#e9edef', marginBottom: '0.2rem' }}>Target Message ({vitchatAiModalMessage.author}):</div>
+              "{vitchatAiModalMessage.content || 'Attachment / Media'}"
             </div>
 
             <div style={{ fontSize: '0.88rem', color: '#e9edef', lineHeight: 1.6, background: 'rgba(0,168,132,0.08)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,168,132,0.2)' }}>
               🤖 <strong>Smart Insights:</strong>
               <p style={{ margin: '0.5rem 0 0 0', color: '#aebac1' }}>
-                This message in #{activeChannel} asks about: <em>"{metaAiModalMessage.content || 'Media update'}"</em>. 
+                This message in #{activeChannel} asks about: <em>"{vitchatAiModalMessage.content || 'Media update'}"</em>. 
                 <br /><br />
                 <strong>Suggested Quick Reply:</strong> "Understood! Thanks for sharing this information with the cohort."
               </p>
@@ -4374,15 +4415,15 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
             <div style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
               <button
                 onClick={() => {
-                  setNewMessage(`Replying to ${metaAiModalMessage.author}: Got it!`);
-                  setMetaAiModalMessage(null);
+                  setNewMessage(`Replying to ${vitchatAiModalMessage.author}: Got it!`);
+                  setvitchatAiModalMessage(null);
                 }}
                 style={{ padding: '0.5rem 1rem', background: '#00a884', color: '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.84rem' }}
               >
                 Use Quick Reply
               </button>
               <button
-                onClick={() => setMetaAiModalMessage(null)}
+                onClick={() => setvitchatAiModalMessage(null)}
                 style={{ padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.08)', color: '#e9edef', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontSize: '0.84rem' }}
               >
                 Close
@@ -4639,7 +4680,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
               {activeChannelObj.icon}
             </div>
             <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.25rem', fontWeight: 800 }}>
-              #{activeChannelObj.label}
+              {activeChannelObj.id.startsWith('dm_') ? activeChannelObj.name : `#${activeChannelObj.label}`}
             </h3>
             <p style={{ fontSize: '0.85rem', color: '#8696a0', margin: '0 0 1rem 0' }}>
               {activeChannelObj.desc}
@@ -4735,11 +4776,12 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
   }, [activeSubTab]);
 
   const watermarkSvg = useMemo(() => {
-    if (!user) return '';
+    if (!user || user.role !== 'admin') return '';
+    const identifier = user.regNo || user.registrationNo || user.studentId || user.id || user.email;
     const encoded = encodeURIComponent(`
       <svg xmlns="http://www.w3.org/2000/svg" width="300" height="150" viewBox="0 0 300 150">
-        <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="currentColor" opacity="0.12" transform="rotate(-30 150 75)">
-          ${user.email}
+        <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="currentColor" opacity="0.03" transform="rotate(-30 150 75)">
+          ${identifier}
         </text>
       </svg>
     `.trim());
@@ -4760,6 +4802,38 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
   const [aiSessionHistory, setAiSessionHistory] = useState([]);
   const aiScrollRef = useRef(null);
 
+  // Load chat history when aiSessionPaper changes
+  useEffect(() => {
+    if (aiSessionPaper && aiSessionPaper.courseCode) {
+      try {
+        const stored = localStorage.getItem(`ai_chat_${aiSessionPaper.courseCode}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+          const filtered = parsed.filter(msg => msg.timestamp && msg.timestamp > sevenDaysAgo);
+          setAiSessionHistory(filtered);
+          if (parsed.length !== filtered.length) {
+            localStorage.setItem(`ai_chat_${aiSessionPaper.courseCode}`, JSON.stringify(filtered));
+          }
+        } else {
+          setAiSessionHistory([]);
+        }
+      } catch (e) {
+        setAiSessionHistory([]);
+      }
+    } else {
+      setAiSessionHistory([]);
+    }
+  }, [aiSessionPaper]);
+
+  // Save chat history when it changes
+  useEffect(() => {
+    if (aiSessionPaper && aiSessionPaper.courseCode) {
+       // Only save if it has actual elements, or if we need to clear we can just overwrite
+       localStorage.setItem(`ai_chat_${aiSessionPaper.courseCode}`, JSON.stringify(aiSessionHistory));
+    }
+  }, [aiSessionHistory, aiSessionPaper]);
+
   useEffect(() => {
     if (aiScrollRef.current) {
       aiScrollRef.current.scrollTo({
@@ -4768,15 +4842,16 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
       });
     }
   }, [aiSessionHistory, aiSessionLoading]);
+
   const handleRunAiPyqSession = useCallback(async (queryText, mode = 'explain') => {
     if (!user) {
-      setAiSessionHistory(prev => [...prev, { role: 'auth-prompt' }]);
+      setAiSessionHistory(prev => [...prev, { role: 'auth-prompt', timestamp: Date.now() }]);
       return;
     }
     if (!queryText || !queryText.trim() || !aiSessionPaper) return;
     const q = queryText.trim();
     
-    setAiSessionHistory(prev => [...prev, { role: 'user', text: q }]);
+    setAiSessionHistory(prev => [...prev, { role: 'user', text: q, timestamp: Date.now() }]);
     setAiSessionQuery('');
     setAiSessionLoading(true);
 
@@ -4797,23 +4872,23 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
       });
 
       if (res.status === 401 || res.status === 403) {
-        setAiSessionHistory(prev => prev.slice(0, -1).concat({ role: 'auth-prompt' }));
+        setAiSessionHistory(prev => prev.slice(0, -1).concat({ role: 'auth-prompt', timestamp: Date.now() }));
         return;
       }
 
       const data = await res.json();
       if (res.ok && data.answer) {
-        setAiSessionHistory(prev => [...prev, { role: 'assistant', text: data.answer }]);
+        setAiSessionHistory(prev => [...prev, { role: 'assistant', text: data.answer, timestamp: Date.now() }]);
       } else {
-        setAiSessionHistory(prev => [...prev, { role: 'assistant', text: `⚠️ ${data.error || 'Failed to generate answer. Please try again.'}` }]);
+        setAiSessionHistory(prev => [...prev, { role: 'assistant', text: `⚠️ ${data.error || 'Failed to generate answer. Please try again.'}`, timestamp: Date.now() }]);
       }
     } catch (err) {
       console.error(err);
-      setAiSessionHistory(prev => [...prev, { role: 'assistant', text: `⚠️ Connection error: ${err.message}` }]);
+      setAiSessionHistory(prev => [...prev, { role: 'assistant', text: `⚠️ Connection error: ${err.message}`, timestamp: Date.now() }]);
     } finally {
       setAiSessionLoading(false);
     }
-  }, [aiSessionPaper]);
+  }, [aiSessionPaper, user]);
 
   // Search input state (immediate for input field) and debounced search state (for heavy filtering index)
   const [searchQuery, setSearchQuery] = useState('');
@@ -5944,7 +6019,7 @@ function CommunityPage({ user, onRequireAuth, initialSubTab = 'pyq', onBackToApp
                     ) : msg.role === 'assistant' ? (
                       <div className="gemini-markdown-content" style={{ color: '#e3e3e3' }}>
                         <ReactMarkdown 
-                          remarkPlugins={[remarkMath]} 
+                          remarkPlugins={[remarkMath, remarkGfm]} 
                           rehypePlugins={[rehypeKatex]}
                         >
                           {msg.text}

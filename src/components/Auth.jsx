@@ -574,6 +574,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
           window.google.accounts.id.initialize({
             client_id: data.googleClientId,
             callback: handleGoogleLoginResponse,
+            hosted_domain: 'vitbhopal.ac.in',
             auto_select: false,
             cancel_on_tap_outside: true,
             itp_support: true,

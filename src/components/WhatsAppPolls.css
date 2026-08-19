@@ -960,3 +960,17 @@ input:checked + .wa-slider:before {
   color: #94a3b8 !important;
 }
 
+
+/* AI Markdown Overrides */
+.gemini-markdown-content table {
+  margin-left: auto;
+  margin-right: auto;
+}
+.gemini-markdown-content th,
+.gemini-markdown-content td {
+  text-align: center;
+}
+.gemini-markdown-content .katex-display {
+  text-align: center;
+}
+

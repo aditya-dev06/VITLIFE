@@ -351,7 +351,7 @@ Return JSON adhering strictly to this schema:
           return {
             type: 'opportunity',
             payload: {
-              id: `auto_${crypto.createHash('md5').update(title + jsonResponse.date).digest('hex').substring(0, 10)}`,
+              id: `auto_${crypto.createHash('sha256').update(title + jsonResponse.date).digest('hex').substring(0, 16)}`,
               title,
               company: jsonResponse.clubName || 'Placement Office',
               role: jsonResponse.category,
@@ -372,7 +372,7 @@ Return JSON adhering strictly to this schema:
         return {
           type: 'event',
           payload: {
-            id: `auto_evt_${crypto.createHash('md5').update(title + jsonResponse.date).digest('hex').substring(0, 10)}`,
+            id: `auto_evt_${crypto.createHash('sha256').update(title + jsonResponse.date).digest('hex').substring(0, 16)}`,
             title,
             clubName: jsonResponse.clubName || extractOrganizer(subject, sender),
             category: jsonResponse.category || 'Technical',
@@ -432,7 +432,7 @@ export function parseEmailToCardPayload(subject = '', bodyText = '', htmlText = 
     return {
       type: 'opportunity',
       payload: {
-        id: `auto_${crypto.createHash('md5').update(title + eventDate).digest('hex').substring(0, 10)}`,
+        id: `auto_${crypto.createHash('sha256').update(title + eventDate).digest('hex').substring(0, 16)}`,
         title,
         company: organizer,
         role: category,
@@ -453,7 +453,7 @@ export function parseEmailToCardPayload(subject = '', bodyText = '', htmlText = 
   return {
     type: 'event',
     payload: {
-      id: `auto_evt_${crypto.createHash('md5').update(title + eventDate).digest('hex').substring(0, 10)}`,
+      id: `auto_evt_${crypto.createHash('sha256').update(title + eventDate).digest('hex').substring(0, 16)}`,
       title,
       clubName: organizer,
       category,

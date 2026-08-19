@@ -3,6 +3,7 @@ import json
 import re
 import sys
 import time
+import tempfile
 from datetime import datetime
 import requests
 
@@ -424,7 +425,7 @@ def fetch_devpost_hackathons(limit=15):
             "page": page
         }
         try:
-            response = requests.get(url, headers=headers, params=params, timeout=15)
+            response = requests.get(url, headers=headers, params=params, timeout=15, allow_redirects=False)
             if response.status_code == 200:
                 data = response.json()
                 hackathons = data.get("hackathons", [])
@@ -476,7 +477,7 @@ def fetch_unstop_hackathons(limit=15):
     
     results = []
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=15)
+        response = requests.get(url, headers=headers, params=params, timeout=15, allow_redirects=False)
         if response.status_code == 200:
             data = response.json()
             hackathons = data.get("data", {}).get("data", [])
@@ -580,15 +581,26 @@ def main():
             combined.append(item)
             seen_titles.add(title_lower)
 
-    # Save to JSON database
+    # Save to JSON database atomically
     db_content = {
         "lastUpdated": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         "count": len(combined),
         "opportunities": combined
     }
 
-    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-        json.dump(db_content, f, indent=2)
+    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+    temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(OUTPUT_FILE), prefix="opps_", suffix=".tmp")
+    try:
+        with os.fdopen(temp_fd, 'w', encoding='utf-8') as f:
+            json.dump(db_content, f, indent=2)
+        os.replace(temp_path, OUTPUT_FILE)
+    except Exception as e:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
+        raise e
 
     print(f"\nSuccessfully saved {len(combined)} opportunities to database.")
     print("Research process completed successfully!")

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import './MetaAIDrawer.css';
+import './VitChatAIDrawer.css';
 
-export function MetaAIDrawer({ isOpen, onClose, targetMessage, activeChannel, onSelectQuickReply }) {
+export function VitChatAIDrawer({ isOpen, onClose, targetMessage, activeChannel, onSelectQuickReply }) {
   const [loading, setLoading] = useState(false);
   const [aiData, setAiData] = useState(null);
   const [error, setError] = useState(null);
@@ -11,7 +11,7 @@ export function MetaAIDrawer({ isOpen, onClose, targetMessage, activeChannel, on
   const [submittingFollowUp, setSubmittingFollowUp] = useState(false);
   const bodyRef = useRef(null);
 
-  // Fetch initial Meta AI analysis when drawer opens or message changes
+  // Fetch initial vitChat AI analysis when drawer opens or message changes
   useEffect(() => {
     if (!isOpen || !targetMessage) return;
 
@@ -24,18 +24,18 @@ export function MetaAIDrawer({ isOpen, onClose, targetMessage, activeChannel, on
 
     const fetchAnalysis = async () => {
       try {
-        const response = await fetch('/api/chat/meta-ai', {
+        const response = await fetch('/api/chat/vitchat-ai', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messageContent: targetMessage.content || 'Attachment / Media update',
             author: targetMessage.author || 'Student',
-            channel: activeChannel || 'general'
+            channel: activeChannel || 'general', mode: 'summary'
           })
         });
 
         if (!response.ok) {
-          throw new Error('Failed to reach Meta AI service');
+          throw new Error('Failed to reach vitChat AI service');
         }
 
         const data = await response.json();
@@ -48,7 +48,7 @@ export function MetaAIDrawer({ isOpen, onClose, targetMessage, activeChannel, on
         }
       } catch (err) {
         if (isMounted) {
-          setError(err.message || 'Error connecting to Meta AI assistant.');
+          setError(err.message || 'Error connecting to vitChat AI assistant.');
         }
       } finally {
         if (isMounted) {
@@ -95,13 +95,13 @@ export function MetaAIDrawer({ isOpen, onClose, targetMessage, activeChannel, on
     setFollowUps((prev) => [...prev, { sender: 'user', text: queryText, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
 
     try {
-      const response = await fetch('/api/chat/meta-ai', {
+      const response = await fetch('/api/chat/vitchat-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messageContent: targetMessage.content || '',
           author: targetMessage.author || 'Student',
-          channel: activeChannel || 'general',
+          channel: activeChannel || 'general', mode: 'uncensored',
           prompt: queryText
         })
       });
@@ -132,7 +132,7 @@ export function MetaAIDrawer({ isOpen, onClose, targetMessage, activeChannel, on
         ...prev,
         {
           sender: 'meta',
-          text: 'Error connecting to Meta AI assistant. Please try again.',
+          text: 'Error connecting to vitChat AI assistant. Please try again.',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);
@@ -142,63 +142,63 @@ export function MetaAIDrawer({ isOpen, onClose, targetMessage, activeChannel, on
   };
 
   return (
-    <div className="meta-ai-drawer-backdrop" onClick={onClose}>
-      <div className="meta-ai-drawer-panel" onClick={(e) => e.stopPropagation()}>
+    <div className="vitchat-ai-drawer-backdrop" onClick={onClose}>
+      <div className="vitchat-ai-drawer-panel" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="meta-ai-drawer-header">
-          <div className="meta-ai-header-left">
-            <div className="meta-ai-orb-logo">✨</div>
+        <div className="vitchat-ai-drawer-header">
+          <div className="vitchat-ai-header-left">
+            <div className="vitchat-ai-orb-logo">✨</div>
             <div>
-              <h3 className="meta-ai-header-title">Meta AI Assistant</h3>
-              <div className="meta-ai-header-subtext">
+              <h3 className="vitchat-ai-header-title">vitChat AI Assistant</h3>
+              <div className="vitchat-ai-header-subtext">
                 Analyzing post in #{activeChannel || 'general'}
               </div>
             </div>
           </div>
-          <button className="meta-ai-close-btn" onClick={onClose} title="Close Meta AI Drawer">
+          <button className="vitchat-ai-close-btn" onClick={onClose} title="Close vitChat AI Drawer">
             ✕
           </button>
         </div>
 
         {/* Quoted Target Message */}
-        <div className="meta-ai-quoted-card">
-          <div className="meta-ai-quoted-author">
+        <div className="vitchat-ai-quoted-card">
+          <div className="vitchat-ai-quoted-author">
             <span>Target Message from {targetMessage.author || 'Student'}</span>
             <span>{targetMessage.timestamp ? new Date(targetMessage.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
           </div>
-          <div className="meta-ai-quoted-text">
+          <div className="vitchat-ai-quoted-text">
             "{targetMessage.content || 'Attachment / Media update'}"
           </div>
         </div>
 
         {/* Drawer Scrollable Content */}
-        <div className="meta-ai-drawer-body" ref={bodyRef}>
+        <div className="vitchat-ai-drawer-body" ref={bodyRef}>
           {/* Toast Notification */}
           {toastMessage && (
-            <div className="meta-ai-toast-banner">
+            <div className="vitchat-ai-toast-banner">
               <span>{toastMessage}</span>
             </div>
           )}
 
           {/* Loading Shimmer State */}
           {loading && (
-            <div className="meta-ai-loading-container">
-              <div className="meta-ai-loading-orb-bar">
-                <div className="meta-ai-pulsing-dot" />
-                <span>Meta AI is generating smart summary & insights...</span>
+            <div className="vitchat-ai-loading-container">
+              <div className="vitchat-ai-loading-orb-bar">
+                <div className="vitchat-ai-pulsing-dot" />
+                <span>vitChat AI is generating smart summary & insights...</span>
               </div>
-              <div className="meta-ai-shimmer-box" />
-              <div className="meta-ai-shimmer-box" style={{ height: '110px' }} />
+              <div className="vitchat-ai-shimmer-box" />
+              <div className="vitchat-ai-shimmer-box" style={{ height: '110px' }} />
             </div>
           )}
 
           {/* Error State */}
           {!loading && error && (
-            <div className="meta-ai-summary-card" style={{ border: '1px solid rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.1)' }}>
-              <div className="meta-ai-section-badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#fca5a5' }}>
+            <div className="vitchat-ai-summary-card" style={{ border: '1px solid rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.1)' }}>
+              <div className="vitchat-ai-section-badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#fca5a5' }}>
                 ⚠️ Notice
               </div>
-              <p className="meta-ai-summary-text" style={{ color: '#fca5a5' }}>
+              <p className="vitchat-ai-summary-text" style={{ color: '#fca5a5' }}>
                 {error}
               </p>
             </div>
@@ -209,24 +209,24 @@ export function MetaAIDrawer({ isOpen, onClose, targetMessage, activeChannel, on
             <>
               {/* 1. Smart Summary Card */}
               {aiData.summary && (
-                <div className="meta-ai-summary-card">
-                  <div className="meta-ai-section-badge badge-summary">
+                <div className="vitchat-ai-summary-card">
+                  <div className="vitchat-ai-section-badge badge-summary">
                     ⚡ Smart Summary
                   </div>
-                  <p className="meta-ai-summary-text">{aiData.summary}</p>
+                  <p className="vitchat-ai-summary-text">{aiData.summary}</p>
                 </div>
               )}
 
               {/* 2. Key Insights Card */}
               {Array.isArray(aiData.keyInsights) && aiData.keyInsights.length > 0 && (
-                <div className="meta-ai-insights-card">
-                  <div className="meta-ai-section-badge badge-insights">
+                <div className="vitchat-ai-insights-card">
+                  <div className="vitchat-ai-section-badge badge-insights">
                     💡 Key Insights
                   </div>
-                  <ul className="meta-ai-insights-list">
+                  <ul className="vitchat-ai-insights-list">
                     {aiData.keyInsights.map((insight, idx) => (
-                      <li key={idx} className="meta-ai-insight-item">
-                        <span className="meta-ai-insight-icon">✦</span>
+                      <li key={idx} className="vitchat-ai-insight-item">
+                        <span className="vitchat-ai-insight-icon">✦</span>
                         <span>{insight}</span>
                       </li>
                     ))}
@@ -236,9 +236,9 @@ export function MetaAIDrawer({ isOpen, onClose, targetMessage, activeChannel, on
 
               {/* 3. Detailed AI Response */}
               {aiData.aiResponse && (
-                <div className="meta-ai-response-box">
-                  <div className="meta-ai-section-badge badge-summary" style={{ marginBottom: '0.6rem' }}>
-                    🤖 Meta AI Analysis
+                <div className="vitchat-ai-response-box">
+                  <div className="vitchat-ai-section-badge badge-summary" style={{ marginBottom: '0.6rem' }}>
+                    🤖 vitChat AI Analysis
                   </div>
                   {aiData.aiResponse}
                 </div>
@@ -246,20 +246,20 @@ export function MetaAIDrawer({ isOpen, onClose, targetMessage, activeChannel, on
 
               {/* 4. 1-Click Quick Replies */}
               {Array.isArray(aiData.quickReplies) && aiData.quickReplies.length > 0 && (
-                <div className="meta-ai-quick-card">
-                  <div className="meta-ai-section-badge badge-quick">
+                <div className="vitchat-ai-quick-card">
+                  <div className="vitchat-ai-section-badge badge-quick">
                     💬 1-Click Quick Replies
                   </div>
-                  <div className="meta-ai-quick-chips">
+                  <div className="vitchat-ai-quick-chips">
                     {aiData.quickReplies.map((reply, idx) => (
                       <button
                         key={idx}
-                        className="meta-ai-quick-btn"
+                        className="vitchat-ai-quick-btn"
                         onClick={() => handleQuickReplyClick(reply)}
                         title="Click to insert as chat reply"
                       >
                         <span>"{reply}"</span>
-                        <span className="meta-ai-quick-arrow">↵</span>
+                        <span className="vitchat-ai-quick-arrow">↵</span>
                       </button>
                     ))}
                   </div>
@@ -270,14 +270,14 @@ export function MetaAIDrawer({ isOpen, onClose, targetMessage, activeChannel, on
 
           {/* Follow-up Threads */}
           {followUps.length > 0 && (
-            <div className="meta-ai-chat-thread">
+            <div className="vitchat-ai-chat-thread">
               {followUps.map((msg, index) => (
                 <div
                   key={index}
-                  className={msg.sender === 'user' ? 'meta-ai-user-bubble' : 'meta-ai-assistant-bubble'}
+                  className={msg.sender === 'user' ? 'vitchat-ai-user-bubble' : 'vitchat-ai-assistant-bubble'}
                 >
                   <div style={{ fontSize: '0.74rem', opacity: 0.7, marginBottom: '0.2rem' }}>
-                    {msg.sender === 'user' ? 'You' : 'Meta AI'} • {msg.timestamp}
+                    {msg.sender === 'user' ? 'You' : 'vitChat AI'} • {msg.timestamp}
                   </div>
                   <div>{msg.text}</div>
 
@@ -286,12 +286,12 @@ export function MetaAIDrawer({ isOpen, onClose, targetMessage, activeChannel, on
                       {msg.quickReplies.map((r, i) => (
                         <button
                           key={i}
-                          className="meta-ai-quick-btn"
+                          className="vitchat-ai-quick-btn"
                           onClick={() => handleQuickReplyClick(r)}
                           style={{ padding: '0.4rem 0.6rem', fontSize: '0.78rem' }}
                         >
                           <span>"{r}"</span>
-                          <span className="meta-ai-quick-arrow">↵</span>
+                          <span className="vitchat-ai-quick-arrow">↵</span>
                         </button>
                       ))}
                     </div>
@@ -302,31 +302,31 @@ export function MetaAIDrawer({ isOpen, onClose, targetMessage, activeChannel, on
           )}
 
           {submittingFollowUp && (
-            <div className="meta-ai-assistant-bubble" style={{ opacity: 0.8 }}>
-              <div className="meta-ai-loading-orb-bar" style={{ fontSize: '0.8rem' }}>
-                <div className="meta-ai-pulsing-dot" />
-                <span>Meta AI is thinking...</span>
+            <div className="vitchat-ai-assistant-bubble" style={{ opacity: 0.8 }}>
+              <div className="vitchat-ai-loading-orb-bar" style={{ fontSize: '0.8rem' }}>
+                <div className="vitchat-ai-pulsing-dot" />
+                <span>vitChat AI is thinking...</span>
               </div>
             </div>
           )}
         </div>
 
         {/* Footer Input */}
-        <div className="meta-ai-drawer-footer">
-          <form className="meta-ai-input-form" onSubmit={handleFollowUpSubmit}>
+        <div className="vitchat-ai-drawer-footer">
+          <form className="vitchat-ai-input-form" onSubmit={handleFollowUpSubmit}>
             <input
               type="text"
-              className="meta-ai-input-field"
-              placeholder="Ask Meta AI follow-up questions..."
+              className="vitchat-ai-input-field"
+              placeholder="Ask vitChat AI follow-up questions..."
               value={userPrompt}
               onChange={(e) => setUserPrompt(e.target.value)}
               disabled={submittingFollowUp || loading}
             />
             <button
               type="submit"
-              className="meta-ai-send-btn"
+              className="vitchat-ai-send-btn"
               disabled={!userPrompt.trim() || submittingFollowUp || loading}
-              title="Send to Meta AI"
+              title="Send to vitChat AI"
             >
               ➤
             </button>
