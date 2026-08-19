@@ -7884,18 +7884,42 @@ In general, AB01 means "Academic block 1", AB02 means "Academic block 2". Parse 
     
     // We will call OpenRouter or Google endpoint based on the key
     if (!apiKey.startsWith('sk-or-')) {
-      const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemInstruction }] },
-          contents: [{ parts: [{ text: userMessage }] }]
-        })
-      });
-      const data = await response.json();
-      if (data.error) throw new Error(data.error.message);
-      aiResponseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const fallbackKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY;
+      const keysToTry = [apiKey];
+      if (fallbackKey && fallbackKey !== apiKey) keysToTry.push(fallbackKey);
+      
+      let success = false;
+      let lastError = null;
+
+      for (const keyToTry of keysToTry) {
+        const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + keyToTry;
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            contents: [{ parts: [{ text: userMessage }] }]
+          })
+        });
+        const data = await response.json();
+        
+        if (data.error) {
+          lastError = new Error(data.error.message);
+          // If it's a 429 (rate limit), continue to the next key (fallback)
+          if (data.error.code === 429 || data.error.status === 'RESOURCE_EXHAUSTED') {
+            continue;
+          } else {
+            throw lastError; // Throw other errors immediately
+          }
+        }
+        
+        aiResponseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        success = true;
+        break;
+      }
+      
+      if (!success && lastError) throw lastError;
+
     } else {
       // OpenRouter format
       const endpoint = 'https://openrouter.ai/api/v1/chat/completions';
