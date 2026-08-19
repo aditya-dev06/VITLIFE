@@ -3424,6 +3424,26 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
     if (!newMessage.trim() && !selectedAttachment) return;
 
+    if (newMessage.trim().startsWith('/ai')) {
+      const aiCommand = newMessage.trim();
+      setNewMessage('');
+      
+      const recentMessages = (Array.isArray(messages) ? messages : [])
+        .filter(m => m.channel === activeChannel)
+        .slice(-10)
+        .map(m => `${m.author}: ${m.content}`)
+        .join('\n');
+
+      const mockMsg = {
+        content: `User Command: ${aiCommand}\n\nRecent Chat History in #${activeChannel}:\n${recentMessages || '(No recent messages)'}`,
+        author: 'System',
+        channel: activeChannel
+      };
+      
+      handleAskvitchatAi(mockMsg);
+      return;
+    }
+
     setUploading(true);
     let attachmentUrl = null;
     let blurThumbnail = null;

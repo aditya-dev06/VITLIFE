@@ -7883,8 +7883,7 @@ In general, AB01 means "Academic block 1", AB02 means "Academic block 2". Parse 
     let aiResponseText = '';
     
     // We will call OpenRouter or Google endpoint based on the key
-    // For simplicity, assuming Google Gemini format if it starts with AIza, else OpenAI format for OpenRouter
-    if (apiKey.startsWith('AIza')) {
+    if (!apiKey.startsWith('sk-or-')) {
       const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
       const response = await fetch(endpoint, {
         method: 'POST',
