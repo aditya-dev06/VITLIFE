@@ -2296,9 +2296,9 @@ const saveFeedback = async (feedbackObj) => {
 
 // Helper function to process OCR using Gemini
 async function performVisionOCR(cleanBase64, mimeType) {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.Gemini_API_Key || process.env.GOOGLE_AI_KEY || process.env.gemini_api_key;
-  if (!apiKey) {
-    throw new Error('AI Vision OCR API key is not configured on the server.');
+  const apiKey = process.env.GEMINI_API_KEY || process.env.Gemini_API_Key || process.env.GOOGLE_AI_KEY || process.env.VITCHAT_API_KEY;
+  if (!apiKey || apiKey.startsWith('sk-or-')) {
+    throw new Error('AI Vision OCR API key is not configured on the server (Google API key required).');
   }
 
   const payload = {
@@ -5357,10 +5357,10 @@ app.post('/api/papers/ask-pyq', aiAssistantLimiter, optionalAuthenticate, async 
       paperText = selectedPaper.fullText || '';
     }
 
-    const apiKey = process.env.Gemini_API_Key || process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY;
+    const apiKey = process.env.Gemini_API_Key || process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || process.env.VITCHAT_API_KEY;
 
-    if (!apiKey) {
-      return res.status(503).json({ error: 'AI Study Assistant is currently unavailable (API key not configured).' });
+    if (!apiKey || apiKey.startsWith('sk-or-')) {
+      return res.status(503).json({ error: 'AI Study Assistant is currently unavailable (Google API key not configured).' });
     }
 
     const systemPrompt = `You are "Ask Me PYQ" — a strict, professional AI Academic Tutor for VIT University students.
