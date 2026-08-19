@@ -1,0 +1,375 @@
+import { useState, useEffect, memo } from 'react';
+import { motion } from 'motion/react';
+import {
+  LayoutDashboard,
+  Target,
+  Users,
+  CalendarDays,
+  BookOpen,
+  PartyPopper,
+  Building2,
+  MessageSquare,
+  ShoppingBag,
+  Info,
+  ChevronLeft,
+  ChevronRight,
+  LogOut,
+  Settings,
+  Wifi,
+  WifiOff,
+  Loader2,
+  Download,
+  Sun,
+  Moon,
+} from 'lucide-react';
+import { useTheme } from './theme-provider';
+import TypewriterText from './TypewriterText';
+import './AppSidebar.css';
+
+const GithubIcon = ({ size = 18, className = '' }) => (
+  <svg height={size} width={size} viewBox="0 0 16 16" fill="currentColor" className={className}>
+    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
+  </svg>
+);
+
+const NAV_ITEMS = [
+  { id: 'dashboard',     label: 'Dashboard',        icon: LayoutDashboard, alwaysVisible: true },
+  { id: 'chats',         label: 'Student Chat',     icon: MessageSquare,   alwaysVisible: true },
+  { id: 'faculty',       label: 'Faculty Cabins',   icon: Building2,       alwaysVisible: true },
+  { id: 'opportunities', label: 'Opportunities Hub', icon: Target,          alwaysVisible: true },
+  { id: 'marketplace',   label: 'Buy & Sell',       icon: ShoppingBag,     alwaysVisible: true },
+  { id: 'community',     label: 'Student Community', icon: Users,           alwaysVisible: true },
+  { id: 'timetable',     label: 'Schedule',          icon: CalendarDays,    requiresAuth: true  },
+  { id: 'guide',         label: 'VIT Bhopal Guide',  icon: BookOpen,        requiresGuide: true },
+  { id: 'campus',        label: 'College Life',      icon: PartyPopper,     requiresAuth: true  },
+];
+
+function AppSidebar({
+  user,
+  activeTab,
+  onTabClick,
+  guideVisible,
+  profileSyncStatus,
+  installPrompt,
+  onInstallApp,
+  onFeedback,
+  onAboutUs,
+  onLogout,
+  onEditProfile,
+}) {
+  const { theme, setTheme } = useTheme();
+  const [collapsed, setCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Sync body class for main content margin shifting
+  useEffect(() => {
+    if (isMobile) {
+      document.body.classList.remove('sidebar-collapsed');
+      document.body.classList.toggle('sidebar-open', mobileOpen);
+    } else {
+      document.body.classList.toggle('sidebar-collapsed', collapsed);
+      document.body.classList.toggle('sidebar-open', !collapsed);
+    }
+    return () => {
+      document.body.classList.remove('sidebar-collapsed', 'sidebar-open');
+    };
+  }, [collapsed, isMobile, mobileOpen]);
+
+  // Detect mobile
+  useEffect(() => {
+    const check = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) setMobileOpen(false);
+    };
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  // Close mobile sidebar on tab change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [activeTab]);
+
+  const handleTabClick = (id) => {
+    onTabClick(id);
+    if (isMobile) setMobileOpen(false);
+  };
+
+  const syncIcon = () => {
+    if (user?.isGuest) return <WifiOff size={14} />;
+    if (profileSyncStatus === 'synced') return <Wifi size={14} />;
+    if (profileSyncStatus === 'syncing') return <Loader2 size={14} className="spin" />;
+    return <WifiOff size={14} />;
+  };
+
+  const syncLabel = () => {
+    if (user?.isGuest) return 'Local only';
+    if (profileSyncStatus === 'synced') return 'Synced';
+    if (profileSyncStatus === 'syncing') return 'Syncing…';
+    return 'Offline';
+  };
+
+  const getSubInfo = () => {
+    if (!user) return 'CDS Student';
+    if (user.isGuest) return 'Guest • Not signed in';
+    if (user.isVitBhopal) {
+      let reg = user.registrationNumber || '';
+      if (!reg && user.email) {
+        const parts = user.email.split('@')[0].split('.');
+        reg = parts[parts.length - 1] ? parts[parts.length - 1].toUpperCase() : '';
+      }
+      return `${reg ? reg + ' • ' : ''}Sem ${user.semester || 1}`;
+    }
+    if (user.semester && user.semester !== 0) return `Sem ${user.semester}`;
+    return 'Global Member';
+  };
+
+  if (isMobile) {
+    return null;
+  }
+
+  const isOpen = !collapsed;
+
+  return (
+    <>
+      {/* ── The Sidebar (Desktop Only) ── */}
+      <aside className={`app-sidebar ${isOpen ? 'open' : 'collapsed'}`}>
+
+        {/* Header */}
+        <div className="sidebar-header">
+          <div className="sidebar-brand">
+            <div className="sidebar-brand-logo-wrap">
+              <div className="sidebar-brand-icon">
+                <span className="sidebar-brand-dot"></span>
+              </div>
+              <span className="sidebar-brand-vit">VIT</span>
+            </div>
+            <div className="sidebar-brand-typewriter-wrapper">
+              <TypewriterText
+                words={['LIFE', 'BHOPAL', 'CAMPUS']}
+                typingSpeed={110}
+                erasingSpeed={55}
+                newWordDelay={2200}
+                className="sidebar-brand-typewriter"
+              />
+            </div>
+          </div>
+          {!isMobile && (
+            <button
+              className="sidebar-collapse-btn"
+              onClick={() => setCollapsed(c => !c)}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+            </button>
+          )}
+        </div>
+
+        {/* User info */}
+        {user && (
+          <div className="sidebar-user-block">
+            <div className="sidebar-user">
+              <div className="sidebar-avatar">
+                {user.name ? user.name.substring(0, 2).toUpperCase() : 'DS'}
+              </div>
+              <div className="sidebar-user-info">
+                <span className="sidebar-user-name" title={user.name || 'Student'}>
+                  {user.name || 'Student'}
+                </span>
+                <span className="sidebar-user-role">{getSubInfo()}</span>
+              </div>
+            </div>
+
+            <div className="sidebar-user-actions">
+              {user.isGuest ? (
+                <button
+                  className="sidebar-user-btn sidebar-user-btn--signup"
+                  onClick={onLogout}
+                  title="Create Account / Sign In"
+                  aria-label="Create Account or Sign In"
+                >
+                  Sign Up
+                </button>
+              ) : (
+                <>
+                  {onEditProfile && (
+                    <button
+                      className="sidebar-user-btn"
+                      onClick={onEditProfile}
+                      title="Edit Profile"
+                      aria-label="Edit Profile"
+                    >
+                      <Settings size={14} />
+                    </button>
+                  )}
+                </>
+              )}
+              <button
+                className="sidebar-user-btn"
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+                aria-label={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+              >
+                {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+              </button>
+              {!user.isGuest && (
+                <button
+                  className="sidebar-user-btn sidebar-user-btn--logout"
+                  onClick={onLogout}
+                  title="Sign Out"
+                  aria-label="Sign Out"
+                >
+                  <LogOut size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Divider */}
+        <div className="sidebar-divider" />
+
+        {/* Main nav */}
+        <nav className="sidebar-nav">
+          <ul>
+            {NAV_ITEMS.map(({ id, label, icon: Icon, alwaysVisible, requiresAuth, requiresGuide }) => {
+              if (requiresAuth && !user) return null;
+              if (requiresGuide && !guideVisible && !(user?.role === 'admin')) return null;
+
+              const isActive = activeTab === id;
+              return (
+                <li key={id}>
+                  <button
+                    className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
+                    onClick={() => handleTabClick(id)}
+                    title={collapsed ? label : undefined}
+                    aria-current={isActive ? 'page' : undefined}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="sidebar-active-indicator"
+                        className="sidebar-active-indicator"
+                        transition={{
+                          type: 'spring',
+                          stiffness: 400,
+                          damping: 32,
+                          mass: 0.8
+                        }}
+                      />
+                    )}
+                    <Icon size={18} className="sidebar-nav-icon" />
+                    <span className="sidebar-nav-label">{label}</span>
+                    <span className="sidebar-nav-pip" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        {/* Divider */}
+        <div className="sidebar-divider" />
+
+        {/* Secondary nav */}
+        <nav className="sidebar-nav sidebar-nav--secondary">
+          <ul>
+            <li>
+              <button
+                className="sidebar-nav-item"
+                onClick={onFeedback}
+                title={collapsed ? 'Feedback' : undefined}
+              >
+                <MessageSquare size={18} className="sidebar-nav-icon" />
+                <span className="sidebar-nav-label">Give Feedback</span>
+              </button>
+            </li>
+            <li>
+              <button
+                className="sidebar-nav-item"
+                onClick={onAboutUs}
+                title={collapsed ? 'About Us' : undefined}
+              >
+                <Info size={18} className="sidebar-nav-icon" />
+                <span className="sidebar-nav-label">About Us</span>
+              </button>
+            </li>
+            <li>
+              <button
+                className="sidebar-nav-item"
+                onClick={() => window.open('https://github.com/aditya-dev06', '_blank', 'noopener,noreferrer')}
+                title={collapsed ? 'GitHub' : undefined}
+              >
+                <GithubIcon size={18} className="sidebar-nav-icon" />
+                <span className="sidebar-nav-label">GitHub</span>
+              </button>
+            </li>
+            {onEditProfile && user && !user.isGuest && (
+              <li>
+                <button
+                  className="sidebar-nav-item"
+                  onClick={onEditProfile}
+                  title={collapsed ? 'Edit Profile' : undefined}
+                >
+                  <Settings size={18} className="sidebar-nav-icon" />
+                  <span className="sidebar-nav-label">Edit Profile</span>
+                </button>
+              </li>
+            )}
+            <li>
+              <button
+                className="sidebar-nav-item"
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                title={collapsed ? `Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode` : undefined}
+              >
+                {theme === 'dark' ? (
+                  <Sun size={18} className="sidebar-nav-icon" />
+                ) : (
+                  <Moon size={18} className="sidebar-nav-icon" />
+                )}
+                <span className="sidebar-nav-label">
+                  {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                </span>
+              </button>
+            </li>
+            {installPrompt && (
+              <li>
+                <button
+                  className="sidebar-nav-item sidebar-nav-item--install"
+                  onClick={onInstallApp}
+                  title={collapsed ? 'Install App' : undefined}
+                >
+                  <Download size={18} className="sidebar-nav-icon" />
+                  <span className="sidebar-nav-label">Install App</span>
+                </button>
+              </li>
+            )}
+          </ul>
+        </nav>
+
+        {/* Footer — sync status + logout */}
+        <div className="sidebar-footer">
+          <div className="sidebar-sync" title={syncLabel()}>
+            {syncIcon()}
+            <span className="sidebar-sync-label">{syncLabel()}</span>
+          </div>
+          {user && !user.isGuest && (
+            <button
+              className="sidebar-logout-btn"
+              onClick={onLogout}
+              title={collapsed ? 'Sign out' : undefined}
+            >
+              <LogOut size={16} />
+              <span className="sidebar-logout-label">Sign out</span>
+            </button>
+          )}
+        </div>
+      </aside>
+    </>
+  );
+}
+
+export default memo(AppSidebar);
+

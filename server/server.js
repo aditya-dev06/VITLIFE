@@ -2497,7 +2497,7 @@ const syncPassVitianPapers = async () => {
           }
         }
       } catch (ocrErr) {
-        console.warn(`[Sync] OCR failed for ${paperUrl}, falling back to PassVitian metadata:`, ocrErr.message);
+        console.warn(`[Sync] OCR failed for ${paperUrl}, falling back to PassVitian metadata: ${ocrErr.message}`);
       }
 
       // Content-Aware Deduplication Check

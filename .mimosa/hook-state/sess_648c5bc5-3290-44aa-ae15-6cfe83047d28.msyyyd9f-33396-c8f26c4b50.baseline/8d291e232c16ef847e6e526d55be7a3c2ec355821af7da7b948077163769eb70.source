@@ -1,0 +1,48 @@
+import { spawn } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+if (process.env.VERCEL) {
+  console.log('===========================================================');
+  console.log('Vercel environment detected.');
+  console.log('Skipping postinstall frontend build and Python setup.');
+  console.log('Vercel will build the frontend during its static-build phase.');
+  console.log('===========================================================');
+  process.exit(0);
+}
+
+console.log('=========================================');
+console.log('RUNNING POSTINSTALL BUILD & SETUP...');
+console.log('=========================================');
+
+const runCommand = (command, args) => new Promise((resolve, reject) => {
+  const child = spawn(command, args, { stdio: 'inherit', shell: false });
+  child.on('close', (code) => {
+    if (code === 0) resolve();
+    else reject(new Error(`Command failed with exit code ${code}`));
+  });
+  child.on('error', reject);
+});
+
+try {
+  console.log('> Building frontend...');
+  await runCommand('npm', ['run', 'build']);
+} catch (err) {
+  console.error('Frontend build failed:', err);
+  process.exit(1);
+}
+
+try {
+  console.log('> Setting up Python virtual environment...');
+  const setupScript = path.join(__dirname, 'setup-venv.js');
+  await runCommand('node', [setupScript]);
+} catch (err) {
+  console.warn('Python virtual environment setup failed, proceeding anyway:', err);
+}
+
+console.log('=========================================');
+console.log('POSTINSTALL BUILD & SETUP COMPLETE');
+console.log('=========================================');

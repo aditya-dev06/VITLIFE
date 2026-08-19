@@ -58,7 +58,16 @@ const isDocumentUrl = (url) => {
 const isGifUrl = (url) => {
   if (!url || typeof url !== 'string') return false;
   const trimmed = url.trim().toLowerCase();
-  return trimmed.includes('.gif') || trimmed.includes('giphy.com') || trimmed.includes('tenor.com') || trimmed.includes('gifer.com');
+  if (trimmed.includes('.gif')) return true;
+  try {
+    const u = new URL(trimmed);
+    const host = u.hostname;
+    return host === 'giphy.com' || host.endsWith('.giphy.com') ||
+           host === 'tenor.com' || host.endsWith('.tenor.com') ||
+           host === 'gifer.com' || host.endsWith('.gifer.com');
+  } catch (e) {
+    return false;
+  }
 };
 
 const isOnlyEmojis = (str) => {
@@ -1146,7 +1155,8 @@ const ModerationCard = memo(function ModerationCard({ paper, onApprove, onDelete
 
   const handleOpenDoc = useCallback((e) => {
     for (let i = 1; i < urls.length; i++) {
-      window.open(urls[i], '_blank');
+      const safe = sanitizeUrl(urls[i]);
+      if (safe !== '#') window.open(safe, '_blank');
     }
   }, [urls]);
 
@@ -1183,7 +1193,7 @@ const ModerationCard = memo(function ModerationCard({ paper, onApprove, onDelete
       </p>
       <div className="moderation-actions">
         <a
-          href={urls[0] || '#'}
+          href={urls[0] ? sanitizeUrl(urls[0]) : '#'}
           target="_blank"
           rel="noopener noreferrer"
           className="mod-action-btn view"
@@ -2477,6 +2487,8 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
   // States for Context Menu Actions (vitChat AI, Report, Select)
   const [vitchatAiModalMessage, setvitchatAiModalMessage] = useState(null);
+  const [vitchatAiAnalysis, setvitchatAiAnalysis] = useState(null);
+  const [isVitchatAiLoading, setIsVitchatAiLoading] = useState(false);
   const [reportModalMessage, setReportModalMessage] = useState(null);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedMsgIds, setSelectedMsgIds] = useState([]);
@@ -2535,8 +2547,33 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     setActiveChannel(dmChannelId);
   }, [user, showToast]);
 
-  const handleAskvitchatAi = useCallback((msg) => {
+  const handleAskvitchatAi = useCallback(async (msg) => {
     setvitchatAiModalMessage(msg);
+    setIsVitchatAiLoading(true);
+    setvitchatAiAnalysis(null);
+    try {
+      const response = await fetch('/api/chat/vitchat-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messageContent: msg.content || (msg.attachment ? '[Attachment / Media]' : '[Voice Note]'),
+          author: msg.author || 'User',
+          channel: msg.channel || 'general',
+          mode: 'summary'
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setvitchatAiAnalysis(data);
+      } else {
+        setvitchatAiAnalysis({ error: data.error || 'Analysis failed' });
+      }
+    } catch (err) {
+      console.error('vitChat AI error:', err);
+      setvitchatAiAnalysis({ error: 'Network error analyzing message' });
+    } finally {
+      setIsVitchatAiLoading(false);
+    }
   }, []);
 
   const handleReportMessage = useCallback((msg) => {
@@ -4180,6 +4217,61 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   GIF
                 </button>
 
+                {/* AI Slash Command Suggestions Popup */}
+                {newMessage.startsWith('/ai') && (
+                  <div 
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      position: 'absolute',
+                      bottom: '100%',
+                      left: '60px',
+                      background: '#233138',
+                      border: '1px solid rgba(0,168,132,0.3)',
+                      borderRadius: '12px',
+                      padding: '0.5rem',
+                      marginBottom: '10px',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                      zIndex: 200,
+                      width: '280px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px'
+                    }}
+                  >
+                    <div style={{ fontSize: '0.75rem', color: '#00a884', fontWeight: 800, padding: '4px 8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      ✨ vitChat AI Commands
+                    </div>
+                    {[
+                      { cmd: '/ai summarize', desc: 'Summarize the recent chat history' },
+                      { cmd: '/ai reply', desc: 'Suggest a reply to the last message' },
+                      { cmd: '/ai analyze', desc: 'Analyze the sentiment of the chat' }
+                    ].filter(c => c.cmd.includes(newMessage.toLowerCase().trim())).map((c, i) => (
+                      <div 
+                        key={i}
+                        onClick={() => {
+                          setNewMessage(c.cmd + ' ');
+                          // Optionally focus the input again, but updating state is usually enough
+                        }}
+                        style={{
+                          padding: '8px 10px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          background: 'rgba(255,255,255,0.03)',
+                          color: '#e9edef',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          transition: 'background 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+                      >
+                        <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#00a884' }}>{c.cmd}</span>
+                        <span style={{ fontSize: '0.75rem', color: '#8696a0', marginTop: '2px' }}>{c.desc}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* WhatsApp Message Field */}
                 <input
                   type="text"
@@ -4190,6 +4282,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   className="wa-input-field"
                   disabled={isRecordingVoice}
                 />
+
 
                 {/* Right side icons container */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '2px', paddingRight: '4px' }}>
@@ -4404,24 +4497,53 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
             </div>
 
             <div style={{ fontSize: '0.88rem', color: '#e9edef', lineHeight: 1.6, background: 'rgba(0,168,132,0.08)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,168,132,0.2)' }}>
-              🤖 <strong>Smart Insights:</strong>
-              <p style={{ margin: '0.5rem 0 0 0', color: '#aebac1' }}>
-                This message in #{activeChannel} asks about: <em>"{vitchatAiModalMessage.content || 'Media update'}"</em>. 
-                <br /><br />
-                <strong>Suggested Quick Reply:</strong> "Understood! Thanks for sharing this information with the cohort."
-              </p>
+              {isVitchatAiLoading ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#00a884' }}>
+                  🤖 Analyzing message...
+                </div>
+              ) : vitchatAiAnalysis?.error ? (
+                <div style={{ color: '#fb7185' }}>❌ {vitchatAiAnalysis.error}</div>
+              ) : vitchatAiAnalysis ? (
+                <>
+                  🤖 <strong>{vitchatAiAnalysis.summary || 'Smart Insights'}:</strong>
+                  <div style={{ margin: '0.5rem 0 0 0', color: '#aebac1' }}>
+                    {vitchatAiAnalysis.aiResponse}
+                    <br /><br />
+                    {vitchatAiAnalysis.quickReplies && vitchatAiAnalysis.quickReplies.length > 0 && (
+                      <>
+                        <strong>Suggested Quick Replies:</strong>
+                        <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.2rem' }}>
+                          {vitchatAiAnalysis.quickReplies.map((reply, idx) => (
+                            <li key={idx} style={{ cursor: 'pointer', color: '#00a884', textDecoration: 'underline' }} onClick={() => {
+                                setNewMessage(`Replying to ${vitchatAiModalMessage.author}: ${reply}`);
+                                setvitchatAiModalMessage(null);
+                            }}>
+                                "{reply}"
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div style={{ color: '#8696a0' }}>Waiting for AI...</div>
+              )}
             </div>
 
             <div style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
-              <button
-                onClick={() => {
-                  setNewMessage(`Replying to ${vitchatAiModalMessage.author}: Got it!`);
-                  setvitchatAiModalMessage(null);
-                }}
-                style={{ padding: '0.5rem 1rem', background: '#00a884', color: '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.84rem' }}
-              >
-                Use Quick Reply
-              </button>
+              {vitchatAiAnalysis?.quickReplies && vitchatAiAnalysis.quickReplies.length > 0 && (
+                <button
+                  disabled={isVitchatAiLoading}
+                  onClick={() => {
+                    setNewMessage(`Replying to ${vitchatAiModalMessage.author}: ${vitchatAiAnalysis.quickReplies[0]}`);
+                    setvitchatAiModalMessage(null);
+                  }}
+                  style={{ padding: '0.5rem 1rem', background: '#00a884', color: '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: isVitchatAiLoading ? 'not-allowed' : 'pointer', fontSize: '0.84rem', opacity: isVitchatAiLoading ? 0.7 : 1 }}
+                >
+                  Use First Quick Reply
+                </button>
+              )}
               <button
                 onClick={() => setvitchatAiModalMessage(null)}
                 style={{ padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.08)', color: '#e9edef', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontSize: '0.84rem' }}
