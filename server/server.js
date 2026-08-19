@@ -74,7 +74,7 @@ const pusherTrigger = async (channel, event, data) => {
     const safeChannel = ('chat-' + (channel || 'general')).replace(/[^a-zA-Z0-9\-_]/g, '-').substring(0, 200);
     await pusherServer.trigger(safeChannel, event, data);
   } catch (err) {
-    console.error(`[Pusher Error] Failed to trigger ${event} on ${channel}:`, err.message);
+    console.error(`[Pusher Error] Failed to trigger ${event} on ${channel}: ${err.message}`);
   }
 };
 
@@ -1128,7 +1128,7 @@ const cleanupExpiredEvents = async () => {
         }
       }
     } catch (err) {
-      console.error(`Error deleting image asset (${url}):`, err.message);
+      console.error(`Error deleting image asset (${url}): ${err.message}`);
     }
   };
 
@@ -3435,38 +3435,68 @@ app.get('/api/auth/config', (req, res) => {
 
 app.post('/api/auth/google', authLimiter, async (req, res) => {
   try {
-    const { idToken } = req.body;
-    if (!idToken) {
-      return res.status(400).json({ error: 'Google ID token is required.' });
+    const { idToken, accessToken } = req.body;
+    if (!idToken && !accessToken) {
+      return res.status(400).json({ error: 'Google token is required.' });
     }
 
-    // Verify token with Google API directly via HTTPS
     const googleClientId = process.env.GOOGLE_CLIENT_ID;
     if (!googleClientId) {
       return res.status(500).json({ error: 'Google Sign-In is not configured on the server.' });
     }
 
-    const tokenVerificationUrl = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`;
-    const googleResponse = await fetch(tokenVerificationUrl);
-    if (!googleResponse.ok) {
-      return res.status(400).json({ error: 'Invalid Google ID token.' });
+    let email, name, email_verified, picture;
+
+    if (idToken) {
+      // Verify ID token with Google API directly via HTTPS
+      const tokenVerificationUrl = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`;
+      const googleResponse = await fetch(tokenVerificationUrl);
+      if (!googleResponse.ok) {
+        return res.status(400).json({ error: 'Invalid Google ID token.' });
+      }
+
+      const payload = await googleResponse.json();
+      
+      // Aud check (verify the client ID matches ours exactly)
+      if (payload.aud !== googleClientId) {
+        return res.status(400).json({ error: 'Google ID token audience mismatch.' });
+      }
+
+      // Iss check
+      if (payload.iss !== 'accounts.google.com' && payload.iss !== 'https://accounts.google.com') {
+        return res.status(400).json({ error: 'Google ID token issuer mismatch.' });
+      }
+
+      email = payload.email;
+      name = payload.name;
+      email_verified = payload.email_verified;
+      picture = payload.picture;
+    } else if (accessToken) {
+      // 1. Verify that this access token was issued specifically for our App Client ID
+      const tokenInfoUrl = `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`;
+      const tokenInfoRes = await fetch(tokenInfoUrl);
+      if (!tokenInfoRes.ok) {
+        return res.status(400).json({ error: 'Invalid Google Access token.' });
+      }
+      const tokenInfo = await tokenInfoRes.json();
+      if (tokenInfo.aud !== googleClientId) {
+        return res.status(400).json({ error: 'Access token audience mismatch.' });
+      }
+
+      // 2. Fetch User Profile
+      const userProfileUrl = `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${encodeURIComponent(accessToken)}`;
+      const googleResponse = await fetch(userProfileUrl);
+      if (!googleResponse.ok) {
+        return res.status(400).json({ error: 'Failed to fetch user profile.' });
+      }
+      
+      const payload = await googleResponse.json();
+      email = payload.email;
+      name = payload.name;
+      email_verified = payload.email_verified;
+      picture = payload.picture;
     }
 
-    const payload = await googleResponse.json();
-    
-    // Aud check (verify the client ID matches ours exactly)
-    const aud = payload.aud;
-    if (aud !== googleClientId) {
-      return res.status(400).json({ error: 'Google ID token audience mismatch.' });
-    }
-
-    // Iss check
-    const iss = payload.iss;
-    if (iss !== 'accounts.google.com' && iss !== 'https://accounts.google.com') {
-      return res.status(400).json({ error: 'Google ID token issuer mismatch.' });
-    }
-
-    const { email, name, email_verified, picture } = payload;
     if (!email) {
       return res.status(400).json({ error: 'Email not provided by Google account.' });
     }
@@ -7330,7 +7360,8 @@ app.post('/api/chat/messages', chatMessageLimiter, authenticate, async (req, res
 // POST /api/chat/poll-vote (Submit vote on a poll message - SEC-001)
 app.post('/api/chat/poll-vote', authenticate, async (req, res) => {
   try {
-    const { messageId, channel: reqChannel, voteData } = req.body;
+    const { channel: reqChannel, voteData } = req.body;
+    const messageId = req.body.messageId ? String(req.body.messageId) : null;
     if (!messageId || !voteData) {
       return res.status(400).json({ success: false, error: "messageId and voteData are required" });
     }

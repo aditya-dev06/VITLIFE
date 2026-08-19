@@ -4365,6 +4365,32 @@ a {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.aurora-google-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  color: #1f2937;
+  font-family: var(--font-accent, 'Inter', sans-serif);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  transition: background 0.3s, transform 0.2s;
+}
+
+.aurora-google-btn:hover {
+  background: #f9fafb;
+}
+
+.aurora-google-btn:active {
+  transform: scale(0.98);
+}
+
 .aurora-guest-btn {
   width: 100%;
   padding: 0.75rem;
