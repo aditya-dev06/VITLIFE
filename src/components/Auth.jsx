@@ -77,6 +77,10 @@ const isValidJWT = (token) => {
    ═══════════════════════════════════════════════════════════════ */
 let googleConfigPromise = null;
 const fetchGoogleConfig = () => {
+  const envClientId = import.meta.env?.VITE_GOOGLE_CLIENT_ID;
+  if (envClientId) {
+    return Promise.resolve({ googleClientId: envClientId });
+  }
   if (!googleConfigPromise) {
     googleConfigPromise = fetch('/api/auth/config')
       .then(res => res.json())
@@ -570,47 +574,47 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
       if (!data?.googleClientId || !isMounted) return;
 
       try {
-        if (!googleInitializedRef.current) {
-          window.google.accounts.id.initialize({
-            client_id: data.googleClientId,
-            callback: handleGoogleLoginResponse,
-            hosted_domain: 'vitbhopal.ac.in',
-            auto_select: false,
-            cancel_on_tap_outside: true,
-            itp_support: true,
-          });
-          googleInitializedRef.current = true;
+        window.google.accounts.id.initialize({
+          client_id: data.googleClientId,
+          callback: handleGoogleLoginResponse,
+          hosted_domain: 'vitbhopal.ac.in',
+          auto_select: false,
+          cancel_on_tap_outside: true,
+          itp_support: true,
+        });
 
-          // Trigger Instant Google One-Tap Prompt
-          window.google.accounts.id.prompt((notification) => {
-            if (IS_DEV && notification.isNotDisplayed()) {
-              console.log('[Google One-Tap] Prompt not displayed:', notification.getNotDisplayedReason());
-            }
-          });
-        }
+        // Trigger Instant Google One-Tap Prompt (Desktop side-popup)
+        window.google.accounts.id.prompt((notification) => {
+          if (IS_DEV && notification.isNotDisplayed()) {
+            console.log('[Google One-Tap] Prompt not displayed:', notification.getNotDisplayedReason());
+          }
+        });
 
-        // Render Google Sign-In button dynamically into DOM containers
+        // Render Google Sign-In button dynamically into DOM containers with dark/light theme match
+        const isDark = theme !== 'light';
+        const buttonConfig = {
+          theme: isDark ? 'filled_black' : 'outline',
+          size: 'large',
+          width: 320,
+          shape: 'rectangular',
+          logo_alignment: 'left'
+        };
+
         const loginBtn = document.getElementById('google-signin-login');
-        if (loginBtn && loginBtn.childElementCount === 0) {
+        if (loginBtn) {
+          loginBtn.innerHTML = '';
           window.google.accounts.id.renderButton(loginBtn, {
-            theme: 'outline',
-            size: 'large',
-            width: '100%',
-            text: 'signin_with',
-            shape: 'rectangular',
-            logo_alignment: 'left'
+            ...buttonConfig,
+            text: 'signin_with'
           });
         }
 
         const signupBtn = document.getElementById('google-signin-signup');
-        if (signupBtn && signupBtn.childElementCount === 0) {
+        if (signupBtn) {
+          signupBtn.innerHTML = '';
           window.google.accounts.id.renderButton(signupBtn, {
-            theme: 'outline',
-            size: 'large',
-            width: '100%',
-            text: 'signup_with',
-            shape: 'rectangular',
-            logo_alignment: 'left'
+            ...buttonConfig,
+            text: 'signup_with'
           });
         }
       } catch (err) {
@@ -623,7 +627,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
     return () => {
       isMounted = false;
     };
-  }, [authState, signupStep, handleGoogleLoginResponse]);
+  }, [authState, signupStep, theme, handleGoogleLoginResponse]);
 
   // ── Course selector state ──
   const handleCourseChange = (courseCode) => {
