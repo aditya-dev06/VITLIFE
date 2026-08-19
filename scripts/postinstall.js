@@ -19,7 +19,7 @@ console.log('RUNNING POSTINSTALL BUILD & SETUP...');
 console.log('=========================================');
 
 const runCommand = (command, args) => new Promise((resolve, reject) => {
-  const child = spawn(command, args, { stdio: 'inherit', shell: false });
+  const child = spawn(command, args, { stdio: 'inherit', shell: true });
   child.on('close', (code) => {
     if (code === 0) resolve();
     else reject(new Error(`Command failed with exit code ${code}`));
