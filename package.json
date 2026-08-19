@@ -15,7 +15,8 @@
     "postinstall": "node scripts/postinstall.js"
   },
   "overrides": {
-    "semver": "^7.5.4"
+    "semver": "^7.5.4",
+    "deepmerge-ts": "^8.0.0"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -33,7 +34,7 @@
     "ioredis": "^5.11.1",
     "katex": "^0.18.4",
     "lucide-react": "^1.25.0",
-    "mailparser": "^3.9.14",
+    "mailparser": "^3.9.15",
     "mongodb": "^7.3.0",
     "motion": "^12.40.0",
     "multer": "^2.2.0",
