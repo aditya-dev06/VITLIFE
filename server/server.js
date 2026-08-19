@@ -7884,7 +7884,7 @@ In general, AB01 means "Academic block 1", AB02 means "Academic block 2". Parse 
     
     // We will call OpenRouter or Google endpoint based on the key
     if (!apiKey.startsWith('sk-or-')) {
-      const fallbackKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY;
+      const fallbackKey = process.env.Gemini_API_Key || process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY;
       const keysToTry = [apiKey];
       if (fallbackKey && fallbackKey !== apiKey) keysToTry.push(fallbackKey);
       
