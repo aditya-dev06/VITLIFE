@@ -7869,7 +7869,7 @@ You are analyzing a chat from the campus community in the channel #${cleanChanne
     if (queryMode === 'summary') {
       systemInstruction += `\nYour task is to summarize the following message by ${cleanAuthor}: "${cleanContent}". Provide key insights.`;
     } else if (queryMode === 'reply') {
-      systemInstruction += `\nYour task is to suggest 3 quick, natural replies to this message by ${cleanAuthor}: "${cleanContent}". Return them as a bulleted list.`;
+      systemInstruction += `\nYour task is to suggest 3 quick, natural replies to this message by ${cleanAuthor}: "${cleanContent}".`;
     } else {
       systemInstruction += `\nYour task is to answer the user's question directly and uncensored. Context message by ${cleanAuthor}: "${cleanContent}".`;
     }
@@ -7877,6 +7877,22 @@ You are analyzing a chat from the campus community in the channel #${cleanChanne
     systemInstruction += `\n\nCRITICAL INSTRUCTION FOR TIMETABLE PARSING:
 If the user mentions a room number like "AB02-126", always understand it as: "Block: Academic block 2, Room no.: AB-126". 
 In general, AB01 means "Academic block 1", AB02 means "Academic block 2". Parse the block and room number accordingly.`;
+
+    systemInstruction += `\n\nCRITICAL FORMATTING & STYLE REQUIREMENT:
+At the very end of your response, you MUST provide 3 suggested quick replies that are highly contextualized, natural, conversational, and direct.
+Since this is a college/campus student community, the replies MUST feel authentic to modern student slang, roasts, and banter (similar to Meta AI on Instagram/WhatsApp chats).
+This means:
+- If the chat features playful arguments, banter, drama, or trolling, suggest replies that are roasts, "sigma" comments, or funny comebacks (e.g. "Skill issue bro 💀", "Ratio + L", "Who let him cook? 😭", "Bro think he the main character 💀").
+- If the chat is about academics, exams, or placements, suggest smart-aleck, lazy student, or highly practical reactions (e.g. "We are cooked 💀", "Can I copy your assignment?", "Attendance is a scam anyway").
+- Make the replies match the exact context and name-drop people in the chat where appropriate (e.g. "Viswajeet is cooked", "Aditya speaking facts").
+- Keep them extremely short (under 6-8 words), punchy, and use emojis (💀, 😭, 🤫, 🔥, 👑, 💅).
+- NEVER suggest boring, generic corporate helper replies like "Got it!" or "Interesting." or "Tell me more."
+
+Format them EXACTLY as:
+SUGGESTED_REPLIES:
+- [Reply 1]
+- [Reply 2]
+- [Reply 3]`;
 
     const userMessage = userPrompt ? userPrompt : (queryMode === 'summary' ? 'Summarize this message.' : 'Suggest replies.');
 
@@ -7920,18 +7936,38 @@ In general, AB01 means "Academic block 1", AB02 means "Academic block 2". Parse 
       aiResponseText = data.choices?.[0]?.message?.content || '';
     }
 
-    // Parse output
+    // Parse output to extract replies and clean the main response
     let quickReplies = [];
-    if (queryMode === 'reply') {
-      quickReplies = aiResponseText.split('\n').filter(line => line.trim().startsWith('-') || line.trim().startsWith('*')).map(line => line.replace(/^[-*]\s*/, '').trim());
-      if (quickReplies.length === 0) quickReplies = ['Thanks!', 'Noted.', 'Can you explain more?'];
+    const repliesMarker = 'SUGGESTED_REPLIES:';
+    const markerIndex = aiResponseText.indexOf(repliesMarker);
+    if (markerIndex !== -1) {
+      const repliesSection = aiResponseText.substring(markerIndex + repliesMarker.length);
+      aiResponseText = aiResponseText.substring(0, markerIndex).trim();
+      
+      quickReplies = repliesSection.split('\n')
+        .map(line => line.trim())
+        .filter(line => line.startsWith('-') || line.startsWith('*') || /^\d+\./.test(line))
+        .map(line => line.replace(/^[-*]\s*/, '').replace(/^\d+\.\s*/, '').trim())
+        .slice(0, 3);
+    }
+    
+    // Fallback if parsing failed or was incomplete
+    if (quickReplies.length < 3) {
+      const lowerText = cleanContent.toLowerCase();
+      if (lowerText.includes('exam') || lowerText.includes('pyq') || lowerText.includes('paper')) {
+        quickReplies = ['Where can I get the PYQs?', 'Is the exam syllabus released?', 'Good luck with exams!'];
+      } else if (lowerText.includes('room') || lowerText.includes('class') || lowerText.includes('timetable')) {
+        quickReplies = ['Which block is this room in?', 'Can you share the timetable?', 'Is attendance mandatory?'];
+      } else {
+        quickReplies = ['Haha true!', 'Tell me more about it', 'What should we do next?'];
+      }
     }
 
     res.json({
       success: true,
       summary: queryMode === 'summary' ? `Analysis in #${cleanChannel}` : `Reply to ${cleanAuthor}`,
       aiResponse: aiResponseText,
-      quickReplies: quickReplies.length > 0 ? quickReplies : ['Got it!', 'Interesting.', 'Tell me more.']
+      quickReplies: quickReplies
     });
 
   } catch (err) {
