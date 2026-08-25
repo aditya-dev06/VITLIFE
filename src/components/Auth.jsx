@@ -1145,10 +1145,7 @@ const Auth = ({ onLoginSuccess, theme, setTheme, onShowFeedback }) => {
                   <FloatingInput id="signup-password" label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required />
                   <p className="aurora-form-hint">Min 8 chars · uppercase · lowercase · digit · symbol (@$!%*?&)</p>
 
-                  <div className="aurora-checkbox-row">
-                    <input type="checkbox" id="vit-check" checked={isVitBhopal} onChange={(e) => { setIsVitBhopal(e.target.checked); setError(''); }} />
-                    <label htmlFor="vit-check">I am a VIT Bhopal student</label>
-                  </div>
+
 
                   <button type="submit" className="aurora-submit-btn">
                     Continue

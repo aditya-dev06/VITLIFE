@@ -3632,23 +3632,16 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     let program = 'Global Member';
 
     // Verification logic
-    if (isVitBhopal) {
-      const vitRegex = /^[a-zA-Z.-]+\.[a-zA-Z0-9]+@vitbhopal\.ac\.in$/;
-      if (!vitRegex.test(lowerEmail)) {
-        return res.status(400).json({
-          error: 'College email must follow the prototype: firstname.registrationnumber@vitbhopal.ac.in'
-        });
-      }
-      const parsed = parseVitBhopalEmail(lowerEmail);
-      if (parsed) {
-        registrationNumber = parsed.registrationNumber;
-        program = parsed.program;
-      }
-    } else {
-      const generalRegex = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
-      if (!generalRegex.test(lowerEmail)) {
-        return res.status(400).json({ error: 'Invalid email address format.' });
-      }
+    const vitRegex = /^[a-zA-Z.-]+\.[a-zA-Z0-9]+@vitbhopal\.ac\.in$/;
+    if (!vitRegex.test(lowerEmail)) {
+      return res.status(400).json({
+        error: 'College email must follow the prototype: firstname.registrationnumber@vitbhopal.ac.in'
+      });
+    }
+    const parsed = parseVitBhopalEmail(lowerEmail);
+    if (parsed) {
+      registrationNumber = parsed.registrationNumber;
+      program = parsed.program;
     }
 
     const existingUser = await findUserByEmail(lowerEmail);
@@ -3892,6 +3885,15 @@ app.post('/api/auth/login', authLimiter, authRateLimiter(10, 15 * 60 * 1000), as
     let lowerEmail = email.trim().toLowerCase();
     if (lowerEmail.endsWith('@vitbhopal')) {
       lowerEmail += '.ac.in';
+    }
+
+    const isVitDomain = lowerEmail.endsWith('@vitbhopal.ac.in');
+    const specialAdmin = isAdminEmail(lowerEmail);
+
+    if (!isVitDomain && !specialAdmin) {
+      return res.status(403).json({
+        error: 'Access Denied: Please use your official VIT Bhopal student email (@vitbhopal.ac.in).'
+      });
     }
 
     const user = await findUserByEmail(lowerEmail);
