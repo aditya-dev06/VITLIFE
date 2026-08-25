@@ -7634,25 +7634,28 @@ AI: Summary: 95% pure bakchodi, 5% attendance panic, and exactly 0% studying hap
     if (apiKey) {
       try {
         if (!apiKey.startsWith('sk-or-')) {
-          const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              systemInstruction: { parts: [{ text: systemInstruction }] },
-              contents: [{ parts: [{ text: userMessage }] }],
-              generationConfig: {
-                temperature: 1.0,
-                maxOutputTokens: 1000,
-                thinkingConfig: { thinkingBudget: 0 }
+          const candidateModels = ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'];
+          for (const modelName of candidateModels) {
+            try {
+              const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+              const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  systemInstruction: { parts: [{ text: systemInstruction }] },
+                  contents: [{ parts: [{ text: userMessage }] }]
+                })
+              });
+              const data = await response.json();
+              if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+                aiResponseText = data.candidates[0].content.parts[0].text;
+                break; // Found successful generation
+              } else if (data.error) {
+                console.warn(`[vitChat AI] ${modelName} notice:`, data.error.message);
               }
-            })
-          });
-          const data = await response.json();
-          if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-            aiResponseText = data.candidates[0].content.parts[0].text;
-          } else if (data.error) {
-            console.warn('[vitChat AI] Gemini API error:', data.error.message);
+            } catch (mErr) {
+              console.warn(`[vitChat AI] Error on ${modelName}:`, mErr.message);
+            }
           }
         } else {
           const endpoint = 'https://openrouter.ai/api/v1/chat/completions';
@@ -7665,7 +7668,7 @@ AI: Summary: 95% pure bakchodi, 5% attendance panic, and exactly 0% studying hap
               'X-Title': 'vitChat'
             },
             body: JSON.stringify({
-              model: 'meta-llama/llama-3.1-8b-instruct:free',
+              model: 'meta-llama/llama-3.3-70b-instruct:free',
               messages: [
                 { role: 'system', content: systemInstruction },
                 { role: 'user', content: userMessage }
