@@ -10,6 +10,28 @@ export function useChatNotifications({ user, activeTab, activeChatChannel }) {
   const bannerTimeoutRef = useRef(null);
   const pusherInstanceRef = useRef(null);
 
+  // Per-channel mute preferences
+  const [mutedChannels, setMutedChannels] = useState(() => {
+    try {
+      const stored = localStorage.getItem('vit_muted_channels');
+      return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  // Listen for channel mute toggles across components
+  useEffect(() => {
+    const handleMuteToggle = () => {
+      try {
+        const stored = localStorage.getItem('vit_muted_channels');
+        setMutedChannels(stored ? JSON.parse(stored) : []);
+      } catch (e) {}
+    };
+    window.addEventListener('channel-mute-toggled', handleMuteToggle);
+    return () => window.removeEventListener('channel-mute-toggled', handleMuteToggle);
+  }, []);
+
   // Read initial permission status
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -75,6 +97,11 @@ export function useChatNotifications({ user, activeTab, activeChatChannel }) {
 
     // Ignore messages sent by oneself
     if (notif.author === currentUserName || (notif.authorRegNo && notif.authorRegNo.toLowerCase() === currentUserReg)) {
+      return;
+    }
+
+    // If channel is muted by user, suppress all sound, banners, and OS push alerts
+    if (mutedChannels.includes(notif.channel)) {
       return;
     }
 

@@ -2551,15 +2551,31 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     }
   };
 
-  const handleToggleSoundMute = () => {
-    const nextMuted = soundEffects.toggleMute();
-    setIsChatMuted(nextMuted);
-    if (!nextMuted) {
-      soundEffects.playMessageChime();
-      showToast('🔔 Chat sounds unmuted!', 'info');
-    } else {
-      showToast('🔕 Chat sounds muted.', 'info');
+  const [mutedChannels, setMutedChannels] = useState(() => {
+    try {
+      const stored = localStorage.getItem('vit_muted_channels');
+      return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      return [];
     }
+  });
+
+  const handleToggleMuteChannel = (channelId) => {
+    if (!channelId) return;
+    const isCurrentlyMuted = mutedChannels.includes(channelId);
+    let updated;
+    if (isCurrentlyMuted) {
+      updated = mutedChannels.filter(id => id !== channelId);
+      showToast(`🔔 Unmuted notifications for this chat`, 'success');
+    } else {
+      updated = [...mutedChannels, channelId];
+      showToast(`🔕 Muted notifications for this chat`, 'info');
+    }
+    setMutedChannels(updated);
+    try {
+      localStorage.setItem('vit_muted_channels', JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent('channel-mute-toggled', { detail: { channelId, isMuted: !isCurrentlyMuted } }));
+    } catch (e) {}
   };
 
   const ALL_BATCH_CHANNELS = useMemo(() => [
@@ -4309,6 +4325,9 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                           {ch.regNo}
                         </span>
                       )}
+                      {mutedChannels.includes(ch.id) && (
+                        <span title="Notifications Muted" style={{ fontSize: '0.72rem', opacity: 0.65 }}>🔕</span>
+                      )}
                     </span>
                     <span className="wa-chat-item-time">{lastMsg ? lastMsg.timestamp : ''}</span>
                   </div>
@@ -4364,6 +4383,9 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
             <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
               <div style={{ color: '#e9edef', fontWeight: 700, fontSize: '0.92rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.2', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <span>{activeChannelObj.id.startsWith('dm_') ? activeChannelObj.name : `#${activeChannelObj.label}`}</span>
+                {mutedChannels.includes(activeChannelObj.id) && (
+                  <span title="Notifications Muted" style={{ fontSize: '0.78rem', opacity: 0.7 }}>🔕</span>
+                )}
                 {activeChannelObj.id.startsWith('dm_') && activeChannelObj.regNo && (
                   <span style={{ fontSize: '0.68rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: 'rgba(0,168,132,0.18)', color: '#00a884', fontWeight: 700 }}>
                     {activeChannelObj.regNo}
@@ -4432,8 +4454,14 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   <DropdownMenuItem icon="ℹ️" onClick={() => setShowChannelInfoModal(true)}>
                     Channel Info
                   </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    icon={mutedChannels.includes(activeChannel) ? "🔔" : "🔕"} 
+                    onClick={() => handleToggleMuteChannel(activeChannel)}
+                  >
+                    {mutedChannels.includes(activeChannel) ? "Unmute This Chat" : "Mute This Chat"}
+                  </DropdownMenuItem>
                   <DropdownMenuItem icon={isChatMuted ? "🔕" : "🔔"} onClick={handleToggleSoundMute}>
-                    {isChatMuted ? "Unmute Sounds" : "Mute Sounds"}
+                    {isChatMuted ? "Unmute App Sounds" : "Mute App Sounds"}
                   </DropdownMenuItem>
                   <DropdownMenuItem icon="📲" onClick={handleEnablePushNotifications}>
                     Enable Push Alerts
