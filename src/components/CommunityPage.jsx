@@ -2551,6 +2551,17 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     }
   };
 
+  const handleToggleSoundMute = () => {
+    const nextMuted = soundEffects.toggleMute();
+    setIsChatMuted(nextMuted);
+    if (!nextMuted) {
+      soundEffects.playMessageChime();
+      showToast('🔔 App sounds unmuted!', 'info');
+    } else {
+      showToast('🔕 App sounds muted.', 'info');
+    }
+  };
+
   const [mutedChannels, setMutedChannels] = useState(() => {
     try {
       const stored = localStorage.getItem('vit_muted_channels');
