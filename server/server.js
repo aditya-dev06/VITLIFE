@@ -18,6 +18,7 @@ import { v2 as cloudinary } from 'cloudinary';
 // Redis is dynamically imported below only when REDIS_URL is set
 import { parseEmailToCardPayload, scanCollegeInboxAndIngest } from './services/emailPipeline.js';
 import Pusher from 'pusher';
+import { getAuthenticHumanResponse, sanitizeHumanTone } from './humorEngine.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -7682,22 +7683,20 @@ AI: Summary: 95% pure bakchodi, 5% attendance panic, and exactly 0% studying hap
       }
     }
 
-    aiResponseText = (aiResponseText || '').replace(/SUGGESTED_REPLIES:[\s\S]*$/i, '').trim();
+    // Apply human sanitizer to remove robotic AI clichés
+    aiResponseText = sanitizeHumanTone(aiResponseText);
 
-    // Instant resilient fallback if API key is rate-limited or unavailable
+    // If API response is empty, rate-limited, or failed, pull authentic human campus response
     if (!aiResponseText) {
-      if (isRoast) {
-        const roasts = [
-          `Bro asked for a roast like their attendance isn't already roasting them daily 💀 🗿`,
-          `Bro is asking me to roast them while their attendance is sitting comfortably at 68% 😭 🔥`,
-          `I would roast you, but honestly the 8:30 AM class in AB02 already did that job 💀 💅`,
-          `Bro typed that with 2% battery and zero completed assignments 🤫 💀`
-        ];
-        aiResponseText = roasts[Math.floor(Math.random() * roasts.length)];
+      const authenticReply = getAuthenticHumanResponse(cleanPrompt || userPrompt, cleanAuthor);
+      if (authenticReply) {
+        aiResponseText = authenticReply;
+      } else if (isRoast) {
+        aiResponseText = `${cleanAuthor} ko roast karke kya faayda bhai, uski 74.8% attendance dekh ke lagta hai VTOP pehle hi roast kar chuka hai 💀🗿`;
       } else if (isSummarize) {
         aiResponseText = `📋 **Chat Summary:**\n• 95% campus bakchodi\n• 5% attendance panic\n• 0% studying completed 💀`;
       } else {
-        aiResponseText = `Bro typed that like their CGPA is above 9.0 💀 What do you want, ${cleanAuthor}? 🗿`;
+        aiResponseText = `Bhai pehle 8:30 AM wali class me time pe pahuch ja, fir baat karenge 💀🗿`;
       }
     }
 
