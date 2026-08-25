@@ -38,6 +38,8 @@ const MarketplacePage = safeLazy(() => import('./components/MarketplacePage'));
 const FacultyDirectory = safeLazy(() => import('./components/FacultyDirectory'));
 const FeedbackModal = safeLazy(() => import('./components/FeedbackModal'));
 const EditProfileModal = safeLazy(() => import('./components/EditProfileModal'));
+import { useChatNotifications } from './hooks/useChatNotifications';
+import WhatsAppNotificationBanner from './components/WhatsAppNotificationBanner';
 
 // Global fetch interceptor to catch 401/403 responses and trigger logouts (HMR-safe)
 if (!window.fetch.__isWrapped) {
@@ -137,6 +139,27 @@ function App() {
   const [guideVisible, setGuideVisible] = useState(false);
   const [eventsLocked, setEventsLocked] = useState(true);
   const lastScrollY = useRef(0);
+
+  // Global WhatsApp-style Chat Notification System
+  const [activeChatChannel, setActiveChatChannel] = useState('general');
+  const {
+    unreadCount,
+    activeNotification,
+    permissionStatus,
+    requestPermission,
+    dismissBanner,
+    clearChannelUnread
+  } = useChatNotifications({ user, activeTab, activeChatChannel });
+
+  const handleOpenNotificationChat = useCallback((notif) => {
+    dismissBanner();
+    setActiveTab('chats');
+    if (notif?.channel) {
+      setActiveChatChannel(notif.channel);
+      window.__targetChatChannel = notif.channel;
+      window.dispatchEvent(new CustomEvent('switch-chat-channel', { detail: { channel: notif.channel } }));
+    }
+  }, [dismissBanner]);
 
   useEffect(() => {
     cachedFetch('/api/settings/guide-visible')
@@ -839,6 +862,13 @@ function App() {
 
   return (
     <div className="app-container">
+      {/* WhatsApp-Style In-App Real-Time Notification Banner */}
+      <WhatsAppNotificationBanner 
+        notification={activeNotification}
+        onOpenChat={handleOpenNotificationChat}
+        onClose={dismissBanner}
+      />
+
       {/* Sidebar Navigation */}
       <AppSidebar
         user={user}
@@ -854,6 +884,7 @@ function App() {
         theme={theme}
         onToggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
         onEditProfile={() => setShowEditProfile(true)}
+        unreadCount={unreadCount}
       />
 
       {/* Main Panel View */}
@@ -1101,6 +1132,7 @@ function App() {
               </svg>
             ),
             label: 'Chat',
+            badge: unreadCount,
             onClick: () => handleTabClick('chats'),
             className: activeTab === 'chats' ? 'active' : ''
           });
@@ -1173,6 +1205,7 @@ function App() {
               </svg>
             ),
             label: 'Chat',
+            badge: unreadCount,
             onClick: () => handleTabClick('chats'),
             className: activeTab === 'chats' ? 'active' : ''
           });

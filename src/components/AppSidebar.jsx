@@ -56,6 +56,7 @@ function AppSidebar({
   onAboutUs,
   onLogout,
   onEditProfile,
+  unreadCount = 0,
 }) {
   const { theme, setTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
@@ -262,6 +263,29 @@ function AppSidebar({
                     )}
                     <Icon size={18} className="sidebar-nav-icon" />
                     <span className="sidebar-nav-label">{label}</span>
+                    {(id === 'chats' || id === 'community') && unreadCount > 0 && (
+                      <span
+                        style={{
+                          marginLeft: 'auto',
+                          marginRight: collapsed ? '0' : '4px',
+                          minWidth: '18px',
+                          height: '18px',
+                          padding: '0 5px',
+                          borderRadius: '999px',
+                          background: '#25D366',
+                          color: '#000000',
+                          fontSize: '0.68rem',
+                          fontWeight: '800',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 2px 8px rgba(37, 211, 102, 0.4)',
+                          zIndex: 2
+                        }}
+                      >
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
                     <span className="sidebar-nav-pip" />
                   </button>
                 </li>

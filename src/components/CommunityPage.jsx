@@ -21,6 +21,7 @@ import { ForwardMessageModal } from './ForwardMessageModal';
 import { useToast } from '../hooks/useToast';
 import { useTheme } from './theme-provider';
 import MarketplacePage from './MarketplacePage';
+import { soundEffects } from '../utils/soundEffects';
 import './WhatsAppPolls.css';
 
 
@@ -2531,6 +2532,36 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
   const [isSendingDmRequest, setIsSendingDmRequest] = useState(false);
   const [showRequestsDrawer, setShowRequestsDrawer] = useState(false);
 
+  // WhatsApp-style notification and sound preferences
+  const [pushPermState, setPushPermState] = useState(() => typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'denied');
+  const [isChatMuted, setIsChatMuted] = useState(() => soundEffects.getIsMuted());
+
+  const handleEnablePushNotifications = async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        const perm = await Notification.requestPermission();
+        setPushPermState(perm);
+        if (perm === 'granted') {
+          soundEffects.playMessageChime();
+          showToast('🔔 WhatsApp-style notifications enabled!', 'success');
+        } else {
+          showToast('Notifications blocked in browser settings.', 'error');
+        }
+      } catch (e) {}
+    }
+  };
+
+  const handleToggleSoundMute = () => {
+    const nextMuted = soundEffects.toggleMute();
+    setIsChatMuted(nextMuted);
+    if (!nextMuted) {
+      soundEffects.playMessageChime();
+      showToast('🔔 Chat sounds unmuted!', 'info');
+    } else {
+      showToast('🔕 Chat sounds muted.', 'info');
+    }
+  };
+
   const ALL_BATCH_CHANNELS = useMemo(() => [
     { id: 'batch-2023', label: '23-batch-lounge', icon: '🎓', name: '23 Batch Lounge', desc: 'Exclusive community channel for 2023 Batch students', batchYear: '23', isPublic: false, isBatch: true },
     { id: 'batch-2024', label: '24-batch-lounge', icon: '🎓', name: '24 Batch Lounge', desc: 'Exclusive community channel for 2024 Batch students', batchYear: '24', isPublic: false, isBatch: true },
@@ -3247,6 +3278,23 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     } catch (e) {}
   };
 
+  // Handle external channel navigation from WhatsApp notifications
+  useEffect(() => {
+    if (window.__targetChatChannel) {
+      handleChannelSelect(window.__targetChatChannel);
+      window.__targetChatChannel = null;
+    }
+
+    const handleSwitchEvent = (e) => {
+      if (e.detail && e.detail.channel) {
+        handleChannelSelect(e.detail.channel);
+      }
+    };
+
+    window.addEventListener('switch-chat-channel', handleSwitchEvent);
+    return () => window.removeEventListener('switch-chat-channel', handleSwitchEvent);
+  }, []);
+
   // Phone Gesture & Hardware Back Button (popstate) Listener
   useEffect(() => {
     const handleCommunityPopState = (e) => {
@@ -3733,6 +3781,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     };
 
     setMessages(prev => [...prev, msg]);
+    soundEffects.playSentSound();
     setNewMessage('');
     setSelectedAttachment(null);
     setAttachmentPreview(null);
@@ -4141,6 +4190,47 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
           </div>
         )}
 
+        {/* WhatsApp Web Push Notification Permission Prompt */}
+        {pushPermState === 'default' && (
+          <div 
+            style={{
+              margin: '0.35rem 0.75rem 0.55rem 0.75rem',
+              padding: '0.55rem 0.75rem',
+              borderRadius: '10px',
+              background: 'rgba(37, 211, 102, 0.1)',
+              border: '1px solid rgba(37, 211, 102, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '8px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+              <span style={{ fontSize: '1.1rem' }}>🔔</span>
+              <div style={{ fontSize: '0.74rem', color: '#d1d5db', lineHeight: 1.25 }}>
+                <strong style={{ color: '#25D366' }}>Enable Push Alerts</strong>
+                <div style={{ color: '#9ca3af', fontSize: '0.68rem' }}>Get notified for DMs &amp; mentions</div>
+              </div>
+            </div>
+            <button
+              onClick={handleEnablePushNotifications}
+              style={{
+                flexShrink: 0,
+                padding: '4px 9px',
+                borderRadius: '8px',
+                background: '#25D366',
+                color: '#000000',
+                border: 'none',
+                fontSize: '0.72rem',
+                fontWeight: '800',
+                cursor: 'pointer'
+              }}
+            >
+              Turn On
+            </button>
+          </div>
+        )}
+
         {/* Rooms List */}
         <div className="wa-chat-list">
           {sidebarTab === 'dms' && CHANNELS.filter(ch => ch.id.startsWith('dm_')).length === 0 && (
@@ -4325,8 +4415,11 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   <DropdownMenuItem icon="ℹ️" onClick={() => setShowChannelInfoModal(true)}>
                     Channel Info
                   </DropdownMenuItem>
-                  <DropdownMenuItem icon="🔔" onClick={() => showToast('Notifications muted for 8 hours 🔕', 'info')}>
-                    Mute Notifications
+                  <DropdownMenuItem icon={isChatMuted ? "🔕" : "🔔"} onClick={handleToggleSoundMute}>
+                    {isChatMuted ? "Unmute Sounds" : "Mute Sounds"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem icon="📲" onClick={handleEnablePushNotifications}>
+                    Enable Push Alerts
                   </DropdownMenuItem>
                   <DropdownMenuItem icon="🧹" onClick={handleClearHistory}>
                     Clear Messages
