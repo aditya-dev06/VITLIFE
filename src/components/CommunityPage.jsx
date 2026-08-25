@@ -4397,11 +4397,6 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                 {mutedChannels.includes(activeChannelObj.id) && (
                   <span title="Notifications Muted" style={{ fontSize: '0.78rem', opacity: 0.7 }}>🔕</span>
                 )}
-                {activeChannelObj.id.startsWith('dm_') && activeChannelObj.regNo && (
-                  <span style={{ fontSize: '0.68rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: 'rgba(0,168,132,0.18)', color: '#00a884', fontWeight: 700 }}>
-                    {activeChannelObj.regNo}
-                  </span>
-                )}
               </div>
               <div style={{ color: isPeerTyping ? '#00a884' : '#8696a0', fontSize: '0.7rem', fontWeight: isPeerTyping ? 700 : 400, transition: 'color 0.2s ease', display: 'flex', alignItems: 'center', gap: '0.35rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {isPeerTyping ? (
@@ -5327,10 +5322,17 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
               {activeChannelObj.icon}
             </div>
             <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.25rem', fontWeight: 800 }}>
-              {activeChannelObj.id.startsWith('dm_') ? activeChannelObj.name : `#${activeChannelObj.label}`}
+              {activeChannelObj.id.startsWith('dm_') ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem' }}>
+                  <span>{activeChannelObj.name}</span>
+                  <span style={{ fontSize: '0.9rem', padding: '0.2rem 0.6rem', borderRadius: '6px', background: 'rgba(0,168,132,0.18)', color: '#00a884', fontWeight: 700 }}>
+                    {activeChannelObj.regNo}
+                  </span>
+                </div>
+              ) : `#${activeChannelObj.label}`}
             </h3>
             <p style={{ fontSize: '0.85rem', color: '#8696a0', margin: '0 0 1rem 0' }}>
-              {activeChannelObj.desc}
+              {activeChannelObj.id.startsWith('dm_') ? 'Private chat' : activeChannelObj.desc}
             </p>
             <div style={{ background: '#202c33', borderRadius: '10px', padding: '0.85rem', textAlign: 'left', fontSize: '0.82rem', color: '#aebac1' }}>
               <div>👥 {onlineStats.totalMembers} {onlineStats.totalMembers === 1 ? 'Member' : 'Members'} ({onlineStats.onlineCount} Active Online)</div>

@@ -101,7 +101,15 @@ if (!window.fetch.__isWrapped) {
 const INITIAL_SKILLS = [];
 
 function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const storedToken = localStorage.getItem('ds_ai_token');
+      if (storedToken) return 'dashboard';
+      return 'auth';
+    } catch (e) {
+      return 'auth';
+    }
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [token, setToken] = useState(localStorage.getItem('ds_ai_token'));
   const [user, setUser] = useState(() => {
@@ -111,8 +119,7 @@ function App() {
         const cachedUser = localStorage.getItem('ds_ai_user');
         return cachedUser ? JSON.parse(cachedUser) : null;
       }
-      const cachedGuest = localStorage.getItem('ds_guest_user');
-      return cachedGuest ? JSON.parse(cachedGuest) : null;
+      return null; // Force unlogged users to authenticate or click guest again
     } catch (e) {
       return null;
     }
@@ -459,7 +466,7 @@ function App() {
     setUser(null);
     setSkills(INITIAL_SKILLS);
     setXpPoints(0);
-    setActiveTab('dashboard');
+    setActiveTab('auth');
     setMobileMenuOpen(false);
     setShowEditProfile(false);
     setShowMobileProfileSheet(false);
