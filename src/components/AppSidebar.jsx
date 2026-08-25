@@ -266,8 +266,11 @@ function AppSidebar({
                     {(id === 'chats' || id === 'community') && unreadCount > 0 && (
                       <span
                         style={{
-                          marginLeft: 'auto',
+                          marginLeft: collapsed ? '0' : 'auto',
                           marginRight: collapsed ? '0' : '4px',
+                          position: collapsed ? 'absolute' : 'relative',
+                          top: collapsed ? '6px' : 'auto',
+                          right: collapsed ? '8px' : 'auto',
                           minWidth: '18px',
                           height: '18px',
                           padding: '0 5px',
@@ -275,15 +278,26 @@ function AppSidebar({
                           background: '#25D366',
                           color: '#000000',
                           fontSize: '0.68rem',
-                          fontWeight: '800',
-                          display: 'flex',
+                          fontWeight: '900',
+                          display: 'inline-flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          boxShadow: '0 2px 8px rgba(37, 211, 102, 0.4)',
-                          zIndex: 2
+                          gap: '3px',
+                          boxShadow: '0 0 10px rgba(37, 211, 102, 0.75), 0 2px 5px rgba(0,0,0,0.4)',
+                          zIndex: 2,
+                          lineHeight: 1
                         }}
                       >
-                        {unreadCount > 99 ? '99+' : unreadCount}
+                        <span
+                          style={{
+                            width: '5px',
+                            height: '5px',
+                            borderRadius: '50%',
+                            background: '#044c20',
+                            display: 'inline-block'
+                          }}
+                        />
+                        <span>{unreadCount > 99 ? '99+' : unreadCount}</span>
                       </span>
                     )}
                     <span className="sidebar-nav-pip" />

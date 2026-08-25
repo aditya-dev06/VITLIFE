@@ -43,24 +43,36 @@ function Dock({
                 <span
                   style={{
                     position: 'absolute',
-                    top: '-2px',
-                    right: '6px',
-                    minWidth: '16px',
-                    height: '16px',
-                    padding: '0 4px',
+                    top: '-3px',
+                    right: '4px',
+                    minWidth: '18px',
+                    height: '18px',
+                    padding: '0 5px',
                     borderRadius: '999px',
                     background: '#25D366',
                     color: '#000000',
-                    fontSize: '0.62rem',
-                    fontWeight: '800',
-                    display: 'flex',
+                    fontSize: '0.66rem',
+                    fontWeight: '900',
+                    display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    boxShadow: '0 2px 8px rgba(37, 211, 102, 0.4)',
-                    zIndex: 10
+                    gap: '3px',
+                    boxShadow: '0 0 10px rgba(37, 211, 102, 0.75), 0 2px 5px rgba(0,0,0,0.5)',
+                    border: '1.5px solid rgba(17, 24, 39, 0.9)',
+                    zIndex: 10,
+                    lineHeight: 1
                   }}
                 >
-                  {item.badge > 99 ? '99+' : item.badge}
+                  <span
+                    style={{
+                      width: '5px',
+                      height: '5px',
+                      borderRadius: '50%',
+                      background: '#044c20',
+                      display: 'inline-block'
+                    }}
+                  />
+                  <span>{item.badge > 99 ? '99+' : item.badge}</span>
                 </span>
               )}
               <div className="dock-icon" aria-hidden="true">{item.icon}</div>

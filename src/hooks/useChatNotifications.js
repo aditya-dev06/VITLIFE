@@ -78,14 +78,17 @@ export function useChatNotifications({ user, activeTab, activeChatChannel }) {
       return;
     }
 
-    const isCurrentActiveView = activeTab === 'community' && activeChatChannel === notif.channel;
+    // Check if user currently has the app chat opened on this specific channel
+    const isChatOpen = (activeTab === 'chats' || activeTab === 'community');
+    const currentOpenChannel = (typeof window !== 'undefined' && window.__currentActiveChatChannel) || activeChatChannel || 'general';
+    const isCurrentActiveView = isChatOpen && currentOpenChannel === notif.channel;
 
-    // If user is currently looking at this active channel, do not show banner or increment unread
+    // If user already has the chat open on this active channel and tab is visible, DO NOT play sound or show banner or increment unread
     if (isCurrentActiveView && !document.hidden) {
       return;
     }
 
-    // 1. Play signature WhatsApp incoming message chime
+    // 1. Play signature WhatsApp incoming message chime (only when NOT in active view)
     soundEffects.playMessageChime();
 
     // 2. Increment unread counter

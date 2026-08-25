@@ -3269,6 +3269,10 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
     setActiveChannel(chId);
     setUnreadCounts(prev => ({ ...prev, [chId]: 0 }));
     setShowMobileChat(true);
+    if (typeof window !== 'undefined') {
+      window.__currentActiveChatChannel = chId;
+      window.dispatchEvent(new CustomEvent('active-chat-channel-changed', { detail: { channel: chId } }));
+    }
     // Clear stale localStorage message cache so we don't show old channel's messages
     try {
       localStorage.removeItem('ds_community_messages_v2');
@@ -3277,6 +3281,19 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       window.history.pushState({ view: 'chat-channel', channel: chId }, '', `#channel-${chId}`);
     } catch (e) {}
   };
+
+  // Sync initial and dynamic active channel to window.__currentActiveChatChannel
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.__currentActiveChatChannel = activeChannel;
+      window.dispatchEvent(new CustomEvent('active-chat-channel-changed', { detail: { channel: activeChannel } }));
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.__currentActiveChatChannel = null;
+      }
+    };
+  }, [activeChannel]);
 
   // Handle external channel navigation from WhatsApp notifications
   useEffect(() => {

@@ -161,6 +161,26 @@ function App() {
     }
   }, [dismissBanner]);
 
+  // Sync activeChatChannel with CommunityPage and clear unread
+  useEffect(() => {
+    const handleActiveChannelChange = (e) => {
+      if (e.detail && e.detail.channel) {
+        setActiveChatChannel(e.detail.channel);
+        window.__currentActiveChatChannel = e.detail.channel;
+        clearChannelUnread(e.detail.channel);
+      }
+    };
+    window.addEventListener('active-chat-channel-changed', handleActiveChannelChange);
+    return () => window.removeEventListener('active-chat-channel-changed', handleActiveChannelChange);
+  }, [clearChannelUnread]);
+
+  // Clear unread when user opens the chat tab
+  useEffect(() => {
+    if (activeTab === 'chats' || activeTab === 'community') {
+      clearChannelUnread(window.__currentActiveChatChannel || activeChatChannel);
+    }
+  }, [activeTab, activeChatChannel, clearChannelUnread]);
+
   useEffect(() => {
     cachedFetch('/api/settings/guide-visible')
       .then(res => res.json())
