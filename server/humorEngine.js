@@ -5,63 +5,53 @@
  * across Hinglish and English. Banned from corporate chatbot fluff and robotic tropes.
  */
 
-// Curated authentic human campus dialogue patterns
+// Curated authentic human campus dialogue patterns across multiple diverse domains
 const HUMAN_CAMPUS_DATABASE = {
   nameRoastsHinglish: [
-    (name) => `${name} bhai, pehle 8:30 wali class me time pe pahuch ja, roast baad me le liyo 💀🗿`,
-    (name) => `${name} ko roast karke kya faayda, uski 74.8% attendance dekh ke lagta hai VTOP pehle hi roast kar chuka hai 😭💀`,
-    (name) => `${name} bhai se ek 5-mark Moodle quiz solve nahi hota aur chale hain chat me chaud dikhane 💀🤡`,
-    (name) => `Arre ${name} bhai, itna overconfidence kahan se laate ho? CAT-1 ke marks toh abhi tak check nahi kiye tune 💀🔥`,
-    (name) => `Isko lagta hai 6.8 CGPA aur zero coding ke saath Google seedha hostel room me offer letter fenkegi 💀🗿`,
-    (name) => `${name} bhai tu wahi hai na jo mass bunk ke din bhi pehli bench pe jaake baith jata hai? 😭🤡`,
-    (name) => `${name} tu pehle Underbelly ka udhar chuka, fir aake yahan gyaan baatna 💀💅`,
-    (name) => `${name} bhai ki attendance aur battery dono 2% pe chal rahi hai 🤫💀`
+    (name) => `${name} group me aise expert banta hai jaise Shark Tank ka chautha judge yahi ho 💀 Shakal dekh ke lagta hai calculator me bhi syntax error la dega.`,
+    (name) => `${name} bhai, itna overconfidence kahan se laate ho? Teri baatein sun ke lagta hai dimag pe airplane mode laga hua hai 😭💀`,
+    (name) => `${name} reels dekh ke khud ko alpha male samajh raha hai, jabki dukan pe 5 rupaye ka change maangte hue iski aawaz kaanpti hai 💀🤡`,
+    (name) => `Isko lagta hai bina padhe 50 LPA ka package iske ghar pe parcel ho jayega 💀 Chill kar ${name} bhai.`,
+    (name) => `${name} bhai se ek basic puzzle solve nahi hoti aur chale hain chat me gyaan baatne 💀💅`,
+    (name) => `${name} ki baaton me utna hi dum hai jitna ₹50 wale Bluetooth headphones ke bass me hota hai 😭🔥`,
+    (name) => `${name} bhai chup ho ja, teri baatein sun ke background me clown music bajne lagta hai 🤡💀`
   ],
 
   nameRoastsEnglish: [
-    (name) => `${name} you're literally one attendance percentage away from getting debarred, chill out 💀`,
-    (name) => `I would roast ${name} but honestly their 6.2 CGPA and 8:30 AM alarms are already doing that 💀🗿`,
-    (name) => `${name} is talking a lot for someone who submitted their assignment at 11:59:59 PM with a corrupted PDF 😭💀`,
-    (name) => `${name} chill bro, even VTOP servers have a higher success rate than your semester goals 💀🔥`,
-    (name) => `${name} sitting here acting all sigma while their attendance is clutching 74.9% for dear life 🗿💀`
+    (name) => `${name} is talking a lot for someone who needs Google to solve 2+2 under pressure 💀`,
+    (name) => `${name} acts like the main character when in reality they wouldn't even make the background credits 💀🗿`,
+    (name) => `I would roast ${name}, but their life decisions and search history are already doing all the heavy lifting 😭💀`,
+    (name) => `${name} has the confidence of a full-stack developer with the skills of a 'Hello World' tutorial 💀🔥`
   ],
 
   attendanceHinglish: [
-    `75% attendance criteria dekh ke ro rahe ho? Pehle class jana shuru karo, proxy har roz nahi lagti 💀🗿`,
-    `Bhai 8:30 AM wali class ke liye AB02 tak daud lagate hue aadhi aatma nikal jaati hai 😭💀`,
-    `Attendance 68% pe hai aur bhai ko lagta hai warden debarment list se naam hata dega 🤡💀`,
-    `Kal subah AB02 ki 8:30 wali class me proxy lagwane ka sapna dekh rahe ho? Faculty ne pehle hi biometric laga diya hai 💀🔥`
+    `Pehle time pe uthna seekh lo bhai, proxy ke bharose degree nahi milti 💀🗿`,
+    `Subah 8 baje alarm bajta hai toh bhai phone ko hi dushman samajh leta hai 😭💀`
   ],
 
   examHinglish: [
-    `Kal subah CAT exam hai aur bhai ko ab yaad aa raha hai ki syllabus me 5 module the 💀😭`,
-    `Exam se 2 ghante pehle YouTube pe 'One Shot Full Syllabus in 15 Minutes' dekhne se 9 CGPA nahi aayegi bhai 💀🗿`,
-    `Moodle quiz me 10 me se 2 number laake bhai chill kar raha hai jaise placement ho gayi ho 😭🤡`,
-    `FAT exam ka wait mat kar bhai, abhi bhi waqt hai backlogs ki fee jama kar de 💀💸`
+    `Exam se 2 ghante pehle YouTube pe 'One Shot Full Syllabus in 15 Minutes' dekhne se topper nahi banega bhai 💀🗿`,
+    `Quiz me tukke maar ke bhai aise chill kar raha hai jaise rank 1 aayi ho 😭🤡`
   ],
 
   campusLifeHinglish: [
-    `Aadha campus AB02 ke samne Maggi pe zinda hai, aur baaki aadha VTOP refresh karte hue 💀 Classic VIT Bhopal scene 😭`,
-    `Wahi roz ka drama — 8:30 ki class, Nescafe ki cold coffee, aur attendance check karte hue collective depression 💀🗿`,
-    `Campus me sab shaant hai kyunki aadhe log so rahe hain aur aadhe assignment copy-paste karne me busy hain 😭🔥`,
-    `Underbelly me Maggi khatam ho gayi hai, hostel me Wi-Fi down hai. Survival mode on hai bhai 💀🏕️`
+    `Wahi roz ka scene — aadhe log so rahe hain, aadhe reel scroll kar rahe hain, aur baaki group me bakwaas 💀`,
+    `Group me sab ek dusre ko gyaan de rahe hain jaise sabke paas 5 saal ka CEO experience ho 😭🔥`
   ],
 
   simpingHinglish: [
-    `Pehle apni 6.8 CGPA aur 70% attendance sambhal le bhai, fir romance sochna 💀🤡`,
-    `Bhai crush ko dekh ke muskurane se placement nahi lagti, thoda LeetCode bhi khol liya kar 😭💀`,
-    `Bandi toh dur ki baat hai, pehle 8:30 AM wali class me time pe pahuch ke dikha 💀🗿`
+    `6 ghante tak novel likh ke tujhe sirf 'K' mil raha hai? 💀 Thoda self-respect pe bhi invest kar le bhai 😭🤡`,
+    `Crush ko impress karne ke chakkar me bhai ne apna career side character bana diya hai 💀💅`
   ],
 
   placementHinglish: [
-    `Placement prep? Bhai, half the batch is still trying to figure out which hostel block they're in 💀 Calm down.`,
-    `DSA ke 2 question karke bhai ko lag raha hai ki Sundar Pichai khud refer karne aayega 💀🤡`,
-    `Resume me 'Proficient in Python (print hello world)' likhne walo ko 40 LPA nahi milta bhai 😭💀`
+    `Resume me 'Expert in Communication' likhne ke baad viva me 'yes sir, no sir' bolne wala banda yahi hai 💀🤡`,
+    `Bina ek line code likhe bhai 50 LPA ke dream dekh raha hai 💀 Chill kar.`
   ],
 
   summarizeHinglish: [
-    `📋 **Chat Summary:**\n• 95% bakchodi aur chill\n• 5% attendance panic\n• Exactly 0% padhai completed 💀`,
-    `📋 **TL;DR:**\n• Aadha group proxy maang raha hai\n• Aadha assignment ke solutions\n• Aur ek banda bina wajah roast maang raha hai 😭💀`
+    `📋 **Chat Summary:**\n• 90% bina sar-pair ki bakchodi\n• 10% random planning jo kabhi execute nahi hogi 💀`,
+    `📋 **TL;DR:**\n• Group me sab ek dusre pe hass rahe hain aur productive kaam 0% hua hai 😭💀`
   ]
 };
 
