@@ -7074,13 +7074,326 @@ const broadcastWsEvent = (channel, payload, excludeWs = null) => {
   return deliveredCount;
 };
 
+// --- CHAT REQUESTS & REGNO DM ENGINE ---
+const inMemoryChatRequests = new Map();
+
+// Helper to find student by registration number
+async function findStudentByRegNo(rawRegNo) {
+  if (!rawRegNo || typeof rawRegNo !== 'string') return null;
+  const cleanReg = rawRegNo.trim();
+  const regRegex = new RegExp(`^${cleanReg}$`, 'i');
+
+  if (db) {
+    try {
+      const user = await db.collection('users').findOne({
+        $or: [
+          { regNo: regRegex },
+          { registrationNumber: regRegex },
+          { email: new RegExp(`\\.${cleanReg}@`, 'i') },
+          { email: new RegExp(`^${cleanReg}@`, 'i') }
+        ]
+      });
+      if (user) return user;
+    } catch (e) {
+      console.warn("DB lookup error:", e.message);
+    }
+  }
+
+  // Fallback to local users.json / inMemory
+  try {
+    const fileUsers = await getUsers();
+    const list = Array.isArray(fileUsers) ? fileUsers : Object.values(fileUsers || {});
+    const match = list.find(u => {
+      const uReg = (u.regNo || u.registrationNumber || '').trim();
+      if (uReg && uReg.toLowerCase() === cleanReg.toLowerCase()) return true;
+      if (u.email && u.email.toLowerCase().includes(cleanReg.toLowerCase())) return true;
+      return false;
+    });
+    if (match) return match;
+  } catch (e) {}
+
+  return null;
+}
+
+// 1. GET /api/users/lookup-by-regno (Look up student details by Reg No)
+app.get('/api/users/lookup-by-regno', authenticate, async (req, res) => {
+  try {
+    const rawRegNo = req.query.regNo;
+    if (!rawRegNo) {
+      return res.status(400).json({ success: false, error: "Registration number is required." });
+    }
+
+    const student = await findStudentByRegNo(rawRegNo);
+    if (!student) {
+      return res.status(404).json({ success: false, error: "Student not found with this Registration Number." });
+    }
+
+    const studentReg = (student.regNo || student.registrationNumber || student.email?.split('@')[0] || rawRegNo).toUpperCase();
+    const myReg = (req.user.regNo || req.user.registrationNumber || req.user.email?.split('@')[0] || '').toUpperCase();
+
+    if (studentReg.toLowerCase() === myReg.toLowerCase()) {
+      return res.status(400).json({ success: false, error: "You cannot start a private chat with yourself." });
+    }
+
+    res.json({
+      success: true,
+      user: {
+        name: student.name || student.email?.split('@')[0],
+        regNo: studentReg,
+        program: student.program || 'Student',
+        avatar: (student.name || student.email).charAt(0).toUpperCase()
+      }
+    });
+  } catch (err) {
+    console.error("Lookup error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 2. POST /api/chat/requests (Send a new private chat request)
+app.post('/api/chat/requests', authenticate, async (req, res) => {
+  try {
+    const { toRegNo, initialMessage } = req.body;
+    if (!toRegNo) {
+      return res.status(400).json({ success: false, error: "Recipient registration number is required." });
+    }
+
+    const myReg = (req.user.regNo || req.user.registrationNumber || req.user.email?.split('@')[0] || '').toUpperCase();
+    if (!myReg) {
+      return res.status(400).json({ success: false, error: "Your registration number is missing. Please update your profile." });
+    }
+
+    const targetStudent = await findStudentByRegNo(toRegNo);
+    if (!targetStudent) {
+      return res.status(404).json({ success: false, error: "Student not found with this Registration Number." });
+    }
+
+    const targetReg = (targetStudent.regNo || targetStudent.registrationNumber || targetStudent.email?.split('@')[0] || toRegNo).toUpperCase();
+    if (myReg.toLowerCase() === targetReg.toLowerCase()) {
+      return res.status(400).json({ success: false, error: "You cannot send a chat request to yourself." });
+    }
+
+    const channelId = `dm_${[myReg.toLowerCase(), targetReg.toLowerCase()].sort().join('_')}`;
+
+    // Check if request already exists
+    let existingReq = null;
+    if (db) {
+      try {
+        existingReq = await db.collection('chat_requests').findOne({ channelId });
+      } catch (e) {}
+    }
+    if (!existingReq) {
+      existingReq = inMemoryChatRequests.get(channelId);
+    }
+
+    if (existingReq) {
+      if (existingReq.status === 'accepted') {
+        return res.json({ success: true, message: "Chat is already active!", channelId, status: 'accepted' });
+      }
+      if (existingReq.status === 'pending') {
+        return res.json({ success: true, message: "Chat request already pending.", channelId, status: 'pending' });
+      }
+    }
+
+    const reqObj = {
+      id: 'req_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex'),
+      fromRegNo: myReg,
+      fromName: req.user.name || req.user.email?.split('@')[0],
+      fromEmail: req.user.email,
+      fromAvatar: (req.user.name || req.user.email).charAt(0).toUpperCase(),
+      fromProgram: req.user.program || 'Student',
+      toRegNo: targetReg,
+      toName: targetStudent.name || targetStudent.email?.split('@')[0],
+      toEmail: targetStudent.email,
+      channelId,
+      initialMessage: initialMessage ? sanitizeString(initialMessage, 500) : 'Hi, let\'s connect on vitLife!',
+      status: 'pending', // 'pending' | 'accepted' | 'declined'
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // Save request
+    inMemoryChatRequests.set(channelId, reqObj);
+    if (db) {
+      try {
+        await db.collection('chat_requests').updateOne(
+          { channelId },
+          { $set: reqObj },
+          { upsert: true }
+        );
+      } catch (e) {
+        console.warn("DB save chat_request error:", e.message);
+      }
+    }
+
+    // Real-time notifications to recipient
+    pusherTrigger(`user-${targetReg.toLowerCase()}`, 'new_chat_request', reqObj);
+    broadcastWsEvent(channelId, { type: 'new_chat_request', request: reqObj });
+
+    res.json({ success: true, request: reqObj, message: "Chat request sent successfully!" });
+  } catch (err) {
+    console.error("Error creating chat request:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3. GET /api/chat/requests (Fetch incoming & outgoing requests)
+app.get('/api/chat/requests', authenticate, async (req, res) => {
+  try {
+    const myReg = (req.user.regNo || req.user.registrationNumber || req.user.email?.split('@')[0] || '').toUpperCase();
+    if (!myReg) return res.json({ success: true, incoming: [], outgoing: [] });
+
+    let allRequests = [];
+    if (db) {
+      try {
+        allRequests = await db.collection('chat_requests').find({
+          $or: [
+            { toRegNo: myReg },
+            { fromRegNo: myReg }
+          ]
+        }).toArray();
+      } catch (e) {}
+    }
+
+    if (allRequests.length === 0) {
+      allRequests = Array.from(inMemoryChatRequests.values()).filter(r => 
+        r.toRegNo === myReg || r.fromRegNo === myReg
+      );
+    }
+
+    const incoming = allRequests.filter(r => r.toRegNo === myReg && r.status === 'pending');
+    const outgoing = allRequests.filter(r => r.fromRegNo === myReg && r.status === 'pending');
+
+    res.json({ success: true, incoming, outgoing });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 4. POST /api/chat/requests/:id/respond (Accept or Decline chat request)
+app.post('/api/chat/requests/:id/respond', authenticate, async (req, res) => {
+  try {
+    const { action } = req.body; // 'accept' | 'decline'
+    const reqId = req.params.id;
+    if (!action || !['accept', 'decline'].includes(action)) {
+      return res.status(400).json({ success: false, error: "Invalid action. Must be 'accept' or 'decline'." });
+    }
+
+    const myReg = (req.user.regNo || req.user.registrationNumber || req.user.email?.split('@')[0] || '').toUpperCase();
+    
+    let chatReq = null;
+    if (db) {
+      try {
+        chatReq = await db.collection('chat_requests').findOne({ id: reqId });
+      } catch (e) {}
+    }
+    if (!chatReq) {
+      chatReq = Array.from(inMemoryChatRequests.values()).find(r => r.id === reqId);
+    }
+
+    if (!chatReq) {
+      return res.status(404).json({ success: false, error: "Chat request not found." });
+    }
+
+    if (chatReq.toRegNo !== myReg) {
+      return res.status(403).json({ success: false, error: "Unauthorized to respond to this request." });
+    }
+
+    const newStatus = action === 'accept' ? 'accepted' : 'declined';
+    chatReq.status = newStatus;
+    chatReq.updatedAt = new Date().toISOString();
+
+    inMemoryChatRequests.set(chatReq.channelId, chatReq);
+    if (db) {
+      try {
+        await db.collection('chat_requests').updateOne(
+          { id: reqId },
+          { $set: { status: newStatus, updatedAt: chatReq.updatedAt } }
+        );
+      } catch (e) {}
+    }
+
+    // If accepted, add the initial greeting message to the channel if not empty
+    if (action === 'accept' && chatReq.initialMessage) {
+      const initialMsgObj = {
+        id: 'msg_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex'),
+        channel: chatReq.channelId,
+        author: chatReq.fromName,
+        authorId: chatReq.fromRegNo,
+        avatar: chatReq.fromAvatar,
+        role: chatReq.fromProgram || 'Student',
+        content: chatReq.initialMessage,
+        attachment: null,
+        reactions: { '👍': [], '❤️': [], '💡': [], '🔥': [], '🚀': [] },
+        timestamp: new Date().toISOString(),
+        rawTimestamp: new Date().toISOString()
+      };
+
+      const channelMsgs = getChannelMessages(chatReq.channelId);
+      if (channelMsgs.length === 0) {
+        channelMsgs.push(initialMsgObj);
+        if (redisConnected && redisClient) {
+          try {
+            await redisClient.lpush(`chat:messages:${chatReq.channelId}`, JSON.stringify(initialMsgObj));
+          } catch (e) {}
+        }
+        if (db) {
+          try {
+            await db.collection('chat_messages').insertOne({ ...initialMsgObj });
+          } catch (e) {}
+        }
+      }
+    }
+
+    // Notify the requester in real-time
+    pusherTrigger(`user-${chatReq.fromRegNo.toLowerCase()}`, 'chat_request_accepted', {
+      channelId: chatReq.channelId,
+      acceptedBy: req.user.name,
+      acceptedByRegNo: myReg
+    });
+
+    broadcastWsEvent(chatReq.channelId, {
+      type: 'chat_request_accepted',
+      channel: chatReq.channelId,
+      request: chatReq
+    });
+
+    res.json({ success: true, message: `Chat request ${newStatus}!`, request: chatReq });
+  } catch (err) {
+    console.error("Respond request error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/chat/dm-channels
 app.get('/api/chat/dm-channels', authenticate, async (req, res) => {
   try {
-    const userReg = req.user.regNo || req.user.email?.split('@')[0];
+    const userReg = (req.user.regNo || req.user.registrationNumber || req.user.email?.split('@')[0] || '').toLowerCase();
     if (!userReg) return res.json({ success: true, channels: [] });
-    
+
     let allChannels = new Set();
+
+    // 1. From accepted chat_requests
+    if (db) {
+      try {
+        const reqs = await db.collection('chat_requests').find({
+          $or: [
+            { fromRegNo: new RegExp(`^${userReg}$`, 'i') },
+            { toRegNo: new RegExp(`^${userReg}$`, 'i') }
+          ],
+          status: 'accepted'
+        }).toArray();
+        reqs.forEach(r => allChannels.add(r.channelId));
+      } catch (e) {}
+    }
+
+    for (const r of inMemoryChatRequests.values()) {
+      if (r.status === 'accepted' && (r.fromRegNo.toLowerCase() === userReg || r.toRegNo.toLowerCase() === userReg)) {
+        allChannels.add(r.channelId);
+      }
+    }
+
+    // 2. From memory & Redis messages
     for (const msgs of inMemoryChatMessages.values()) {
       msgs.forEach(m => {
         if (m.channel && m.channel.startsWith('dm_') && m.channel.includes(userReg)) {
@@ -7101,31 +7414,25 @@ app.get('/api/chat/dm-channels', authenticate, async (req, res) => {
 
     const channelsArray = await Promise.all(Array.from(allChannels).map(async ch => {
       const parts = ch.replace('dm_', '').split('_');
-      const otherUser = parts.find(p => p !== userReg) || 'Student';
+      const otherUserReg = parts.find(p => p.toLowerCase() !== userReg) || 'Student';
       
-      let otherUserName = `Chat with ${otherUser.toUpperCase()}`;
-      if (db) {
-        try {
-          const userDoc = await db.collection('users').findOne({
-            $or: [
-              { regNo: new RegExp(`^${otherUser}$`, 'i') },
-              { email: new RegExp(`^${otherUser}@`, 'i') }
-            ]
-          });
-          if (userDoc && userDoc.name) {
-            otherUserName = userDoc.name;
-          }
-        } catch (e) {
-          console.error("Error fetching user for DM channel:", e);
-        }
+      let otherUserName = `Student (${otherUserReg.toUpperCase()})`;
+      let otherUserProgram = 'Student';
+
+      const studentDoc = await findStudentByRegNo(otherUserReg);
+      if (studentDoc) {
+        if (studentDoc.name) otherUserName = studentDoc.name;
+        if (studentDoc.program) otherUserProgram = studentDoc.program;
       }
 
       return {
         id: ch,
-        label: ch,
+        label: otherUserReg.toUpperCase(),
         icon: '👤',
         name: otherUserName,
-        desc: 'Direct Message',
+        regNo: otherUserReg.toUpperCase(),
+        program: otherUserProgram,
+        desc: `Private chat • ${otherUserReg.toUpperCase()}`,
         isPublic: false
       };
     }));
@@ -7448,6 +7755,7 @@ app.post('/api/chat/messages', chatMessageLimiter, authenticate, async (req, res
       channel: targetChannel,
       author: user.name || user.email.split('@')[0],
       authorId: String(user._id || user.id || user.email),
+      authorRegNo: (user.regNo || user.registrationNumber || '').toUpperCase(),
       avatar: (user.name || user.email).charAt(0).toUpperCase(),
       role: user.role === 'admin' ? 'Admin' : (user.program || 'Student'),
       content: cleanContent || (poll ? `📊 Poll: ${poll.question || ''}` : ''),
@@ -7494,12 +7802,13 @@ app.post('/api/chat/messages', chatMessageLimiter, authenticate, async (req, res
     // Personal notification trigger for DMs
     if (targetChannel.startsWith('dm_')) {
       const parts = targetChannel.replace('dm_', '').split('_');
-      const userReg = user.regNo || user.email?.split('@')[0];
-      const recipient = parts.find(p => p !== userReg);
+      const userReg = (user.regNo || user.registrationNumber || user.email?.split('@')[0] || '').toLowerCase();
+      const recipient = parts.find(p => p.toLowerCase() !== userReg);
       if (recipient) {
-        pusherTrigger(`user-${recipient}`, 'new_dm', {
+        pusherTrigger(`user-${recipient.toLowerCase()}`, 'new_dm', {
           channel: targetChannel,
           senderName: user.name || user.email?.split('@')[0],
+          senderRegNo: (user.regNo || user.registrationNumber || '').toUpperCase(),
           message: messageObj
         });
       }

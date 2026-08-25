@@ -2513,58 +2513,106 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
   const [selectedMsgIds, setSelectedMsgIds] = useState([]);
   const [sidebarTab, setSidebarTab] = useState('channels'); // 'channels' or 'dms'
 
-  const handleReplyPrivately = useCallback((msg) => {
+  const handleReplyPrivately = useCallback(async (msg) => {
     if (!user || user.isGuest) {
-      showToast('🔒 Please log in to send private messages.', 'error');
+      if (onRequireAuth) onRequireAuth();
+      else showToast('🔒 Please log in to send private messages.', 'error');
       return;
     }
-    const myId = user.regNo || user.email?.split('@')[0] || user.id || 'me';
-    const theirId = msg.authorId || msg.author.replace(/\s+/g, '');
-    const dmChannelId = 'dm_' + [myId, theirId].sort().join('_');
-    
-    setDmChannels(prev => {
-      if (!prev.find(c => c.id === dmChannelId)) {
-        return [...prev, {
-          id: dmChannelId,
-          label: dmChannelId,
-          icon: '👤',
-          name: `Chat with ${msg.author || 'User'}`,
-          desc: 'Direct Message',
-          isPublic: false
-        }];
-      }
-      return prev;
-    });
-    setSidebarTab('dms');
-    setActiveChannel(dmChannelId);
-    setReplyingToMessage(msg);
-  }, [user, showToast]);
+    const myReg = (user.regNo || user.registrationNumber || user.email?.split('@')[0] || '').toUpperCase();
+    if (!myReg) {
+      showToast('⚠️ Please update your Registration Number in your profile.', 'error');
+      return;
+    }
 
-  const handleDirectMessageUser = useCallback((msg) => {
-    if (!user || user.isGuest) {
-      showToast('🔒 Please log in to send private messages.', 'error');
+    const theirIdentifier = msg.authorRegNo || msg.authorId || msg.author;
+    if (theirIdentifier === 'vitchat_ai_bot' || msg.isAi) {
+      showToast('🤖 To chat with vitChat AI, type /ai in any channel!', 'info');
       return;
     }
-    const myId = user.regNo || user.email?.split('@')[0] || user.id || 'me';
-    const theirId = msg.authorId || msg.author.replace(/\s+/g, '');
-    const dmChannelId = 'dm_' + [myId, theirId].sort().join('_');
-    
-    setDmChannels(prev => {
-      if (!prev.find(c => c.id === dmChannelId)) {
-        return [...prev, {
-          id: dmChannelId,
-          label: dmChannelId,
-          icon: '👤',
-          name: `Chat with ${msg.author || 'User'}`,
-          desc: 'Direct Message',
-          isPublic: false
-        }];
+
+    let student = null;
+    try {
+      const token = localStorage.getItem('ds_ai_token');
+      const res = await fetch(`/api/users/lookup-by-regno?regNo=${encodeURIComponent(theirIdentifier)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        student = data.user;
       }
-      return prev;
-    });
-    setSidebarTab('dms');
-    setActiveChannel(dmChannelId);
-  }, [user, showToast]);
+    } catch (e) {}
+
+    if (student) {
+      const expectedChannelId = `dm_${[myReg.toLowerCase(), student.regNo.toLowerCase()].sort().join('_')}`;
+      const existingChannel = dmChannels.find(c => c.id === expectedChannelId);
+      if (existingChannel) {
+        setSidebarTab('dms');
+        setActiveChannel(expectedChannelId);
+        setReplyingToMessage(msg);
+        return;
+      }
+
+      setSearchRegNo(student.regNo);
+      setSearchedStudent(student);
+      setDmInitialMessage(msg.content ? `Replying to: "${msg.content.slice(0, 100)}..."` : 'Hi!');
+      setShowNewDmModal(true);
+    } else {
+      setSearchRegNo(theirIdentifier);
+      setDmInitialMessage(msg.content ? `Replying to: "${msg.content.slice(0, 100)}..."` : 'Hi!');
+      setShowNewDmModal(true);
+    }
+  }, [user, dmChannels, onRequireAuth, showToast]);
+
+  const handleDirectMessageUser = useCallback(async (msg) => {
+    if (!user || user.isGuest) {
+      if (onRequireAuth) onRequireAuth();
+      else showToast('🔒 Please log in to send private messages.', 'error');
+      return;
+    }
+    const myReg = (user.regNo || user.registrationNumber || user.email?.split('@')[0] || '').toUpperCase();
+    if (!myReg) {
+      showToast('⚠️ Please update your Registration Number in your profile.', 'error');
+      return;
+    }
+
+    const theirIdentifier = msg.authorRegNo || msg.authorId || msg.author;
+    if (theirIdentifier === 'vitchat_ai_bot' || msg.isAi) {
+      showToast('🤖 To chat with vitChat AI, type /ai in any channel!', 'info');
+      return;
+    }
+
+    let student = null;
+    try {
+      const token = localStorage.getItem('ds_ai_token');
+      const res = await fetch(`/api/users/lookup-by-regno?regNo=${encodeURIComponent(theirIdentifier)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        student = data.user;
+      }
+    } catch (e) {}
+
+    if (student) {
+      const expectedChannelId = `dm_${[myReg.toLowerCase(), student.regNo.toLowerCase()].sort().join('_')}`;
+      const existingChannel = dmChannels.find(c => c.id === expectedChannelId);
+      if (existingChannel) {
+        setSidebarTab('dms');
+        setActiveChannel(expectedChannelId);
+        return;
+      }
+
+      setSearchRegNo(student.regNo);
+      setSearchedStudent(student);
+      setDmInitialMessage('Hi, let\'s connect on vitLife!');
+      setShowNewDmModal(true);
+    } else {
+      setSearchRegNo(theirIdentifier);
+      setDmInitialMessage('Hi, let\'s connect on vitLife!');
+      setShowNewDmModal(true);
+    }
+  }, [user, dmChannels, onRequireAuth, showToast]);
 
   const handleAskvitchatAi = useCallback(async (msg) => {
     if (!msg) return;
@@ -2712,24 +2760,150 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
   const [dmToast, setDmToast] = useState(null);
   const [dmChannels, setDmChannels] = useState([]);
+  const [chatRequests, setChatRequests] = useState({ incoming: [], outgoing: [] });
+  const [showNewDmModal, setShowNewDmModal] = useState(false);
+  const [searchRegNo, setSearchRegNo] = useState('');
+  const [searchedStudent, setSearchedStudent] = useState(null);
+  const [isSearchingStudent, setIsSearchingStudent] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [dmInitialMessage, setDmInitialMessage] = useState('');
+  const [isSendingDmRequest, setIsSendingDmRequest] = useState(false);
+  const [showRequestsDrawer, setShowRequestsDrawer] = useState(false);
 
-  useEffect(() => {
-    if (user && !user.isGuest) {
+  const fetchChatRequests = useCallback(async () => {
+    if (!user || user.isGuest) return;
+    try {
       const token = localStorage.getItem('ds_ai_token');
-      fetch('/api/chat/dm-channels', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.channels) {
-          setDmChannels(data.channels);
-        }
-      })
-      .catch(err => console.error('Failed to fetch DM channels:', err));
+      const res = await fetch('/api/chat/requests', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setChatRequests({ incoming: data.incoming || [], outgoing: data.outgoing || [] });
+      }
+    } catch (err) {
+      console.error('Failed to fetch chat requests:', err);
     }
   }, [user]);
+
+  const fetchDmChannels = useCallback(async () => {
+    if (!user || user.isGuest) return;
+    try {
+      const token = localStorage.getItem('ds_ai_token');
+      const res = await fetch('/api/chat/dm-channels', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success && data.channels) {
+        setDmChannels(data.channels);
+      }
+    } catch (err) {
+      console.error('Failed to fetch DM channels:', err);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchDmChannels();
+    fetchChatRequests();
+    const interval = setInterval(() => {
+      fetchChatRequests();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [fetchDmChannels, fetchChatRequests]);
+
+  const handleSearchStudent = async (reg) => {
+    const cleanReg = (reg || '').trim();
+    if (!cleanReg) {
+      setSearchedStudent(null);
+      setSearchError('');
+      return;
+    }
+    setIsSearchingStudent(true);
+    setSearchError('');
+    try {
+      const token = localStorage.getItem('ds_ai_token');
+      const res = await fetch(`/api/users/lookup-by-regno?regNo=${encodeURIComponent(cleanReg)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        setSearchedStudent(data.user);
+        setSearchError('');
+      } else {
+        setSearchedStudent(null);
+        setSearchError(data.error || 'Student not found. Check Registration Number.');
+      }
+    } catch (err) {
+      setSearchedStudent(null);
+      setSearchError('Network error looking up student.');
+    } finally {
+      setIsSearchingStudent(false);
+    }
+  };
+
+  const handleSendChatRequest = async () => {
+    if (!searchedStudent) return;
+    setIsSendingDmRequest(true);
+    try {
+      const token = localStorage.getItem('ds_ai_token');
+      const res = await fetch('/api/chat/requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          toRegNo: searchedStudent.regNo,
+          initialMessage: dmInitialMessage
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message || `Chat request sent to ${searchedStudent.name}! ✉️`, 'success');
+        setShowNewDmModal(false);
+        setSearchRegNo('');
+        setSearchedStudent(null);
+        setDmInitialMessage('');
+        fetchChatRequests();
+        fetchDmChannels();
+      } else {
+        showToast(data.error || 'Failed to send chat request', 'error');
+      }
+    } catch (err) {
+      showToast('Network error sending chat request', 'error');
+    } finally {
+      setIsSendingDmRequest(false);
+    }
+  };
+
+  const handleRespondChatRequest = async (reqId, action) => {
+    try {
+      const token = localStorage.getItem('ds_ai_token');
+      const res = await fetch(`/api/chat/requests/${reqId}/respond`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ action })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Chat request ${action === 'accept' ? 'accepted 🎉' : 'declined'}!`, action === 'accept' ? 'success' : 'info');
+        fetchChatRequests();
+        fetchDmChannels();
+        if (action === 'accept' && data.request && data.request.channelId) {
+          setActiveChannel(data.request.channelId);
+          setSidebarTab('dms');
+          setShowRequestsDrawer(false);
+        }
+      } else {
+        showToast(data.error || 'Failed to process response', 'error');
+      }
+    } catch (err) {
+      showToast('Network error responding to request', 'error');
+    }
+  };
 
   const CHANNELS = useMemo(() => {
     const baseChannels = [
@@ -2921,6 +3095,28 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
           // Try native notification if allowed
           if ("Notification" in window && Notification.permission === "granted") {
             new Notification("New Direct Message", { body: `From ${data.senderName}` });
+          }
+        }
+      });
+
+      pusherUserChannel.bind('new_chat_request', (data) => {
+        if (data) {
+          setDmToast(`📥 New chat request from ${data.fromName || 'a student'} (${data.fromRegNo || ''})!`);
+          setTimeout(() => setDmToast(null), 5000);
+          fetchChatRequests();
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification("New Chat Request", { body: `From ${data.fromName} (${data.fromRegNo})` });
+          }
+        }
+      });
+
+      pusherUserChannel.bind('chat_request_accepted', (data) => {
+        if (data) {
+          if (showToast) showToast(`🎉 ${data.acceptedBy || 'Student'} accepted your chat request!`, 'success');
+          fetchChatRequests();
+          fetchDmChannels();
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification("Chat Request Accepted", { body: `${data.acceptedBy} accepted your chat request!` });
           }
         }
       });
@@ -3869,14 +4065,117 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
           </button>
           <button 
             onClick={() => setSidebarTab('dms')} 
-            style={{ flex: 1, padding: '0.35rem', borderRadius: '12px', background: sidebarTab === 'dms' ? '#202c33' : 'transparent', color: sidebarTab === 'dms' ? '#00a884' : '#8696a0', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.2s' }}
+            style={{ flex: 1, padding: '0.35rem', borderRadius: '12px', background: sidebarTab === 'dms' ? '#202c33' : 'transparent', color: sidebarTab === 'dms' ? '#00a884' : '#8696a0', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.2s', position: 'relative' }}
           >
             Private
+            {chatRequests.incoming && chatRequests.incoming.length > 0 && (
+              <span style={{ position: 'absolute', top: '4px', right: '12px', width: '8px', height: '8px', borderRadius: '50%', background: '#00a884' }} />
+            )}
           </button>
         </div>
 
+        {/* Private DMs Action Bar */}
+        {sidebarTab === 'dms' && (
+          <div style={{ padding: '0.4rem 0.75rem', background: '#111b21', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+            <span style={{ fontSize: '0.78rem', color: '#8696a0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Direct Messages
+            </span>
+            <button
+              onClick={() => {
+                if (!user || user.isGuest) {
+                  if (onRequireAuth) onRequireAuth();
+                  else showToast('Please log in to start private chats.', 'error');
+                  return;
+                }
+                setShowNewDmModal(true);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                background: 'rgba(0,168,132,0.15)',
+                color: '#00a884',
+                border: '1px solid rgba(0,168,132,0.3)',
+                borderRadius: '8px',
+                padding: '0.25rem 0.6rem',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              <span>➕</span> New Chat
+            </button>
+          </div>
+        )}
+
+        {/* Incoming Chat Requests Banner */}
+        {sidebarTab === 'dms' && chatRequests.incoming && chatRequests.incoming.length > 0 && (
+          <div 
+            onClick={() => setShowRequestsDrawer(true)}
+            style={{
+              margin: '0.45rem 0.75rem',
+              padding: '0.55rem 0.75rem',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, rgba(0,168,132,0.18) 0%, rgba(20,184,166,0.08) 100%)',
+              border: '1px solid rgba(0,168,132,0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(0,168,132,0.15)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '1.1rem' }}>📥</span>
+              <div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#00a884' }}>
+                  {chatRequests.incoming.length} Chat Request{chatRequests.incoming.length > 1 ? 's' : ''}
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#aebac1' }}>
+                  Click to review &amp; accept
+                </div>
+              </div>
+            </div>
+            <span style={{ fontSize: '0.78rem', color: '#00a884', fontWeight: 700, background: 'rgba(0,168,132,0.2)', padding: '0.2rem 0.5rem', borderRadius: '6px' }}>
+              Review →
+            </span>
+          </div>
+        )}
+
         {/* Rooms List */}
         <div className="wa-chat-list">
+          {sidebarTab === 'dms' && CHANNELS.filter(ch => ch.id.startsWith('dm_')).length === 0 && (
+            <div style={{ padding: '2rem 1.2rem', textAlign: 'center', color: '#8696a0', fontSize: '0.85rem' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>💬</div>
+              <div style={{ fontWeight: 700, color: '#e9edef', marginBottom: '0.35rem', fontSize: '0.95rem' }}>No private chats yet</div>
+              <div style={{ marginBottom: '1.2rem', lineHeight: 1.4, fontSize: '0.8rem', color: '#8696a0' }}>
+                Search any student by their <strong>Registration Number</strong> (e.g. <code>23BCE10001</code>) to start a chat!
+              </div>
+              <button
+                onClick={() => {
+                  if (!user || user.isGuest) {
+                    if (onRequireAuth) onRequireAuth();
+                    else showToast('Please log in to start private chats.', 'error');
+                    return;
+                  }
+                  setShowNewDmModal(true);
+                }}
+                style={{
+                  padding: '0.5rem 1.1rem',
+                  background: '#00a884',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                  fontSize: '0.84rem',
+                  cursor: 'pointer'
+                }}
+              >
+                ➕ Start New Chat
+              </button>
+            </div>
+          )}
+
           {CHANNELS.filter(ch => {
             if (sidebarTab === 'dms') return ch.id.startsWith('dm_');
             return !ch.id.startsWith('dm_');
@@ -3884,6 +4183,7 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
             const isLocked = isGuestUser && !ch.isPublic;
             const channelMsgs = messages.filter(m => m.channel === ch.id);
             const lastMsg = channelMsgs[channelMsgs.length - 1];
+            const isDm = ch.id.startsWith('dm_');
 
             return (
               <div
@@ -3891,12 +4191,19 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                 onClick={() => handleChannelSelect(ch.id)}
                 className={`wa-chat-item ${activeChannel === ch.id ? 'active' : ''}`}
               >
-                <div className="wa-chat-item-avatar">
-                  {ch.icon}
+                <div className="wa-chat-item-avatar" style={isDm ? { background: '#202c33', color: '#00a884', fontWeight: 800 } : {}}>
+                  {isDm ? (ch.name ? ch.name.charAt(0).toUpperCase() : '👤') : ch.icon}
                 </div>
                 <div className="wa-chat-item-info">
                   <div className="wa-chat-item-name">
-                    <span>#{ch.label}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      {isDm ? ch.name : `#${ch.label}`}
+                      {isDm && ch.regNo && (
+                        <span style={{ fontSize: '0.65rem', padding: '0.05rem 0.35rem', borderRadius: '4px', background: 'rgba(0,168,132,0.15)', color: '#00a884', fontWeight: 700 }}>
+                          {ch.regNo}
+                        </span>
+                      )}
+                    </span>
                     <span className="wa-chat-item-time">{lastMsg ? lastMsg.timestamp : ''}</span>
                   </div>
                   <div className="wa-chat-item-preview">
@@ -3945,16 +4252,23 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
             onClick={(e) => { e.stopPropagation(); setShowChannelInfoModal(true); }}
             title="Click for Channel Details"
           >
-            <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#2a3942', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', flexShrink: 0 }}>
-              {activeChannelObj.icon}
+            <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: activeChannelObj.id.startsWith('dm_') ? '#00a884' : '#2a3942', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', fontWeight: 800, flexShrink: 0 }}>
+              {activeChannelObj.id.startsWith('dm_') ? (activeChannelObj.name ? activeChannelObj.name.charAt(0).toUpperCase() : '👤') : activeChannelObj.icon}
             </div>
             <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
-              <div style={{ color: '#e9edef', fontWeight: 700, fontSize: '0.92rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.2' }}>
-                {activeChannelObj.id.startsWith('dm_') ? activeChannelObj.name : `#${activeChannelObj.label}`}
+              <div style={{ color: '#e9edef', fontWeight: 700, fontSize: '0.92rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.2', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span>{activeChannelObj.id.startsWith('dm_') ? activeChannelObj.name : `#${activeChannelObj.label}`}</span>
+                {activeChannelObj.id.startsWith('dm_') && activeChannelObj.regNo && (
+                  <span style={{ fontSize: '0.68rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: 'rgba(0,168,132,0.18)', color: '#00a884', fontWeight: 700 }}>
+                    {activeChannelObj.regNo}
+                  </span>
+                )}
               </div>
               <div style={{ color: isPeerTyping ? '#00a884' : '#8696a0', fontSize: '0.7rem', fontWeight: isPeerTyping ? 700 : 400, transition: 'color 0.2s ease', display: 'flex', alignItems: 'center', gap: '0.35rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {isPeerTyping ? (
                   `🟢 ${typingPeerName} is typing...`
+                ) : activeChannelObj.id.startsWith('dm_') ? (
+                  <span>Direct Message • {activeChannelObj.program || 'Student'}</span>
                 ) : (
                   <>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -3964,7 +4278,6 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   </>
                 )}
               </div>
-
             </div>
           </div>
 
@@ -4892,6 +5205,313 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
           imageSrc={previewImageModal}
           onClose={() => setPreviewImageModal(null)}
         />
+      )}
+
+      {/* Start New Private Chat Modal */}
+      {showNewDmModal && (
+        <div className="aurora-modal-overlay" onClick={() => setShowNewDmModal(false)} style={{ zIndex: 99999 }}>
+          <div className="aurora-modal-card glass-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px', padding: '1.6rem', borderRadius: '18px', background: '#111b21', color: '#e9edef', border: '1px solid rgba(0,168,132,0.3)', boxShadow: '0 20px 40px rgba(0,0,0,0.8)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.6rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <span style={{ fontSize: '1.3rem' }}>✉️</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#e9edef' }}>Start Private Chat</h3>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#8696a0' }}>Use student's Registration Number (like phone numbers)</p>
+                </div>
+              </div>
+              <button onClick={() => setShowNewDmModal(false)} style={{ background: 'none', border: 'none', color: '#8696a0', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
+
+            {/* Registration Number Search Input */}
+            <div style={{ marginBottom: '1.2rem' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#00a884', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Student Registration Number
+              </label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input
+                  type="text"
+                  placeholder="e.g. 23BCE10001"
+                  value={searchRegNo}
+                  onChange={(e) => {
+                    const val = e.target.value.toUpperCase();
+                    setSearchRegNo(val);
+                    if (val.length >= 8) {
+                      handleSearchStudent(val);
+                    } else {
+                      setSearchedStudent(null);
+                      setSearchError('');
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSearchStudent(searchRegNo);
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '0.7rem 0.9rem',
+                    background: '#202c33',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '10px',
+                    color: '#e9edef',
+                    fontSize: '0.92rem',
+                    fontWeight: 700,
+                    letterSpacing: '1px',
+                    outline: 'none'
+                  }}
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => handleSearchStudent(searchRegNo)}
+                  disabled={isSearchingStudent || !searchRegNo.trim()}
+                  style={{
+                    padding: '0 1rem',
+                    background: '#00a884',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    cursor: searchRegNo.trim() ? 'pointer' : 'not-allowed',
+                    opacity: searchRegNo.trim() ? 1 : 0.6
+                  }}
+                >
+                  {isSearchingStudent ? '...' : 'Verify'}
+                </button>
+              </div>
+              {searchError && (
+                <div style={{ color: '#fb7185', fontSize: '0.78rem', marginTop: '0.4rem', fontWeight: 600 }}>
+                  ⚠️ {searchError}
+                </div>
+              )}
+            </div>
+
+            {/* Verified Student Preview Card */}
+            {searchedStudent && (
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(0,168,132,0.12) 0%, rgba(32,44,51,0.8) 100%)',
+                border: '1px solid rgba(0,168,132,0.4)',
+                borderRadius: '12px',
+                padding: '0.9rem 1rem',
+                marginBottom: '1.2rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.8rem'
+              }}>
+                <div style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '50%',
+                  background: '#00a884',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1.2rem',
+                  fontWeight: 800,
+                  flexShrink: 0
+                }}>
+                  {searchedStudent.avatar || searchedStudent.name?.charAt(0) || '👤'}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#e9edef', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span>{searchedStudent.name}</span>
+                    <span style={{ fontSize: '0.7rem', color: '#00a884' }}>✓ Verified</span>
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#8696a0', marginTop: '0.1rem' }}>
+                    <span style={{ fontWeight: 700, color: '#00a884' }}>{searchedStudent.regNo}</span> • {searchedStudent.program}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Initial Message Input */}
+            {searchedStudent && (
+              <div style={{ marginBottom: '1.2rem' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#8696a0', marginBottom: '0.4rem' }}>
+                  Initial Greeting / Reason to Connect (Optional)
+                </label>
+                <textarea
+                  placeholder="e.g. Hey! Saw your post in #exam-prep, let's discuss CAT-2..."
+                  value={dmInitialMessage}
+                  onChange={(e) => setDmInitialMessage(e.target.value)}
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    padding: '0.7rem 0.9rem',
+                    background: '#202c33',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '10px',
+                    color: '#e9edef',
+                    fontSize: '0.85rem',
+                    outline: 'none',
+                    resize: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNewDmModal(false);
+                  setSearchedStudent(null);
+                  setSearchRegNo('');
+                }}
+                style={{
+                  padding: '0.6rem 1.2rem',
+                  borderRadius: '10px',
+                  background: 'transparent',
+                  color: '#8696a0',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSendChatRequest}
+                disabled={!searchedStudent || isSendingDmRequest}
+                style={{
+                  padding: '0.6rem 1.4rem',
+                  borderRadius: '10px',
+                  background: '#00a884',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: 800,
+                  fontSize: '0.85rem',
+                  cursor: searchedStudent && !isSendingDmRequest ? 'pointer' : 'not-allowed',
+                  opacity: searchedStudent && !isSendingDmRequest ? 1 : 0.6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem'
+                }}
+              >
+                {isSendingDmRequest ? 'Sending Request...' : 'Send Chat Request ✉️'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Incoming Chat Requests Modal */}
+      {showRequestsDrawer && (
+        <div className="aurora-modal-overlay" onClick={() => setShowRequestsDrawer(false)} style={{ zIndex: 99999 }}>
+          <div className="aurora-modal-card glass-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '460px', maxHeight: '80vh', overflowY: 'auto', padding: '1.6rem', borderRadius: '18px', background: '#111b21', color: '#e9edef', border: '1px solid rgba(0,168,132,0.3)', boxShadow: '0 20px 40px rgba(0,0,0,0.8)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.6rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <span style={{ fontSize: '1.3rem' }}>📥</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#e9edef' }}>Incoming Chat Requests</h3>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#8696a0' }}>Accept to unlock private messaging</p>
+                </div>
+              </div>
+              <button onClick={() => setShowRequestsDrawer(false)} style={{ background: 'none', border: 'none', color: '#8696a0', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
+
+            {(!chatRequests.incoming || chatRequests.incoming.length === 0) ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#8696a0', fontSize: '0.88rem' }}>
+                <span>✨ No pending chat requests at the moment.</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                {chatRequests.incoming.map((req) => (
+                  <div key={req.id} style={{
+                    background: '#202c33',
+                    borderRadius: '12px',
+                    padding: '0.9rem 1rem',
+                    border: '1px solid rgba(255,255,255,0.08)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.6rem' }}>
+                      <div style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        background: '#00a884',
+                        color: '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.1rem',
+                        fontWeight: 800,
+                        flexShrink: 0
+                      }}>
+                        {req.fromAvatar || req.fromName?.charAt(0) || '👤'}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#e9edef', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span>{req.fromName}</span>
+                          <span style={{ fontSize: '0.68rem', padding: '0.05rem 0.35rem', borderRadius: '4px', background: 'rgba(0,168,132,0.18)', color: '#00a884', fontWeight: 700 }}>
+                            {req.fromRegNo}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#8696a0' }}>
+                          {req.fromProgram || 'Student'} • {new Date(req.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {req.initialMessage && (
+                      <div style={{
+                        background: 'rgba(0,0,0,0.25)',
+                        padding: '0.6rem 0.8rem',
+                        borderRadius: '8px',
+                        fontSize: '0.82rem',
+                        color: '#d1d7db',
+                        marginBottom: '0.75rem',
+                        borderLeft: '3px solid #00a884',
+                        lineHeight: 1.4
+                      }}>
+                        "{req.initialMessage}"
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                      <button
+                        onClick={() => handleRespondChatRequest(req.id, 'decline')}
+                        style={{
+                          padding: '0.45rem 0.9rem',
+                          borderRadius: '8px',
+                          background: 'rgba(244,63,94,0.15)',
+                          color: '#fb7185',
+                          border: '1px solid rgba(244,63,94,0.3)',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Decline
+                      </button>
+                      <button
+                        onClick={() => handleRespondChatRequest(req.id, 'accept')}
+                        style={{
+                          padding: '0.45rem 1.1rem',
+                          borderRadius: '8px',
+                          background: '#00a884',
+                          color: '#fff',
+                          border: 'none',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Accept &amp; Chat 💬
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
