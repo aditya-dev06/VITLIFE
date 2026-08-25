@@ -2513,6 +2513,202 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
   const [selectedMsgIds, setSelectedMsgIds] = useState([]);
   const [sidebarTab, setSidebarTab] = useState('channels'); // 'channels' or 'dms'
 
+  const [dmToast, setDmToast] = useState(null);
+  const [dmChannels, setDmChannels] = useState([]);
+  const [chatRequests, setChatRequests] = useState({ incoming: [], outgoing: [] });
+  const [showNewDmModal, setShowNewDmModal] = useState(false);
+  const [searchRegNo, setSearchRegNo] = useState('');
+  const [searchedStudent, setSearchedStudent] = useState(null);
+  const [isSearchingStudent, setIsSearchingStudent] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [dmInitialMessage, setDmInitialMessage] = useState('');
+  const [isSendingDmRequest, setIsSendingDmRequest] = useState(false);
+  const [showRequestsDrawer, setShowRequestsDrawer] = useState(false);
+
+  const ALL_BATCH_CHANNELS = useMemo(() => [
+    { id: 'batch-2023', label: '23-batch-lounge', icon: '🎓', name: '23 Batch Lounge', desc: 'Exclusive community channel for 2023 Batch students', batchYear: '23', isPublic: false, isBatch: true },
+    { id: 'batch-2024', label: '24-batch-lounge', icon: '🎓', name: '24 Batch Lounge', desc: 'Exclusive community channel for 2024 Batch students', batchYear: '24', isPublic: false, isBatch: true },
+    { id: 'batch-2025', label: '25-batch-lounge', icon: '🎓', name: '25 Batch Lounge', desc: 'Exclusive community channel for 2025 Batch students', batchYear: '25', isPublic: false, isBatch: true },
+    { id: 'batch-2026', label: '26-batch-lounge', icon: '🎓', name: '26 Batch Lounge', desc: 'Exclusive community channel for 2026 Batch students', batchYear: '26', isPublic: false, isBatch: true }
+  ], []);
+
+  const userBatchYear = useMemo(() => getUserBatchYear(user), [user]);
+
+  const CHANNELS = useMemo(() => {
+    const baseChannels = [
+      { id: 'general', label: 'general', icon: '💬', name: 'General Campus', desc: 'General campus discussion & updates', isPublic: true },
+      ...dmChannels,
+      { id: 'pyq-doubts', label: 'pyq-doubt-solver', icon: '📄', name: 'PYQ Doubts', desc: 'Past year paper solutions & doubts', isPublic: false },
+      { id: 'exam-prep', label: 'exam-prep-groups', icon: '📚', name: 'Exam Prep', desc: 'Study circles & CAT/TEE prep', isPublic: false },
+      { id: 'buy-sell', label: 'campus-buy-sell', icon: '🛍️', name: 'Buy & Sell', desc: 'Textbooks, bicycles & hostel gear', isPublic: false },
+      { id: 'placements', label: 'placements-internships', icon: '💼', name: 'Placements', desc: 'OA questions & placement prep', isPublic: false },
+      { id: 'lost-found', label: 'lost-and-found', icon: '🔍', name: 'Lost & Found', desc: 'Campus lost & found items', isPublic: false }
+    ];
+
+    if (!user || user.isGuest) {
+      return [...baseChannels, ...ALL_BATCH_CHANNELS];
+    }
+
+    if (user.role === 'admin' || user.role === 'Faculty' || user.role === 'Teacher') {
+      return [...baseChannels, ...ALL_BATCH_CHANNELS];
+    }
+
+    if (userBatchYear) {
+      const matchBatch = ALL_BATCH_CHANNELS.find(b => b.batchYear === userBatchYear) || {
+        id: `batch-20${userBatchYear}`,
+        label: `${userBatchYear}-batch-lounge`,
+        icon: '🎓',
+        name: `${userBatchYear} Batch Lounge`,
+        desc: `Exclusive community channel for 20${userBatchYear} Batch students`,
+        batchYear: userBatchYear,
+        isPublic: false,
+        isBatch: true
+      };
+      return [...baseChannels, matchBatch];
+    }
+
+    return [...baseChannels, ...ALL_BATCH_CHANNELS];
+  }, [user, userBatchYear, ALL_BATCH_CHANNELS, dmChannels]);
+
+  const activeChannelObj = CHANNELS.find(c => c.id === activeChannel) || CHANNELS[0];
+  const isGuestUser = !user || user.isGuest;
+  const isChannelLockedForGuest = isGuestUser && activeChannel !== 'general' && !activeChannelObj.isPublic;
+
+  const fetchChatRequests = useCallback(async () => {
+    if (!user || user.isGuest) return;
+    try {
+      const token = localStorage.getItem('ds_ai_token');
+      const res = await fetch('/api/chat/requests', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setChatRequests({ incoming: data.incoming || [], outgoing: data.outgoing || [] });
+      }
+    } catch (err) {
+      console.error('Failed to fetch chat requests:', err);
+    }
+  }, [user]);
+
+  const fetchDmChannels = useCallback(async () => {
+    if (!user || user.isGuest) return;
+    try {
+      const token = localStorage.getItem('ds_ai_token');
+      const res = await fetch('/api/chat/dm-channels', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success && data.channels) {
+        setDmChannels(data.channels);
+      }
+    } catch (err) {
+      console.error('Failed to fetch DM channels:', err);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchDmChannels();
+    fetchChatRequests();
+    const interval = setInterval(() => {
+      fetchChatRequests();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [fetchDmChannels, fetchChatRequests]);
+
+  const handleSearchStudent = async (reg) => {
+    const cleanReg = (reg || '').trim();
+    if (!cleanReg) {
+      setSearchedStudent(null);
+      setSearchError('');
+      return;
+    }
+    setIsSearchingStudent(true);
+    setSearchError('');
+    try {
+      const token = localStorage.getItem('ds_ai_token');
+      const res = await fetch(`/api/users/lookup-by-regno?regNo=${encodeURIComponent(cleanReg)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        setSearchedStudent(data.user);
+        setSearchError('');
+      } else {
+        setSearchedStudent(null);
+        setSearchError(data.error || 'Student not found. Check Registration Number.');
+      }
+    } catch (err) {
+      setSearchedStudent(null);
+      setSearchError('Network error looking up student.');
+    } finally {
+      setIsSearchingStudent(false);
+    }
+  };
+
+  const handleSendChatRequest = async () => {
+    if (!searchedStudent) return;
+    setIsSendingDmRequest(true);
+    try {
+      const token = localStorage.getItem('ds_ai_token');
+      const res = await fetch('/api/chat/requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          toRegNo: searchedStudent.regNo,
+          initialMessage: dmInitialMessage
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message || `Chat request sent to ${searchedStudent.name}! ✉️`, 'success');
+        setShowNewDmModal(false);
+        setSearchRegNo('');
+        setSearchedStudent(null);
+        setDmInitialMessage('');
+        fetchChatRequests();
+        fetchDmChannels();
+      } else {
+        showToast(data.error || 'Failed to send chat request', 'error');
+      }
+    } catch (err) {
+      showToast('Network error sending chat request', 'error');
+    } finally {
+      setIsSendingDmRequest(false);
+    }
+  };
+
+  const handleRespondChatRequest = async (reqId, action) => {
+    try {
+      const token = localStorage.getItem('ds_ai_token');
+      const res = await fetch(`/api/chat/requests/${reqId}/respond`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ action })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Chat request ${action === 'accept' ? 'accepted 🎉' : 'declined'}!`, action === 'accept' ? 'success' : 'info');
+        fetchChatRequests();
+        fetchDmChannels();
+        if (action === 'accept' && data.request && data.request.channelId) {
+          setActiveChannel(data.request.channelId);
+          setSidebarTab('dms');
+          setShowRequestsDrawer(false);
+        }
+      } else {
+        showToast(data.error || 'Failed to process response', 'error');
+      }
+    } catch (err) {
+      showToast('Network error responding to request', 'error');
+    }
+  };
+
   const handleReplyPrivately = useCallback(async (msg) => {
     if (!user || user.isGuest) {
       if (onRequireAuth) onRequireAuth();
@@ -2748,209 +2944,6 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
       localStorage.setItem('ds_community_messages_v2', JSON.stringify(messages));
     } catch (e) {}
   }, [messages]);
-
-  const ALL_BATCH_CHANNELS = useMemo(() => [
-    { id: 'batch-2023', label: '23-batch-lounge', icon: '🎓', name: '23 Batch Lounge', desc: 'Exclusive community channel for 2023 Batch students', batchYear: '23', isPublic: false, isBatch: true },
-    { id: 'batch-2024', label: '24-batch-lounge', icon: '🎓', name: '24 Batch Lounge', desc: 'Exclusive community channel for 2024 Batch students', batchYear: '24', isPublic: false, isBatch: true },
-    { id: 'batch-2025', label: '25-batch-lounge', icon: '🎓', name: '25 Batch Lounge', desc: 'Exclusive community channel for 2025 Batch students', batchYear: '25', isPublic: false, isBatch: true },
-    { id: 'batch-2026', label: '26-batch-lounge', icon: '🎓', name: '26 Batch Lounge', desc: 'Exclusive community channel for 2026 Batch students', batchYear: '26', isPublic: false, isBatch: true }
-  ], []);
-
-  const userBatchYear = useMemo(() => getUserBatchYear(user), [user]);
-
-  const [dmToast, setDmToast] = useState(null);
-  const [dmChannels, setDmChannels] = useState([]);
-  const [chatRequests, setChatRequests] = useState({ incoming: [], outgoing: [] });
-  const [showNewDmModal, setShowNewDmModal] = useState(false);
-  const [searchRegNo, setSearchRegNo] = useState('');
-  const [searchedStudent, setSearchedStudent] = useState(null);
-  const [isSearchingStudent, setIsSearchingStudent] = useState(false);
-  const [searchError, setSearchError] = useState('');
-  const [dmInitialMessage, setDmInitialMessage] = useState('');
-  const [isSendingDmRequest, setIsSendingDmRequest] = useState(false);
-  const [showRequestsDrawer, setShowRequestsDrawer] = useState(false);
-
-  const fetchChatRequests = useCallback(async () => {
-    if (!user || user.isGuest) return;
-    try {
-      const token = localStorage.getItem('ds_ai_token');
-      const res = await fetch('/api/chat/requests', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success) {
-        setChatRequests({ incoming: data.incoming || [], outgoing: data.outgoing || [] });
-      }
-    } catch (err) {
-      console.error('Failed to fetch chat requests:', err);
-    }
-  }, [user]);
-
-  const fetchDmChannels = useCallback(async () => {
-    if (!user || user.isGuest) return;
-    try {
-      const token = localStorage.getItem('ds_ai_token');
-      const res = await fetch('/api/chat/dm-channels', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success && data.channels) {
-        setDmChannels(data.channels);
-      }
-    } catch (err) {
-      console.error('Failed to fetch DM channels:', err);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    fetchDmChannels();
-    fetchChatRequests();
-    const interval = setInterval(() => {
-      fetchChatRequests();
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [fetchDmChannels, fetchChatRequests]);
-
-  const handleSearchStudent = async (reg) => {
-    const cleanReg = (reg || '').trim();
-    if (!cleanReg) {
-      setSearchedStudent(null);
-      setSearchError('');
-      return;
-    }
-    setIsSearchingStudent(true);
-    setSearchError('');
-    try {
-      const token = localStorage.getItem('ds_ai_token');
-      const res = await fetch(`/api/users/lookup-by-regno?regNo=${encodeURIComponent(cleanReg)}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success && data.user) {
-        setSearchedStudent(data.user);
-        setSearchError('');
-      } else {
-        setSearchedStudent(null);
-        setSearchError(data.error || 'Student not found. Check Registration Number.');
-      }
-    } catch (err) {
-      setSearchedStudent(null);
-      setSearchError('Network error looking up student.');
-    } finally {
-      setIsSearchingStudent(false);
-    }
-  };
-
-  const handleSendChatRequest = async () => {
-    if (!searchedStudent) return;
-    setIsSendingDmRequest(true);
-    try {
-      const token = localStorage.getItem('ds_ai_token');
-      const res = await fetch('/api/chat/requests', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          toRegNo: searchedStudent.regNo,
-          initialMessage: dmInitialMessage
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast(data.message || `Chat request sent to ${searchedStudent.name}! ✉️`, 'success');
-        setShowNewDmModal(false);
-        setSearchRegNo('');
-        setSearchedStudent(null);
-        setDmInitialMessage('');
-        fetchChatRequests();
-        fetchDmChannels();
-      } else {
-        showToast(data.error || 'Failed to send chat request', 'error');
-      }
-    } catch (err) {
-      showToast('Network error sending chat request', 'error');
-    } finally {
-      setIsSendingDmRequest(false);
-    }
-  };
-
-  const handleRespondChatRequest = async (reqId, action) => {
-    try {
-      const token = localStorage.getItem('ds_ai_token');
-      const res = await fetch(`/api/chat/requests/${reqId}/respond`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ action })
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast(`Chat request ${action === 'accept' ? 'accepted 🎉' : 'declined'}!`, action === 'accept' ? 'success' : 'info');
-        fetchChatRequests();
-        fetchDmChannels();
-        if (action === 'accept' && data.request && data.request.channelId) {
-          setActiveChannel(data.request.channelId);
-          setSidebarTab('dms');
-          setShowRequestsDrawer(false);
-        }
-      } else {
-        showToast(data.error || 'Failed to process response', 'error');
-      }
-    } catch (err) {
-      showToast('Network error responding to request', 'error');
-    }
-  };
-
-  const CHANNELS = useMemo(() => {
-    const baseChannels = [
-      { id: 'general', label: 'general', icon: '💬', name: 'General Campus', desc: 'General campus discussion & updates', isPublic: true },
-      ...dmChannels,
-      { id: 'pyq-doubts', label: 'pyq-doubt-solver', icon: '📄', name: 'PYQ Doubts', desc: 'Past year paper solutions & doubts', isPublic: false },
-      { id: 'exam-prep', label: 'exam-prep-groups', icon: '📚', name: 'Exam Prep', desc: 'Study circles & CAT/TEE prep', isPublic: false },
-      { id: 'buy-sell', label: 'campus-buy-sell', icon: '🛍️', name: 'Buy & Sell', desc: 'Textbooks, bicycles & hostel gear', isPublic: false },
-      { id: 'placements', label: 'placements-internships', icon: '💼', name: 'Placements', desc: 'OA questions & placement prep', isPublic: false },
-      { id: 'lost-found', label: 'lost-and-found', icon: '🔍', name: 'Lost & Found', desc: 'Campus lost & found items', isPublic: false }
-    ];
-
-    // Guests: Show base channels and batch lounge channels marked as locked
-    if (!user || user.isGuest) {
-      return [
-        ...baseChannels,
-        ...ALL_BATCH_CHANNELS
-      ];
-    }
-
-    // Admin & Faculty can view all batch lounges
-    if (user.role === 'admin' || user.role === 'Faculty' || user.role === 'Teacher') {
-      return [...baseChannels, ...ALL_BATCH_CHANNELS];
-    }
-
-    // Students: ONLY show the specific batch lounge they belong to (e.g. 25 Batch Lounge for 25bce... emails)
-    if (userBatchYear) {
-      const matchBatch = ALL_BATCH_CHANNELS.find(b => b.batchYear === userBatchYear) || {
-        id: `batch-20${userBatchYear}`,
-        label: `${userBatchYear}-batch-lounge`,
-        icon: '🎓',
-        name: `${userBatchYear} Batch Lounge`,
-        desc: `Exclusive community channel for 20${userBatchYear} Batch students`,
-        batchYear: userBatchYear,
-        isPublic: false,
-        isBatch: true
-      };
-      return [...baseChannels, matchBatch];
-    }
-
-    // Fallback: If student account has no batch prefix in email, show all batch lounges
-    return [...baseChannels, ...ALL_BATCH_CHANNELS];
-  }, [user, userBatchYear, ALL_BATCH_CHANNELS, dmChannels]);
-
-  const activeChannelObj = CHANNELS.find(c => c.id === activeChannel) || CHANNELS[0];
-  const isGuestUser = !user || user.isGuest;
-  const isChannelLockedForGuest = isGuestUser && activeChannel !== 'general' && !activeChannelObj.isPublic;
 
   // Peer Typing Engine State, Refs, and Helpers
   const [isPeerTyping, setIsPeerTyping] = useState(false);

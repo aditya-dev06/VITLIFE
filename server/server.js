@@ -7548,7 +7548,8 @@ app.delete('/api/chat/messages/clear', authenticate, requireAdmin, async (req, r
 
 // --- vitChat AI Real-Time Chat Participant Engine ---
 async function triggerAiParticipantResponse(channel, triggerMsg, customPrompt = null) {
-  const apiKey = process.env.VITCHAT_API_KEY || process.env.Gemini_API_Key || process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY;
+  const rawKey = process.env.VITCHAT_API_KEY || process.env.Gemini_API_Key || process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || '';
+  const apiKey = rawKey.replace(/^["']|["']$/g, '').trim();
   if (!apiKey) return;
 
   const targetChannel = sanitizeString(channel || 'general', 100);
@@ -7607,7 +7608,7 @@ ${isRoast ? '5. TASK: Drop a savage, hilarious campus roast based on the chat co
     let aiResponseText = '';
 
     if (!apiKey.startsWith('sk-or-')) {
-      const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=' + apiKey;
+      const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
