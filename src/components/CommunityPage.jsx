@@ -2699,11 +2699,11 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
         setSearchError('');
       } else {
         setSearchedStudent(null);
-        setSearchError(data.error || 'Student not found. Check Registration Number.');
+        setSearchError(data.error || `User with registration number "${cleanReg.toUpperCase()}" is not a user of our app now.`);
       }
     } catch (err) {
       setSearchedStudent(null);
-      setSearchError('Network error looking up student.');
+      setSearchError('Unable to verify student. Please check your connection and try again.');
     } finally {
       setIsSearchingStudent(false);
     }
@@ -5357,22 +5357,32 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
       {/* Start New Private Chat Modal */}
       {showNewDmModal && (
-        <div className="aurora-modal-overlay" onClick={() => setShowNewDmModal(false)} style={{ zIndex: 99999 }}>
-          <div className="aurora-modal-card glass-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px', padding: '1.6rem', borderRadius: '18px', background: '#111b21', color: '#e9edef', border: '1px solid rgba(0,168,132,0.3)', boxShadow: '0 20px 40px rgba(0,0,0,0.8)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.6rem' }}>
+        <div className="aurora-modal-overlay" onClick={() => setShowNewDmModal(false)} style={{ zIndex: 99999, padding: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="aurora-modal-card glass-panel" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '440px', padding: '1.35rem 1.2rem', borderRadius: '18px', background: '#111b21', color: '#e9edef', border: '1px solid rgba(0,168,132,0.35)', boxShadow: '0 25px 60px rgba(0,0,0,0.9)', boxSizing: 'border-box', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.1rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.65rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <span style={{ fontSize: '1.3rem' }}>✉️</span>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#e9edef' }}>Start Private Chat</h3>
-                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#8696a0' }}>Use student's Registration Number (like phone numbers)</p>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#e9edef' }}>Start Private Chat</h3>
+                  <p style={{ margin: 0, fontSize: '0.73rem', color: '#8696a0' }}>Enter student's Registration Number</p>
                 </div>
               </div>
-              <button onClick={() => setShowNewDmModal(false)} style={{ background: 'none', border: 'none', color: '#8696a0', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+              <button 
+                onClick={() => {
+                  setShowNewDmModal(false);
+                  setSearchedStudent(null);
+                  setSearchRegNo('');
+                  setSearchError('');
+                }} 
+                style={{ background: 'rgba(255,255,255,0.06)', border: 'none', color: '#8696a0', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
             </div>
 
             {/* Registration Number Search Input */}
-            <div style={{ marginBottom: '1.2rem' }}>
-              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#00a884', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <div style={{ marginBottom: '1.1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 800, color: '#00a884', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Student Registration Number
               </label>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -5398,15 +5408,17 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   }}
                   style={{
                     flex: 1,
-                    padding: '0.7rem 0.9rem',
+                    minWidth: 0,
+                    padding: '0.65rem 0.85rem',
                     background: '#202c33',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    border: searchError ? '1px solid rgba(239, 68, 68, 0.5)' : searchedStudent ? '1px solid rgba(0, 168, 132, 0.6)' : '1px solid rgba(255,255,255,0.12)',
                     borderRadius: '10px',
                     color: '#e9edef',
-                    fontSize: '0.92rem',
+                    fontSize: '0.9rem',
                     fontWeight: 700,
                     letterSpacing: '1px',
-                    outline: 'none'
+                    outline: 'none',
+                    boxSizing: 'border-box'
                   }}
                   autoFocus
                 />
@@ -5415,23 +5427,43 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   onClick={() => handleSearchStudent(searchRegNo)}
                   disabled={isSearchingStudent || !searchRegNo.trim()}
                   style={{
-                    padding: '0 1rem',
+                    padding: '0.65rem 1rem',
                     background: '#00a884',
                     color: '#fff',
                     border: 'none',
                     borderRadius: '10px',
                     fontWeight: 700,
-                    fontSize: '0.85rem',
-                    cursor: searchRegNo.trim() ? 'pointer' : 'not-allowed',
-                    opacity: searchRegNo.trim() ? 1 : 0.6
+                    fontSize: '0.84rem',
+                    cursor: searchRegNo.trim() && !isSearchingStudent ? 'pointer' : 'not-allowed',
+                    opacity: searchRegNo.trim() && !isSearchingStudent ? 1 : 0.6,
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0
                   }}
                 >
-                  {isSearchingStudent ? '...' : 'Verify'}
+                  {isSearchingStudent ? 'Verifying...' : 'Verify'}
                 </button>
               </div>
               {searchError && (
-                <div style={{ color: '#fb7185', fontSize: '0.78rem', marginTop: '0.4rem', fontWeight: 600 }}>
-                  ⚠️ {searchError}
+                <div style={{
+                  marginTop: '0.65rem',
+                  padding: '0.7rem 0.85rem',
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                  borderRadius: '10px',
+                  color: '#fca5a5',
+                  fontSize: '0.8rem',
+                  lineHeight: 1.4,
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.5rem'
+                }}>
+                  <span style={{ fontSize: '1rem', flexShrink: 0, marginTop: '-1px' }}>⚠️</span>
+                  <div>
+                    <div style={{ fontWeight: 800, color: '#f87171', fontSize: '0.82rem' }}>User Not Found</div>
+                    <div style={{ fontSize: '0.76rem', color: '#fecaca', marginTop: '0.15rem' }}>
+                      {searchError}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -5439,36 +5471,36 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
             {/* Verified Student Preview Card */}
             {searchedStudent && (
               <div style={{
-                background: 'linear-gradient(135deg, rgba(0,168,132,0.12) 0%, rgba(32,44,51,0.8) 100%)',
-                border: '1px solid rgba(0,168,132,0.4)',
+                background: 'linear-gradient(135deg, rgba(0,168,132,0.15) 0%, rgba(32,44,51,0.9) 100%)',
+                border: '1px solid rgba(0,168,132,0.5)',
                 borderRadius: '12px',
-                padding: '0.9rem 1rem',
-                marginBottom: '1.2rem',
+                padding: '0.85rem 0.95rem',
+                marginBottom: '1.1rem',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.8rem'
+                gap: '0.75rem'
               }}>
                 <div style={{
-                  width: '44px',
-                  height: '44px',
+                  width: '42px',
+                  height: '42px',
                   borderRadius: '50%',
                   background: '#00a884',
                   color: '#fff',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '1.2rem',
+                  fontSize: '1.15rem',
                   fontWeight: 800,
                   flexShrink: 0
                 }}>
                   {searchedStudent.avatar || searchedStudent.name?.charAt(0) || '👤'}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#e9edef', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <span>{searchedStudent.name}</span>
-                    <span style={{ fontSize: '0.7rem', color: '#00a884' }}>✓ Verified</span>
+                  <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#e9edef', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{searchedStudent.name}</span>
+                    <span style={{ fontSize: '0.68rem', color: '#00a884', background: 'rgba(0,168,132,0.18)', padding: '1px 5px', borderRadius: '4px', flexShrink: 0 }}>✓ Verified</span>
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: '#8696a0', marginTop: '0.1rem' }}>
+                  <div style={{ fontSize: '0.76rem', color: '#8696a0', marginTop: '0.1rem' }}>
                     <span style={{ fontWeight: 700, color: '#00a884' }}>{searchedStudent.regNo}</span> • {searchedStudent.program}
                   </div>
                 </div>
@@ -5477,23 +5509,23 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
             {/* Initial Message Input */}
             {searchedStudent && (
-              <div style={{ marginBottom: '1.2rem' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#8696a0', marginBottom: '0.4rem' }}>
+              <div style={{ marginBottom: '1.1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 700, color: '#8696a0', marginBottom: '0.35rem' }}>
                   Initial Greeting / Reason to Connect (Optional)
                 </label>
                 <textarea
                   placeholder="e.g. Hey! Saw your post in #exam-prep, let's discuss CAT-2..."
                   value={dmInitialMessage}
                   onChange={(e) => setDmInitialMessage(e.target.value)}
-                  rows={3}
+                  rows={2}
                   style={{
                     width: '100%',
-                    padding: '0.7rem 0.9rem',
+                    padding: '0.65rem 0.85rem',
                     background: '#202c33',
                     border: '1px solid rgba(255,255,255,0.1)',
                     borderRadius: '10px',
                     color: '#e9edef',
-                    fontSize: '0.85rem',
+                    fontSize: '0.84rem',
                     outline: 'none',
                     resize: 'none',
                     boxSizing: 'border-box'
@@ -5503,22 +5535,23 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
             )}
 
             {/* Action Buttons */}
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: '0.65rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
               <button
                 type="button"
                 onClick={() => {
                   setShowNewDmModal(false);
                   setSearchedStudent(null);
                   setSearchRegNo('');
+                  setSearchError('');
                 }}
                 style={{
-                  padding: '0.6rem 1.2rem',
+                  padding: '0.6rem 1.1rem',
                   borderRadius: '10px',
                   background: 'transparent',
                   color: '#8696a0',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.12)',
                   fontWeight: 700,
-                  fontSize: '0.85rem',
+                  fontSize: '0.82rem',
                   cursor: 'pointer'
                 }}
               >
@@ -5529,18 +5562,18 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                 onClick={handleSendChatRequest}
                 disabled={!searchedStudent || isSendingDmRequest}
                 style={{
-                  padding: '0.6rem 1.4rem',
+                  padding: '0.6rem 1.3rem',
                   borderRadius: '10px',
                   background: '#00a884',
                   color: '#ffffff',
                   border: 'none',
                   fontWeight: 800,
-                  fontSize: '0.85rem',
+                  fontSize: '0.84rem',
                   cursor: searchedStudent && !isSendingDmRequest ? 'pointer' : 'not-allowed',
                   opacity: searchedStudent && !isSendingDmRequest ? 1 : 0.6,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.4rem'
+                  gap: '0.35rem'
                 }}
               >
                 {isSendingDmRequest ? 'Sending Request...' : 'Send Chat Request ✉️'}

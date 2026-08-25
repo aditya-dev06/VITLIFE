@@ -7126,7 +7126,10 @@ app.get('/api/users/lookup-by-regno', authenticate, async (req, res) => {
 
     const student = await findStudentByRegNo(rawRegNo);
     if (!student) {
-      return res.status(404).json({ success: false, error: "Student not found with this Registration Number." });
+      return res.status(404).json({ 
+        success: false, 
+        error: `User with registration number "${rawRegNo.trim().toUpperCase()}" is not a user of our app yet.` 
+      });
     }
 
     const studentReg = (student.regNo || student.registrationNumber || student.email?.split('@')[0] || rawRegNo).toUpperCase();
@@ -7166,7 +7169,10 @@ app.post('/api/chat/requests', authenticate, async (req, res) => {
 
     const targetStudent = await findStudentByRegNo(toRegNo);
     if (!targetStudent) {
-      return res.status(404).json({ success: false, error: "Student not found with this Registration Number." });
+      return res.status(404).json({ 
+        success: false, 
+        error: `User with registration number "${toRegNo.trim().toUpperCase()}" is not a user of our app yet.` 
+      });
     }
 
     const targetReg = (targetStudent.regNo || targetStudent.registrationNumber || targetStudent.email?.split('@')[0] || toRegNo).toUpperCase();
