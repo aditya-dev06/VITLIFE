@@ -71,6 +71,14 @@ export function sanitizeHumanTone(text) {
   // Strip chatbot conversational ending questions
   cleaned = cleaned.replace(/(what do you think\??|what's up with you\??|how can i help\??|let me know your thoughts\.?|what are you up to\??)$/i, '').trim();
 
+  // If text is excessively long (more than 2 sentences or 260 chars), keep only the first 2 punchy sentences
+  if (cleaned.length > 260) {
+    const sentences = cleaned.match(/[^.!?\n]+[.!?\n]*/g) || [cleaned];
+    if (sentences.length > 2) {
+      cleaned = sentences.slice(0, 2).join(' ').trim();
+    }
+  }
+
   return cleaned;
 }
 
