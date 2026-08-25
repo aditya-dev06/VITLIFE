@@ -1313,6 +1313,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
     ? String(currentUser._id || currentUser.id || currentUser.email || '')
     : guestClientId;
   const isOwner = isMessageOwner(message, currentUser);
+  const isAi = Boolean(message?.isAi || message?.authorId === 'vitchat_ai_bot' || message?.author === 'vitChat AI' || message?.author === '🤖 vitChat AI');
 
   const reactions = message.reactions || { '👍': [], '❤️': [], '😂': [], '😮': [], '😢': [], '🙏': [], '💡': [], '🔥': [], '🚀': [] };
   const activeReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏', '💡', '🔥', '🚀']
@@ -1487,7 +1488,12 @@ const ChatMessageItem = memo(function ChatMessageItem({
           position: 'relative',
           transform: `translateX(${swipeOffset}px)`,
           transition: isSwiping ? 'none' : 'transform 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-          touchAction: 'pan-y'
+          touchAction: 'pan-y',
+          ...(isAi ? {
+            background: theme === 'light' ? 'linear-gradient(135deg, #f5f3ff 0%, #e0f2fe 100%)' : 'linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)',
+            border: theme === 'light' ? '1px solid rgba(168, 85, 247, 0.3)' : '1px solid rgba(168, 85, 247, 0.4)',
+            boxShadow: '0 4px 16px rgba(168, 85, 247, 0.12)'
+          } : {})
         }}
         onTouchStart={(e) => handleGestureStart(e.touches[0].clientX, e.touches[0].clientY)}
         onTouchMove={(e) => handleGestureMove(e.touches[0].clientX, e.touches[0].clientY)}
@@ -1501,7 +1507,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
           if (!isMouseDownRef.current) return;
           handleGestureMove(e.clientX, e.clientY);
         }}
-        onMouseUp={() => {
+        onMouseUp={(e) => {
           if (isMouseDownRef.current) {
             isMouseDownRef.current = false;
             handleGestureEnd();
@@ -1543,12 +1549,25 @@ const ChatMessageItem = memo(function ChatMessageItem({
 
           {/* Header Name for Received Messages */}
           {!isOwner && (
-            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: theme === 'light' ? '#0284c7' : '#38bdf8', marginBottom: '0.15rem', padding: '0.5rem 0.85rem 0 0.85rem' }}>
-              {message.author}
-              {message.role && (
-                <span style={{ fontSize: '0.65rem', marginLeft: '0.4rem', padding: '0.05rem 0.35rem', borderRadius: '4px', background: theme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)', color: theme === 'light' ? '#475569' : '#aebac1', fontWeight: 400, display: 'inline-block', maxWidth: '100px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', verticalAlign: 'bottom' }}>
-                  {message.role}
-                </span>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: isAi ? '#c084fc' : (theme === 'light' ? '#0284c7' : '#38bdf8'), marginBottom: '0.15rem', padding: '0.5rem 0.85rem 0 0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              {isAi ? (
+                <>
+                  <span style={{ background: 'linear-gradient(135deg, #c084fc, #38bdf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 800 }}>
+                    🤖 vitChat AI
+                  </span>
+                  <span style={{ fontSize: '0.62rem', padding: '0.05rem 0.35rem', borderRadius: '4px', background: 'linear-gradient(135deg, rgba(192,132,252,0.2), rgba(56,189,248,0.2))', color: '#c084fc', border: '1px solid rgba(192,132,252,0.4)', fontWeight: 800, letterSpacing: '0.4px' }}>
+                    BOT
+                  </span>
+                </>
+              ) : (
+                <>
+                  {message.author}
+                  {message.role && (
+                    <span style={{ fontSize: '0.65rem', marginLeft: '0.4rem', padding: '0.05rem 0.35rem', borderRadius: '4px', background: theme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)', color: theme === 'light' ? '#475569' : '#aebac1', fontWeight: 400, display: 'inline-block', maxWidth: '100px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', verticalAlign: 'bottom' }}>
+                      {message.role}
+                    </span>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -2548,33 +2567,26 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
   }, [user, showToast]);
 
   const handleAskvitchatAi = useCallback(async (msg) => {
-    setvitchatAiModalMessage(msg);
-    setIsVitchatAiLoading(true);
-    setvitchatAiAnalysis(null);
+    if (!msg) return;
+    if (showToast) showToast('vitChat AI is thinking and replying in chat... 🤖', 'info');
     try {
-      const response = await fetch('/api/chat/vitchat-ai', {
+      const token = localStorage.getItem('ds_ai_token');
+      await fetch('/api/chat/ask-ai-in-chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
-          messageContent: msg.content || (msg.attachment ? '[Attachment / Media]' : '[Voice Note]'),
-          author: msg.author || 'User',
-          channel: msg.channel || 'general',
-          mode: 'summary'
+          messageId: msg.id,
+          channel: activeChannel,
+          prompt: msg.content || 'React to this message'
         })
       });
-      const data = await response.json();
-      if (data.success) {
-        setvitchatAiAnalysis(data);
-      } else {
-        setvitchatAiAnalysis({ error: data.error || 'Analysis failed' });
-      }
     } catch (err) {
-      console.error('vitChat AI error:', err);
-      setvitchatAiAnalysis({ error: 'Network error analyzing message' });
-    } finally {
-      setIsVitchatAiLoading(false);
+      console.error('vitChat AI ask error:', err);
     }
-  }, []);
+  }, [activeChannel, showToast]);
 
   const handleReportMessage = useCallback((msg) => {
     setReportModalMessage(msg);
@@ -3448,26 +3460,6 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
 
     if (!newMessage.trim() && !selectedAttachment) return;
 
-    if (newMessage.trim().startsWith('/ai')) {
-      const aiCommand = newMessage.trim();
-      setNewMessage('');
-      
-      const recentMessages = (Array.isArray(messages) ? messages : [])
-        .filter(m => m.channel === activeChannel)
-        .slice(-10)
-        .map(m => `${m.author}: ${m.content}`)
-        .join('\n');
-
-      const mockMsg = {
-        content: `User Command: ${aiCommand}\n\nRecent Chat History in #${activeChannel}:\n${recentMessages || '(No recent messages)'}`,
-        author: 'System',
-        channel: activeChannel
-      };
-      
-      handleAskvitchatAi(mockMsg);
-      return;
-    }
-
     setUploading(true);
     let attachmentUrl = null;
     let blurThumbnail = null;
@@ -4307,9 +4299,9 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                       ✨ vitChat AI Commands
                     </div>
                     {[
-                      { cmd: '/ai summarize', desc: 'Summarize the recent chat history' },
-                      { cmd: '/ai reply', desc: 'Suggest a reply to the last message' },
-                      { cmd: '/ai analyze', desc: 'Analyze the sentiment of the chat' }
+                      { cmd: '/ai summarize', desc: 'Summarize the recent chat conversation' },
+                      { cmd: '/ai roast', desc: 'Drop a savage campus roast in the chat' },
+                      { cmd: '/ai', desc: 'Ask AI any question directly in the chat' }
                     ].filter(c => c.cmd.includes(newMessage.toLowerCase().trim())).map((c, i) => (
                       <div 
                         key={i}
@@ -4345,6 +4337,12 @@ const StudentChatSection = memo(function StudentChatSection({ user, onRequireAut
                   onChange={handleInputChange}
                   onFocus={() => setActiveMenuMsgId(null)}
                   onPaste={handleInputPaste}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage(e);
+                    }
+                  }}
                   className="wa-input-field"
                   disabled={isRecordingVoice}
                 />
