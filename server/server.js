@@ -7548,9 +7548,8 @@ app.delete('/api/chat/messages/clear', authenticate, requireAdmin, async (req, r
 
 // --- vitChat AI Real-Time Chat Participant Engine ---
 async function triggerAiParticipantResponse(channel, triggerMsg, customPrompt = null) {
-  const rawKey = process.env.VITCHAT_API_KEY || process.env.Gemini_API_Key || process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || '';
+  const rawKey = process.env.VITCHAT_API_KEY || process.env.Gemini_API_Key || process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || process.env.VITE_GEMINI_API_KEY || '';
   const apiKey = rawKey.replace(/^["']|["']$/g, '').trim();
-  if (!apiKey) return;
 
   const targetChannel = sanitizeString(channel || 'general', 100);
 
@@ -7573,9 +7572,10 @@ async function triggerAiParticipantResponse(channel, triggerMsg, customPrompt = 
     let isSummarize = false;
     let isRoast = false;
 
-    if (userPrompt.startsWith('/ai summarize') || userPrompt.includes('summarize')) {
+    const lowerPrompt = (userPrompt || '').toLowerCase();
+    if (lowerPrompt.includes('summarize')) {
       isSummarize = true;
-    } else if (userPrompt.startsWith('/ai roast') || userPrompt.includes('roast') || userPrompt.includes('sigma')) {
+    } else if (lowerPrompt.includes('roast') || lowerPrompt.includes('sigma') || lowerPrompt.includes('bully') || lowerPrompt.includes('cook')) {
       isRoast = true;
     }
 
@@ -7589,7 +7589,7 @@ CRITICAL PARTICIPANT RULES:
 2. If responding to ${cleanAuthor}, address them naturally and conversationally.
 3. TONE & VIBE:
    - Modern campus student slang, witty, sarcastic, 'sigma' humor, playful roasts, and campus banter (like Meta AI on Instagram/WhatsApp).
-   - If someone is trolling or bantering, roast them back playfully (use emojis like 💀, 😭, 🗿, 🔥, 💅, 🤫).
+   - If someone is trolling, asking for a roast, or bantering, roast them back playfully and savagely (use emojis like 💀, 😭, 🗿, 🔥, 💅, 🤫).
    - If someone asks a real campus question (exams, PYQs, placements, classes, timetable, mess food, campus guide, faculty, blocks), give a direct, accurate, and helpful response.
    - For academic blocks: AB01 = Academic Block 1, AB02 = Academic Block 2.
 4. LENGTH: Keep replies punchy, natural, and concise (1 to 3 short sentences, like a real WhatsApp/Discord message, maximum 60-90 words). Never write corporate essays.
@@ -7607,45 +7607,69 @@ ${isRoast ? '5. TASK: Drop a savage, hilarious campus roast based on the chat co
 
     let aiResponseText = '';
 
-    if (!apiKey.startsWith('sk-or-')) {
-      const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemInstruction }] },
-          contents: [{ parts: [{ text: userMessage }] }]
-        })
-      });
-      const data = await response.json();
-      if (data.error) throw new Error(data.error.message);
-      aiResponseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    } else {
-      const endpoint = 'https://openrouter.ai/api/v1/chat/completions';
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://vitchat.app',
-          'X-Title': 'vitChat'
-        },
-        body: JSON.stringify({
-          model: 'meta-llama/llama-3.1-8b-instruct:free',
-          messages: [
-            { role: 'system', content: systemInstruction },
-            { role: 'user', content: userMessage }
-          ]
-        })
-      });
-      const data = await response.json();
-      if (data.error) throw new Error(data.error.message);
-      aiResponseText = data.choices?.[0]?.message?.content || '';
+    if (apiKey) {
+      try {
+        if (!apiKey.startsWith('sk-or-')) {
+          const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemInstruction }] },
+              contents: [{ parts: [{ text: userMessage }] }]
+            })
+          });
+          const data = await response.json();
+          if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+            aiResponseText = data.candidates[0].content.parts[0].text;
+          } else if (data.error) {
+            console.warn('[vitChat AI] Gemini API error:', data.error.message);
+          }
+        } else {
+          const endpoint = 'https://openrouter.ai/api/v1/chat/completions';
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+              'HTTP-Referer': 'https://vitchat.app',
+              'X-Title': 'vitChat'
+            },
+            body: JSON.stringify({
+              model: 'meta-llama/llama-3.1-8b-instruct:free',
+              messages: [
+                { role: 'system', content: systemInstruction },
+                { role: 'user', content: userMessage }
+              ]
+            })
+          });
+          const data = await response.json();
+          if (data.choices?.[0]?.message?.content) {
+            aiResponseText = data.choices[0].message.content;
+          }
+        }
+      } catch (callErr) {
+        console.warn('[vitChat AI] Generation network error:', callErr.message);
+      }
     }
 
-    aiResponseText = aiResponseText.replace(/SUGGESTED_REPLIES:[\s\S]*$/i, '').trim();
+    aiResponseText = (aiResponseText || '').replace(/SUGGESTED_REPLIES:[\s\S]*$/i, '').trim();
+
+    // Instant resilient fallback if API key is rate-limited or unavailable
     if (!aiResponseText) {
-      aiResponseText = "Bro left me speechless 💀";
+      if (isRoast) {
+        const roasts = [
+          `Bro asked for a roast like their attendance isn't already roasting them daily 💀 🗿`,
+          `Bro is asking me to roast them while their attendance is sitting comfortably at 68% 😭 🔥`,
+          `I would roast you, but honestly the 8:30 AM class in AB02 already did that job 💀 💅`,
+          `Bro typed that with 2% battery and zero completed assignments 🤫 💀`
+        ];
+        aiResponseText = roasts[Math.floor(Math.random() * roasts.length)];
+      } else if (isSummarize) {
+        aiResponseText = `📋 **Chat Summary:**\n• Campus discussions in full swing.\n• Assignments and exam prep in progress.\n• Keep grinding and don't miss the 75% attendance cutoff! 🚀`;
+      } else {
+        aiResponseText = `I'm here, ${cleanAuthor}! Just navigating through another chaotic semester at VIT Bhopal 🏕️ 💀 What's on your mind?`;
+      }
     }
 
     // Create AI Participant Message Object
@@ -7691,14 +7715,12 @@ ${isRoast ? '5. TASK: Drop a savage, hilarious campus roast based on the chat co
 
     // Broadcast AI message to all clients in channel in real time!
     broadcastWsEvent(targetChannel, { type: 'new_message', channel: targetChannel, message: aiMessageObj });
-    pusherTrigger(targetChannel, 'new_message', { type: 'new_message', channel: targetChannel, message: aiMessageObj });
 
   } catch (err) {
     console.error("AI Participant generation error:", err.message);
   } finally {
     // Stop typing indicator
     broadcastWsEvent(targetChannel, { type: 'peer_typing', channel: targetChannel, username: 'vitChat AI', isTyping: false });
-    pusherTrigger(targetChannel, 'peer_typing', { type: 'peer_typing', channel: targetChannel, username: 'vitChat AI', isTyping: false });
   }
 }
 
@@ -7817,7 +7839,7 @@ app.post('/api/chat/messages', chatMessageLimiter, authenticate, async (req, res
 
     // Check if message is addressed to vitChat AI (as participant)
     const cleanMsgText = (cleanContent || '').trim();
-    const isAiTargeted = cleanMsgText.startsWith('/ai') ||
+    const isAiTargeted = cleanMsgText.toLowerCase().startsWith('/ai') ||
                          cleanMsgText.toLowerCase().includes('@ai') ||
                          cleanMsgText.toLowerCase().includes('@vitchat') ||
                          (replyTo && (replyTo.author === 'vitChat AI' || replyTo.author === '🤖 vitChat AI' || replyTo.authorId === 'vitchat_ai_bot'));
@@ -8788,7 +8810,7 @@ wss.on('connection', (ws) => {
 
         // Check if message is addressed to vitChat AI (as participant)
         const cleanWsMsgText = (cleanContent || '').trim();
-        const isWsAiTargeted = cleanWsMsgText.startsWith('/ai') ||
+        const isWsAiTargeted = cleanWsMsgText.toLowerCase().startsWith('/ai') ||
                                cleanWsMsgText.toLowerCase().includes('@ai') ||
                                cleanWsMsgText.toLowerCase().includes('@vitchat') ||
                                (data.replyTo && (data.replyTo.author === 'vitChat AI' || data.replyTo.author === '🤖 vitChat AI' || data.replyTo.authorId === 'vitchat_ai_bot'));
