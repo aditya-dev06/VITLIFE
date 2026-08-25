@@ -1766,6 +1766,12 @@ const ChatMessageItem = memo(function ChatMessageItem({
                   <img
                     src={sanitizeImageSrc(message.imageUrl || message.attachment)}
                     alt="GIF"
+                    onError={(e) => {
+                      if (!e.target.dataset.triedFallback) {
+                        e.target.dataset.triedFallback = 'true';
+                        e.target.src = 'https://i.giphy.com/26ufdipQqU2lhNA4g.gif';
+                      }
+                    }}
                     onClick={() => onPreviewImage && onPreviewImage(message.imageUrl || message.attachment)}
                     style={{
                       maxWidth: '100%',

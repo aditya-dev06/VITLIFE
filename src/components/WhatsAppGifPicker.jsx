@@ -14,40 +14,40 @@ const GIF_CATEGORIES = [
 
 const CURATED_GIFS = [
   // Trending / Hype
-  { id: 't1', category: 'trending', tags: ['hype', 'yes', 'celebrate'], title: 'Hype Dance', url: 'https://media.giphy.com/media/artj92V8o75VPL7AeQ/giphy.gif', preview: 'https://media.giphy.com/media/artj92V8o75VPL7AeQ/200w.gif' },
-  { id: 't2', category: 'trending', tags: ['fire', 'lit', 'hype'], title: 'Elmo Fire', url: 'https://media.giphy.com/media/P7JmDW75B5fO1OoJB6/giphy.gif', preview: 'https://media.giphy.com/media/P7JmDW75B5fO1OoJB6/200w.gif' },
-  { id: 't3', category: 'trending', tags: ['mindblown', 'wow', 'shocked'], title: 'Mind Blown', url: 'https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif', preview: 'https://media.giphy.com/media/26ufdipQqU2lhNA4g/200w.gif' },
-  { id: 't4', category: 'trending', tags: ['popcorn', 'watching', 'drama'], title: 'Eating Popcorn', url: 'https://media.giphy.com/media/gl0mkIZOW6Nwc/giphy.gif', preview: 'https://media.giphy.com/media/gl0mkIZOW6Nwc/200w.gif' },
+  { id: 't1', category: 'trending', tags: ['hype', 'yes', 'celebrate'], title: 'Hype Dance', url: 'https://i.giphy.com/artj92V8o75VPL7AeQ.gif', preview: 'https://i.giphy.com/artj92V8o75VPL7AeQ.gif' },
+  { id: 't2', category: 'trending', tags: ['fire', 'lit', 'hype'], title: 'Elmo Fire', url: 'https://i.giphy.com/P7JmDW75B5fO1OoJB6.gif', preview: 'https://i.giphy.com/P7JmDW75B5fO1OoJB6.gif' },
+  { id: 't3', category: 'trending', tags: ['mindblown', 'wow', 'shocked'], title: 'Mind Blown', url: 'https://i.giphy.com/26ufdipQqU2lhNA4g.gif', preview: 'https://i.giphy.com/26ufdipQqU2lhNA4g.gif' },
+  { id: 't4', category: 'trending', tags: ['popcorn', 'watching', 'drama'], title: 'Eating Popcorn', url: 'https://i.giphy.com/gl0mkIZOW6Nwc.gif', preview: 'https://i.giphy.com/gl0mkIZOW6Nwc.gif' },
 
   // Funny
-  { id: 'f1', category: 'funny', tags: ['laugh', 'lol', 'funny', 'haha'], title: 'Minion Laugh', url: 'https://media.giphy.com/media/10JhviFuU2gWD6/giphy.gif', preview: 'https://media.giphy.com/media/10JhviFuU2gWD6/200w.gif' },
-  { id: 'f2', category: 'funny', tags: ['cat', 'confused', 'funny'], title: 'Confused Cat', url: 'https://media.giphy.com/media/unQ3IJU2RG7DO/giphy.gif', preview: 'https://media.giphy.com/media/unQ3IJU2RG7DO/200w.gif' },
-  { id: 'f3', category: 'funny', tags: ['facepalm', 'no', 'crying'], title: 'Facepalm', url: 'https://media.giphy.com/media/3og0INyCmHlNylks9O/giphy.gif', preview: 'https://media.giphy.com/media/3og0INyCmHlNylks9O/200w.gif' },
-  { id: 'f4', category: 'funny', tags: ['awkward', 'homer', 'bushes'], title: 'Homer Disappears', url: 'https://media.giphy.com/media/jUwpNzg9IcyrK/giphy.gif', preview: 'https://media.giphy.com/media/jUwpNzg9IcyrK/200w.gif' },
+  { id: 'f1', category: 'funny', tags: ['laugh', 'lol', 'funny', 'haha'], title: 'Minion Laugh', url: 'https://i.giphy.com/10JhviFuU2gWD6.gif', preview: 'https://i.giphy.com/10JhviFuU2gWD6.gif' },
+  { id: 'f2', category: 'funny', tags: ['cat', 'confused', 'funny'], title: 'Confused Cat', url: 'https://i.giphy.com/unQ3IJU2RG7DO.gif', preview: 'https://i.giphy.com/unQ3IJU2RG7DO.gif' },
+  { id: 'f3', category: 'funny', tags: ['facepalm', 'no', 'crying'], title: 'Facepalm', url: 'https://i.giphy.com/3og0INyCmHlNylks9O.gif', preview: 'https://i.giphy.com/3og0INyCmHlNylks9O.gif' },
+  { id: 'f4', category: 'funny', tags: ['awkward', 'homer', 'bushes'], title: 'Homer Disappears', url: 'https://i.giphy.com/jUwpNzg9IcyrK.gif', preview: 'https://i.giphy.com/jUwpNzg9IcyrK.gif' },
 
   // Study / Exam
-  { id: 's1', category: 'study', tags: ['study', 'reading', 'exam', 'fat', 'cat'], title: 'Typing Fast', url: 'https://media.giphy.com/media/LmN8OYiY4m0X85al0Z/giphy.gif', preview: 'https://media.giphy.com/media/LmN8OYiY4m0X85al0Z/200w.gif' },
-  { id: 's2', category: 'study', tags: ['study', 'tired', 'sleepy', 'books'], title: 'Overwhelmed Study', url: 'https://media.giphy.com/media/13HgwGsXF0aiGY/giphy.gif', preview: 'https://media.giphy.com/media/13HgwGsXF0aiGY/200w.gif' },
-  { id: 's3', category: 'study', tags: ['math', 'confused', 'calculate'], title: 'Math Lady Confusion', url: 'https://media.giphy.com/media/DHqth0hVQoIzS/giphy.gif', preview: 'https://media.giphy.com/media/DHqth0hVQoIzS/200w.gif' },
-  { id: 's4', category: 'study', tags: ['exam', 'done', 'stress'], title: 'Exam Stress', url: 'https://media.giphy.com/media/l46CyJmS9KUbokzsI/giphy.gif', preview: 'https://media.giphy.com/media/l46CyJmS9KUbokzsI/200w.gif' },
+  { id: 's1', category: 'study', tags: ['study', 'reading', 'exam', 'fat', 'cat'], title: 'Typing Fast', url: 'https://i.giphy.com/LmN8OYiY4m0X85al0Z.gif', preview: 'https://i.giphy.com/LmN8OYiY4m0X85al0Z.gif' },
+  { id: 's2', category: 'study', tags: ['study', 'tired', 'sleepy', 'books'], title: 'Overwhelmed Study', url: 'https://i.giphy.com/13HgwGsXF0aiGY.gif', preview: 'https://i.giphy.com/13HgwGsXF0aiGY.gif' },
+  { id: 's3', category: 'study', tags: ['math', 'confused', 'calculate'], title: 'Math Lady Confusion', url: 'https://i.giphy.com/DHqth0hVQoIzS.gif', preview: 'https://i.giphy.com/DHqth0hVQoIzS.gif' },
+  { id: 's4', category: 'study', tags: ['exam', 'done', 'stress'], title: 'Exam Stress', url: 'https://i.giphy.com/l46CyJmS9KUbokzsI.gif', preview: 'https://i.giphy.com/l46CyJmS9KUbokzsI.gif' },
 
   // Celebrate
-  { id: 'c1', category: 'celebrate', tags: ['celebrate', 'party', 'congrats', 'win'], title: 'Party Confetti', url: 'https://media.giphy.com/media/g9582DNuQppxC/giphy.gif', preview: 'https://media.giphy.com/media/g9582DNuQppxC/200w.gif' },
-  { id: 'c2', category: 'celebrate', tags: ['dance', 'happy', 'party'], title: 'Happy Dance', url: 'https://media.giphy.com/media/blSTtZehjAZ8I/giphy.gif', preview: 'https://media.giphy.com/media/blSTtZehjAZ8I/200w.gif' },
-  { id: 'c3', category: 'celebrate', tags: ['cheers', 'champagne', 'leo'], title: 'Leo Cheers', url: 'https://media.giphy.com/media/BPJmthQ3YRwD6QqcVD/giphy.gif', preview: 'https://media.giphy.com/media/BPJmthQ3YRwD6QqcVD/200w.gif' },
+  { id: 'c1', category: 'celebrate', tags: ['celebrate', 'party', 'congrats', 'win'], title: 'Party Confetti', url: 'https://i.giphy.com/g9582DNuQppxC.gif', preview: 'https://i.giphy.com/g9582DNuQppxC.gif' },
+  { id: 'c2', category: 'celebrate', tags: ['dance', 'happy', 'party'], title: 'Happy Dance', url: 'https://i.giphy.com/blSTtZehjAZ8I.gif', preview: 'https://i.giphy.com/blSTtZehjAZ8I.gif' },
+  { id: 'c3', category: 'celebrate', tags: ['cheers', 'champagne', 'leo'], title: 'Leo Cheers', url: 'https://i.giphy.com/BPJmthQ3YRwD6QqcVD.gif', preview: 'https://i.giphy.com/BPJmthQ3YRwD6QqcVD.gif' },
 
   // Coding
-  { id: 'cd1', category: 'code', tags: ['code', 'developer', 'hacker', 'matrix'], title: 'Hacker Fast Typing', url: 'https://media.giphy.com/media/YQitE4YNQNahy/giphy.gif', preview: 'https://media.giphy.com/media/YQitE4YNQNahy/200w.gif' },
-  { id: 'cd2', category: 'code', tags: ['code', 'bug', 'working', 'magic'], title: 'It Works Why', url: 'https://media.giphy.com/media/ZVik7pBtu9dNS/giphy.gif', preview: 'https://media.giphy.com/media/ZVik7pBtu9dNS/200w.gif' },
-  { id: 'cd3', category: 'code', tags: ['code', 'git', 'push', 'coffee'], title: 'Coffee & Code', url: 'https://media.giphy.com/media/du3J3cXyzhj75IOgvA/giphy.gif', preview: 'https://media.giphy.com/media/du3J3cXyzhj75IOgvA/200w.gif' },
+  { id: 'cd1', category: 'code', tags: ['code', 'developer', 'hacker', 'matrix'], title: 'Hacker Fast Typing', url: 'https://i.giphy.com/YQitE4YNQNahy.gif', preview: 'https://i.giphy.com/YQitE4YNQNahy.gif' },
+  { id: 'cd2', category: 'code', tags: ['code', 'bug', 'working', 'magic'], title: 'It Works Why', url: 'https://i.giphy.com/ZVik7pBtu9dNS.gif', preview: 'https://i.giphy.com/ZVik7pBtu9dNS.gif' },
+  { id: 'cd3', category: 'code', tags: ['code', 'git', 'push', 'coffee'], title: 'Coffee & Code', url: 'https://i.giphy.com/du3J3cXyzhj75IOgvA.gif', preview: 'https://i.giphy.com/du3J3cXyzhj75IOgvA.gif' },
 
   // Cats
-  { id: 'ct1', category: 'cats', tags: ['cat', 'cute', 'typing', 'bongo'], title: 'Bongo Cat', url: 'https://media.giphy.com/media/ule4akeEDWA0/giphy.gif', preview: 'https://media.giphy.com/media/ule4akeEDWA0/200w.gif' },
-  { id: 'ct2', category: 'cats', tags: ['cat', 'vibing', 'headbob'], title: 'Vibing Cat', url: 'https://media.giphy.com/media/jpbnoe3UIa8TU8LM13/giphy.gif', preview: 'https://media.giphy.com/media/jpbnoe3UIa8TU8LM13/200w.gif' },
+  { id: 'ct1', category: 'cats', tags: ['cat', 'cute', 'typing', 'bongo'], title: 'Bongo Cat', url: 'https://i.giphy.com/ule4akeEDWA0.gif', preview: 'https://i.giphy.com/ule4akeEDWA0.gif' },
+  { id: 'ct2', category: 'cats', tags: ['cat', 'vibing', 'headbob'], title: 'Vibing Cat', url: 'https://i.giphy.com/jpbnoe3UIa8TU8LM13.gif', preview: 'https://i.giphy.com/jpbnoe3UIa8TU8LM13.gif' },
 
   // Chill / Coffee
-  { id: 'ch1', category: 'chill', tags: ['chill', 'coffee', 'fine', 'this is fine'], title: 'This is Fine', url: 'https://media.giphy.com/media/NTur7XlVDUdqM/giphy.gif', preview: 'https://media.giphy.com/media/NTur7XlVDUdqM/200w.gif' },
-  { id: 'ch2', category: 'chill', tags: ['chill', 'relax', 'sloth'], title: 'Sloth Chill', url: 'https://media.giphy.com/media/26xBI73gWquCBBCDe/giphy.gif', preview: 'https://media.giphy.com/media/26xBI73gWquCBBCDe/200w.gif' }
+  { id: 'ch1', category: 'chill', tags: ['chill', 'coffee', 'fine', 'this is fine'], title: 'This is Fine', url: 'https://i.giphy.com/NTur7XlVDUdqM.gif', preview: 'https://i.giphy.com/NTur7XlVDUdqM.gif' },
+  { id: 'ch2', category: 'chill', tags: ['chill', 'relax', 'sloth'], title: 'Sloth Chill', url: 'https://i.giphy.com/26xBI73gWquCBBCDe.gif', preview: 'https://i.giphy.com/26xBI73gWquCBBCDe.gif' }
 ];
 
 export function WhatsAppGifPicker({ isOpen, onClose, onSelectGif }) {
